@@ -1,22 +1,19 @@
-import { type ClassValue, clsx } from "clsx";
+import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(value: number): string {
+export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 export function formatPercentage(value: number): string {
   return `${value.toFixed(2)}%`;
-}
-
-export function calculatePnL(buyPrice: number, sellPrice: number, shares: number): number {
-  return (sellPrice - buyPrice) * shares;
 }

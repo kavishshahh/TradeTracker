@@ -498,26 +498,131 @@ async def get_trades(user_id: str, from_date: Optional[str] = None, to_date: Opt
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/metrics/{user_id}")
-async def get_metrics(user_id: str, current_user: str = Depends(get_current_user)):
+async def get_metrics(user_id: str, from_date: Optional[str] = None, to_date: Optional[str] = None, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Get metrics request: user={user_id}")
+        print(f"🔍 Get metrics request: user={user_id}, from_date={from_date}, to_date={to_date}")
+        
+        # Validate date parameters
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                print(f"✅ from_date parsed: {from_date_obj}")
+            except ValueError as e:
+                print(f"❌ Invalid from_date format: {from_date}, error: {e}")
+                from_date = None
+        
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                print(f"✅ to_date parsed: {to_date_obj}")
+            except ValueError as e:
+                print(f"❌ Invalid to_date format: {to_date}, error: {e}")
+                to_date = None
         
         # Ensure user can only access their own metrics
         if user_id != current_user:
             print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s metrics")
             raise HTTPException(status_code=403, detail="Access denied")
         
+        # Initialize variables for tracking all trades
+        all_trades = []
+        
         if db:
             # Use Firebase Firestore
             trades_ref = db.collection('trades')
-            docs = trades_ref.where("user_id", "==", user_id).get()
+            
+            # First, get total trades without date filtering for comparison
+            total_query = trades_ref.where("user_id", "==", user_id)
+            total_docs = total_query.get()
+            all_trades = [doc.to_dict() for doc in total_docs]
+            print(f"📊 Total trades without date filtering: {len(all_trades)}")
+            
+            # Now apply date filtering
+            query = trades_ref.where("user_id", "==", user_id)
+            
+            # Add date filtering if provided
+            if from_date:
+                print(f"📅 Adding from_date filter: {from_date}")
+                query = query.where("date", ">=", from_date)
+            if to_date:
+                print(f"📅 Adding to_date filter: {to_date}")
+                query = query.where("date", "<=", to_date)
+            
+            docs = query.get()
             trades = [doc.to_dict() for doc in docs]
+            print(f"📊 Found {len(trades)} trades after Firebase date filtering")
+            
+            # Debug: Show first few trade dates
+            if trades:
+                sample_dates = [t.get('date') for t in trades[:5]]
+                print(f"📅 Sample trade dates: {sample_dates}")
+                
+                # Also show the date types and formats
+                for i, trade in enumerate(trades[:3]):
+                    date_val = trade.get('date')
+                    print(f"   Trade {i+1}: date={date_val}, type={type(date_val)}")
+                    if hasattr(date_val, 'strftime'):
+                        print(f"     Formatted: {date_val.strftime('%Y-%m-%d')}")
         else:
             # Fallback to mock data
-            trades = [trade for trade in MOCK_TRADES if trade['user_id'] == user_id]
+            all_trades = [trade for trade in MOCK_TRADES if trade['user_id'] == user_id]
+            trades = all_trades.copy()
+            print(f"📝 Mock data: Found {len(all_trades)} trades for user {user_id}")
+        
+        # Apply additional date filtering in Python as a safety measure
+        if from_date or to_date:
+            print(f"🔍 Applying additional Python date filtering...")
+            filtered_trades = []
+            for trade in trades:
+                trade_date = trade.get('date')
+                if not trade_date:
+                    continue
+                    
+                # Convert to string if it's a datetime object
+                if hasattr(trade_date, 'strftime'):
+                    trade_date_str = trade_date.strftime('%Y-%m-%d')
+                else:
+                    trade_date_str = str(trade_date)
+                
+                # Apply date filtering
+                if from_date and trade_date_str < from_date:
+                    continue
+                if to_date and trade_date_str > to_date:
+                    continue
+                    
+                filtered_trades.append(trade)
+            
+            trades = filtered_trades
+            print(f"📊 After Python filtering: {len(trades)} trades")
+            
+            # If no trades found, try to find the closest month
+            if len(trades) == 0 and (from_date or to_date):
+                print(f"⚠️  No trades found in date range {from_date} to {to_date}")
+                print(f"🔍 Available dates in database: {sorted(set(t.get('date') for t in all_trades if t.get('date')))}")
+                
+                # Try to find trades in the month of the from_date or to_date
+                target_month = None
+                if from_date:
+                    try:
+                        target_month = datetime.strptime(from_date, '%Y-%m-%d').strftime('%Y-%m')
+                    except:
+                        pass
+                elif to_date:
+                    try:
+                        target_month = datetime.strptime(to_date, '%Y-%m-%d').strftime('%Y-%m')
+                    except:
+                        pass
+                
+                if target_month:
+                    print(f"🔍 Looking for trades in month: {target_month}")
+                    month_trades = [t for t in all_trades if t.get('date') and str(t.get('date')).startswith(target_month)]
+                    if month_trades:
+                        print(f"📊 Found {len(month_trades)} trades in month {target_month}")
+                        trades = month_trades
         
         # Calculate metrics (same logic as before)
         closed_trades = [t for t in trades if t['status'] == 'closed' and t.get('sell_price') and t.get('buy_price')]
+        print(f"🔒 Found {len(closed_trades)} closed trades for metrics calculation")
         
         if not closed_trades:
             return TradeMetrics(
@@ -552,6 +657,21 @@ async def get_metrics(user_id: str, current_user: str = Depends(get_current_user
         gross_profit = sum(winning_trades) if winning_trades else 0
         gross_loss = abs(sum(losing_trades)) if losing_trades else 1  # Avoid division by zero
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
+        
+        # Debug: Show final metrics
+        print(f"📈 Final metrics for date range {from_date} to {to_date}:")
+        print(f"   Total trades: {total_trades}")
+        print(f"   Net P&L: {net_pnl}")
+        print(f"   Win rate: {win_percentage}%")
+        
+        # Also return debug info in development
+        debug_info = {
+            "date_range": {"from": from_date, "to": to_date},
+            "total_trades_before_filtering": len(all_trades) if 'all_trades' in locals() else "N/A",
+            "trades_after_firebase_filtering": len(trades),
+            "closed_trades_for_metrics": len(closed_trades)
+        }
+        print(f"🔍 Debug info: {debug_info}")
         
         return TradeMetrics(
             net_pnl=net_pnl,

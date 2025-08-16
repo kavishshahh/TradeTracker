@@ -50,9 +50,16 @@ export async function getTrades(userId: string, fromDate?: string, toDate?: stri
   return response.json();
 }
 
-export async function getMetrics(userId: string): Promise<TradeMetrics> {
+export async function getMetrics(userId: string, fromDate?: string, toDate?: string): Promise<TradeMetrics> {
+  const params = new URLSearchParams();
+  if (fromDate) params.append('from_date', fromDate);
+  if (toDate) params.append('to_date', toDate);
+  
+  const queryString = params.toString();
+  const url = `${API_BASE_URL}/metrics/${userId}${queryString ? `?${queryString}` : ''}`;
+
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/metrics/${userId}`, { headers });
+  const response = await fetch(url, { headers });
 
   if (!response.ok) {
     throw new Error('Failed to fetch metrics');

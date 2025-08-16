@@ -690,6 +690,11 @@ async def get_account_balance(user_id: str, current_user: str = Depends(get_curr
         print(f"❌ Error fetching account balance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker and load balancers"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

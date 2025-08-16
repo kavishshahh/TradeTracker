@@ -276,7 +276,7 @@ export default function Dashboard() {
     );
   }
 
-  // Prepare equity curve data
+  // Prepare equity curve data (simplified without fund flows)
   const equityCurveData = trades
     .filter(trade => trade.status === 'closed' && trade.sell_price && trade.buy_price)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())

@@ -178,7 +178,7 @@ export default function TradeForm() {
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <DollarSign className="h-5 w-5 text-gray-400" />
+                  <DollarSign className="h-5 w-5 text-gray-600" />
                 </div>
                 <input
                   type="number"
@@ -188,7 +188,7 @@ export default function TradeForm() {
                     min: { value: 0.01, message: 'Price must be greater than 0' }
                   })}
                   placeholder="150.00"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                 />
               </div>
               {errors.buy_price && (
@@ -203,7 +203,7 @@ export default function TradeForm() {
                 </label>
                 <div className="mt-1 relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <DollarSign className="h-5 w-5 text-gray-400" />
+                    <DollarSign className="h-5 w-5 text-gray-600" />
                   </div>
                   <input
                     type="number"

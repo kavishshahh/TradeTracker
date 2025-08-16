@@ -1,6 +1,7 @@
 'use client';
 
 import { BarChart3, BookOpen, Calendar, Menu, Plus, TrendingUp, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 interface LayoutProps {
@@ -9,13 +10,14 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const pathname = usePathname();
 
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: BarChart3, current: true },
-    { name: 'Add Trade', href: '/add-trade', icon: Plus, current: false },
-    { name: 'Calendar', href: '/calendar', icon: Calendar, current: false },
-    { name: 'Progress', href: '/progress', icon: TrendingUp, current: false },
-    { name: 'Journal', href: '/journal', icon: BookOpen, current: false },
+    { name: 'Dashboard', href: '/', icon: BarChart3 },
+    { name: 'Add Trade', href: '/add-trade', icon: Plus },
+    { name: 'Calendar', href: '/calendar', icon: Calendar },
+    { name: 'Progress', href: '/progress', icon: TrendingUp },
+    { name: 'Journal', href: '/journal', icon: BookOpen },
   ];
 
   return (
@@ -40,12 +42,13 @@ export default function Layout({ children }: LayoutProps) {
           <nav className="flex-1 space-y-1 px-2 py-4">
             {navigation.map((item) => {
               const Icon = item.icon;
+              const isActive = pathname === item.href;
               return (
                 <a
                   key={item.name}
                   href={item.href}
                   className={`
-                    ${item.current
+                    ${isActive
                       ? 'bg-blue-50 border-r-2 border-blue-500 text-blue-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }
@@ -54,7 +57,7 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   <Icon
                     className={`
-                      ${item.current ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}
+                      ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}
                       ${sidebarOpen ? 'mr-3' : 'mx-auto'}
                       h-5 w-5 flex-shrink-0
                     `}

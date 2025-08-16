@@ -17,7 +17,7 @@ app = FastAPI(title="TradeTracker API", version="1.0.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://tradebud.vercel.app"],  # Next.js dev server
+    allow_origins=["http://localhost:3000", "https://tradebud.vercel.app", "https://app.tradebud.xyz"],  # Next.js dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

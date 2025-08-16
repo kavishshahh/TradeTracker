@@ -6,6 +6,7 @@ from datetime import datetime, date
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import os
+import json
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -26,21 +27,50 @@ app.add_middleware(
 def initialize_firebase():
     try:
         if not firebase_admin._apps:
-            # Path to your service account key file
-            service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH', './firebase-service-account.json')
+            # Try to get service account from environment variable first (stringified JSON)
+            service_account_json = os.getenv('FIREBASE_SERVICE_ACCOUNT_JSON')
             
-            if os.path.exists(service_account_path):
-                cred = credentials.Certificate(service_account_path)
-                firebase_admin.initialize_app(cred)
-                print("✅ Firebase Admin SDK initialized successfully")
+            if service_account_json:
+                try:
+                    # Parse the stringified JSON from environment variable
+                    service_account_info = json.loads(service_account_json)
+                    cred = credentials.Certificate(service_account_info)
+                    firebase_admin.initialize_app(cred)
+                    print("✅ Firebase Admin SDK initialized successfully from environment variable")
+                except json.JSONDecodeError as e:
+                    print(f"❌ Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+                    print("📝 Falling back to file path approach")
+                    return _initialize_from_file()
+                except Exception as e:
+                    print(f"❌ Error initializing from environment variable: {e}")
+                    print("📝 Falling back to file path approach")
+                    return _initialize_from_file()
             else:
-                print(f"❌ Service account file not found: {service_account_path}")
-                print("📝 Using mock data instead")
-                return None
+                # Fall back to file path approach
+                return _initialize_from_file()
         
         return firestore.client()
     except Exception as e:
         print(f"❌ Firebase initialization error: {e}")
+        print("📝 Using mock data instead")
+        return None
+
+def _initialize_from_file():
+    """Initialize Firebase from service account file"""
+    try:
+        service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH', './firebase-service-account.json')
+        
+        if os.path.exists(service_account_path):
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK initialized successfully from file")
+            return firestore.client()
+        else:
+            print(f"❌ Service account file not found: {service_account_path}")
+            print("📝 Using mock data instead")
+            return None
+    except Exception as e:
+        print(f"❌ File-based initialization error: {e}")
         print("📝 Using mock data instead")
         return None
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { BarChart3, BookOpen, Calendar, Menu, Plus, TrendingUp, X } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { BarChart3, BookOpen, Calendar, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
@@ -11,6 +12,7 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
+  const { currentUser, logout } = useAuth();
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: BarChart3 },
@@ -70,18 +72,30 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Footer */}
           {sidebarOpen && (
-            <div className="border-t p-4">
-              <div className="flex items-center">
+            <div className="border-t p-4 space-y-2">
+              {/* User Profile */}
+              <a href="/profile" className="flex items-center hover:bg-gray-50 rounded-md p-2 transition-colors">
                 <div className="flex-shrink-0">
                   <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">U</span>
+                    <User className="h-5 w-5 text-white" />
                   </div>
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-700">User</p>
-                  <p className="text-xs text-gray-500">user123@example.com</p>
+                  <p className="text-sm font-medium text-gray-700">
+                    {currentUser?.email?.split('@')[0] || 'User'}
+                  </p>
+                  <p className="text-xs text-gray-500">Manage account settings</p>
                 </div>
-              </div>
+              </a>
+              
+              {/* Logout */}
+              <button
+                onClick={logout}
+                className="w-full flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors"
+              >
+                <LogOut className="h-5 w-5 text-gray-400 mr-3" />
+                Logout
+              </button>
             </div>
           )}
         </div>

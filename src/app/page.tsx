@@ -1,10 +1,13 @@
 import Dashboard from '@/components/Dashboard';
 import Layout from '@/components/Layout';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 export default function Home() {
   return (
-    <Layout>
-      <Dashboard />
-    </Layout>
+    <ProtectedRoute>
+      <Layout>
+        <Dashboard />
+      </Layout>
+    </ProtectedRoute>
   );
 }

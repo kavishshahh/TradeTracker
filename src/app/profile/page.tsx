@@ -1,12 +1,12 @@
 import Layout from '@/components/Layout';
-import ProgressTracker from '@/components/ProgressTracker';
+import Profile from '@/components/Profile';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
-export default function ProgressPage() {
+export default function ProfilePage() {
   return (
     <ProtectedRoute>
       <Layout>
-        <ProgressTracker />
+        <Profile />
       </Layout>
     </ProtectedRoute>
   );

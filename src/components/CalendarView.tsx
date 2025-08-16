@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { getTrades } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { DailyStats, Trade } from '@/types/trade';
@@ -100,9 +101,10 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
         <div className="space-y-3">
           <h4 className="font-medium text-gray-900">Trades</h4>
           {stats.trades.map((trade) => {
-            const pnl = trade.sell_price 
+            const pnl = trade.sell_price && trade.buy_price
               ? (trade.sell_price - trade.buy_price) * trade.shares 
               : 0;
+            const canCalculatePnL = trade.buy_price && trade.sell_price;
             
             return (
               <div key={trade.id} className="border border-gray-200 rounded-lg p-3">
@@ -110,8 +112,10 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
                   <div>
                     <div className="font-medium">{trade.ticker}</div>
                     <div className="text-sm text-gray-600">
-                      {trade.shares} shares @ ${trade.buy_price}
+                      {trade.shares} shares
+                      {trade.buy_price && ` @ $${trade.buy_price}`}
                       {trade.sell_price && ` → $${trade.sell_price}`}
+                      {!trade.buy_price && trade.sell_price && ` @ $${trade.sell_price} (exit only)`}
                     </div>
                     <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${
                       trade.status === 'closed' 
@@ -122,11 +126,16 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
                     </div>
                   </div>
                   <div className="text-right">
-                    {trade.status === 'closed' && (
+                    {trade.status === 'closed' && canCalculatePnL && (
                       <div className={`font-semibold ${
                         pnl >= 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
+                      </div>
+                    )}
+                    {trade.status === 'closed' && !canCalculatePnL && (
+                      <div className="text-xs text-gray-500">
+                        Exit recorded
                       </div>
                     )}
                   </div>
@@ -150,11 +159,14 @@ export default function CalendarView() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<{ date: Date; stats: DailyStats } | null>(null);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
+    if (!currentUser) return;
+    
     const fetchTrades = async () => {
       try {
-        const response = await getTrades('user123');
+        const response = await getTrades(currentUser.uid);
         setTrades(response.trades);
       } catch (error) {
         console.error('Error fetching trades:', error);
@@ -164,7 +176,7 @@ export default function CalendarView() {
     };
 
     fetchTrades();
-  }, []);
+  }, [currentUser]);
 
   // Generate calendar data
   const generateCalendarData = () => {
@@ -208,7 +220,8 @@ export default function CalendarView() {
       grouped[dateKey].trades.push(trade);
       grouped[dateKey].trade_count++;
       
-      if (trade.status === 'closed' && trade.sell_price) {
+      // Calculate P&L for closed trades that have both buy and sell prices
+      if (trade.status === 'closed' && trade.sell_price && trade.buy_price) {
         const pnl = (trade.sell_price - trade.buy_price) * trade.shares;
         grouped[dateKey].pnl += pnl;
       }

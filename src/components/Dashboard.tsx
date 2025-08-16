@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { getMetrics, getTrades } from '@/lib/api';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { Trade, TradeMetrics } from '@/types/trade';
@@ -67,13 +68,16 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState<TradeMetrics | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
+    if (!currentUser) return;
+    
     const fetchData = async () => {
       try {
         const [metricsData, tradesData] = await Promise.all([
-          getMetrics('user123'),
-          getTrades('user123')
+          getMetrics(currentUser.uid),
+          getTrades(currentUser.uid)
         ]);
         
         setMetrics(metricsData);
@@ -86,7 +90,7 @@ export default function Dashboard() {
     };
 
     fetchData();
-  }, []);
+  }, [currentUser]);
 
   if (loading || !metrics) {
     return (

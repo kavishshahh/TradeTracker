@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { getMetrics, getTrades } from '@/lib/api';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { Trade, TradeMetrics } from '@/types/trade';
@@ -33,13 +34,16 @@ export default function ProgressTracker() {
   const [metrics, setMetrics] = useState<TradeMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'weekly' | 'monthly'>('weekly');
+  const { currentUser } = useAuth();
 
   useEffect(() => {
+    if (!currentUser) return;
+    
     const fetchData = async () => {
       try {
         const [tradesData, metricsData] = await Promise.all([
-          getTrades('user123'),
-          getMetrics('user123')
+          getTrades(currentUser.uid),
+          getMetrics(currentUser.uid)
         ]);
         
         setTrades(tradesData.trades);
@@ -52,7 +56,7 @@ export default function ProgressTracker() {
     };
 
     fetchData();
-  }, []);
+  }, [currentUser]);
 
   const generatePeriodStats = (): PeriodStats[] => {
     if (!trades.length) return [];

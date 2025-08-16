@@ -3,10 +3,12 @@ export interface Trade {
   user_id: string;
   date: string;
   ticker: string;
-  buy_price: number;
+  buy_price?: number;
   sell_price?: number;
   shares: number;
-  risk: number;
+  risk?: number; // Risk percentage (0-100)
+  risk_dollars?: number; // Risk in dollars
+  account_balance?: number; // Account balance at time of trade
   notes?: string;
   status: 'open' | 'closed';
   created_at?: string;

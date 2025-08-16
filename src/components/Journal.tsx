@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { getTrades } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Trade } from '@/types/trade';
@@ -12,7 +13,7 @@ interface JournalEntryProps {
 }
 
 function JournalEntry({ trade, onEdit }: JournalEntryProps) {
-  const pnl = trade.sell_price 
+  const pnl = trade.sell_price && trade.buy_price
     ? (trade.sell_price - trade.buy_price) * trade.shares 
     : 0;
 
@@ -191,11 +192,14 @@ export default function Journal() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
+    if (!currentUser) return;
+    
     const fetchTrades = async () => {
       try {
-        const response = await getTrades('user123');
+        const response = await getTrades(currentUser.uid);
         const sortedTrades = response.trades.sort((a, b) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         );
@@ -209,7 +213,7 @@ export default function Journal() {
     };
 
     fetchTrades();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     let filtered = trades;

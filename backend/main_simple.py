@@ -21,7 +21,7 @@ class Trade(BaseModel):
     user_id: str
     date: date
     ticker: str
-    buy_price: float
+    buy_price: Optional[float] = None
     sell_price: Optional[float] = None
     shares: int
     risk: float
@@ -108,14 +108,26 @@ async def root():
 @app.post("/add-trade")
 async def add_trade(trade: Trade):
     try:
+        # Validation based on status
+        if trade.status == "open":
+            if not trade.buy_price:
+                raise HTTPException(status_code=422, detail="Buy price is required for open trades")
+        elif trade.status == "closed":
+            if not trade.sell_price:
+                raise HTTPException(status_code=422, detail="Sell price is required for closed trades")
+            # For exit-only trades (no buy_price), we'll allow it
+            # For complete trades, both buy and sell should be present
+        
         trade.created_at = datetime.now()
         trade.updated_at = datetime.now()
         trade.id = str(len(MOCK_TRADES) + 1)
         
         # Add to in-memory store
-        MOCK_TRADES.append(trade.dict())
+        MOCK_TRADES.append(trade.model_dump())
         
         return {"message": "Trade added successfully", "trade_id": trade.id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -133,7 +145,7 @@ async def get_metrics(user_id: str):
         trades = [trade for trade in MOCK_TRADES if trade['user_id'] == user_id]
         
         # Calculate metrics
-        closed_trades = [t for t in trades if t['status'] == 'closed' and t['sell_price']]
+        closed_trades = [t for t in trades if t['status'] == 'closed' and t['sell_price'] and t['buy_price']]
         
         if not closed_trades:
             return TradeMetrics(

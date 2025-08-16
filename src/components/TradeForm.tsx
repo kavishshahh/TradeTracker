@@ -1,7 +1,7 @@
 'use client';
 
+import { useAuth } from '@/contexts/AuthContext';
 import { addTrade } from '@/lib/api';
-import { Trade } from '@/types/trade';
 import { CalendarIcon, DollarSign } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -9,10 +9,11 @@ import { useForm } from 'react-hook-form';
 interface TradeFormData {
   date: string;
   ticker: string;
-  buy_price: number;
+  buy_price?: number;
   sell_price?: number;
   shares: number;
-  risk: number;
+  risk?: number; // Risk percentage
+  risk_dollars?: number; // Risk in dollars
   notes?: string;
   status: 'open' | 'closed';
 }
@@ -20,6 +21,8 @@ interface TradeFormData {
 export default function TradeForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [tradeType, setTradeType] = useState<'entry' | 'exit'>('entry');
+  const { currentUser } = useAuth();
   
   const {
     register,
@@ -44,17 +47,28 @@ export default function TradeForm() {
     setSubmitSuccess(false);
 
     try {
-      const tradeData: Omit<Trade, 'id' | 'created_at' | 'updated_at'> = {
-        user_id: 'user123', // In a real app, this would come from auth
+      const tradeData: any = {
+        user_id: currentUser!.uid, // Use authenticated user's ID
         date: data.date,
         ticker: data.ticker.toUpperCase(),
-        buy_price: data.buy_price,
-        sell_price: data.status === 'closed' ? data.sell_price : undefined,
         shares: data.shares,
-        risk: data.risk,
         notes: data.notes || '',
-        status: data.status,
+        status: tradeType === 'exit' ? 'closed' : data.status,
       };
+
+      // Include risk fields
+      if (data.risk) tradeData.risk = data.risk;
+      if (data.risk_dollars) tradeData.risk_dollars = data.risk_dollars;
+
+      // Only include buy_price if it's provided (for entry trades or complete trades)
+      if (data.buy_price && data.buy_price > 0) {
+        tradeData.buy_price = data.buy_price;
+      }
+
+      // Include sell_price for closed trades or exits
+      if ((data.status === 'closed' || tradeType === 'exit') && data.sell_price) {
+        tradeData.sell_price = data.sell_price;
+      }
 
       await addTrade(tradeData);
       setSubmitSuccess(true);
@@ -84,10 +98,56 @@ export default function TradeForm() {
     <div className="max-w-2xl mx-auto">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Add New Trade</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {tradeType === 'entry' ? 'Add New Trade' : 'Exit Trade'}
+          </h2>
           <p className="mt-1 text-sm text-gray-600">
-            Enter the details of your trade to track performance
+            {tradeType === 'entry' 
+              ? 'Enter the details of your trade to track performance'
+              : 'Record your trade exit to close the position'
+            }
           </p>
+        </div>
+
+        {/* Trade Type Toggle */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Trade Type</label>
+          <div className="flex rounded-md shadow-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setTradeType('entry');
+                reset({ 
+                  status: 'closed',
+                  date: new Date().toISOString().split('T')[0],
+                });
+              }}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
+                tradeType === 'entry'
+                  ? 'bg-blue-50 border-blue-500 text-blue-700'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              New Entry
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTradeType('exit');
+                reset({ 
+                  status: 'closed',
+                  date: new Date().toISOString().split('T')[0],
+                });
+              }}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
+                tradeType === 'exit'
+                  ? 'bg-blue-50 border-blue-500 text-blue-700'
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              Exit Trade
+            </button>
+          </div>
         </div>
 
         {submitSuccess && (
@@ -172,34 +232,10 @@ export default function TradeForm() {
 
           {/* Prices and Shares */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            <div>
-              <label htmlFor="buy_price" className="block text-sm font-medium text-gray-700">
-                Buy Price
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <DollarSign className="h-5 w-5 text-gray-600" />
-                </div>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register('buy_price', { 
-                    required: 'Buy price is required',
-                    min: { value: 0.01, message: 'Price must be greater than 0' }
-                  })}
-                  placeholder="150.00"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-                />
-              </div>
-              {errors.buy_price && (
-                <p className="mt-1 text-sm text-red-600">{errors.buy_price.message}</p>
-              )}
-            </div>
-
-            {status === 'closed' && (
+            {tradeType === 'entry' && (
               <div>
-                <label htmlFor="sell_price" className="block text-sm font-medium text-gray-700">
-                  Sell Price
+                <label htmlFor="buy_price" className="block text-sm font-medium text-gray-700">
+                  Buy Price *
                 </label>
                 <div className="mt-1 relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -207,10 +243,36 @@ export default function TradeForm() {
                   </div>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.0001"
+                    {...register('buy_price', { 
+                      required: tradeType === 'entry' ? 'Buy price is required' : false,
+                      min: { value: 0.0001, message: 'Price must be greater than 0' }
+                    })}
+                    placeholder="150.00"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  />
+                </div>
+                {errors.buy_price && (
+                  <p className="mt-1 text-sm text-red-600">{errors.buy_price.message}</p>
+                )}
+              </div>
+            )}
+
+            {(status === 'closed' || tradeType === 'exit') && (
+              <div>
+                <label htmlFor="sell_price" className="block text-sm font-medium text-gray-700">
+                  {tradeType === 'exit' ? 'Exit Price *' : 'Sell Price *'}
+                </label>
+                <div className="mt-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <DollarSign className="h-5 w-5 text-gray-600" />
+                  </div>
+                  <input
+                    type="number"
+                    step="0.0001"
                     {...register('sell_price', { 
-                      required: status === 'closed' ? 'Sell price is required for closed trades' : false,
-                      min: { value: 0.01, message: 'Price must be greater than 0' }
+                      required: (status === 'closed' || tradeType === 'exit') ? 'Exit price is required' : false,
+                      min: { value: 0.0001, message: 'Price must be greater than 0' }
                     })}
                     placeholder="165.00"
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
@@ -229,12 +291,13 @@ export default function TradeForm() {
               <div className="mt-1">
                 <input
                   type="number"
+                  step="0.0001"
                   {...register('shares', { 
                     required: 'Number of shares is required',
-                    min: { value: 1, message: 'Must have at least 1 share' }
+                    min: { value: 0.0001, message: 'Must have at least 0.0001 shares' }
                   })}
                   placeholder="100"
-                                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
                 />
               </div>
               {errors.shares && (
@@ -243,27 +306,59 @@ export default function TradeForm() {
             </div>
           </div>
 
-          {/* Risk Percentage */}
-          <div>
-            <label htmlFor="risk" className="block text-sm font-medium text-gray-700">
-              Risk Percentage
-            </label>
-            <div className="mt-1">
-              <input
-                type="number"
-                step="0.1"
-                {...register('risk', { 
-                  required: 'Risk percentage is required',
-                  min: { value: 0.1, message: 'Risk must be at least 0.1%' },
-                  max: { value: 100, message: 'Risk cannot exceed 100%' }
-                })}
-                placeholder="2.0"
-                                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              />
+
+
+          {/* Risk Fields */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {/* Risk Percentage */}
+            <div>
+              <label htmlFor="risk" className="block text-sm font-medium text-gray-700">
+                Risk Percentage (%)
+              </label>
+              <div className="mt-1">
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('risk', { 
+                    min: { value: 0.01, message: 'Risk must be at least 0.01%' },
+                    max: { value: 100, message: 'Risk cannot exceed 100%' }
+                  })}
+                  placeholder="2.0"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                />
+              </div>
+              {errors.risk && (
+                <p className="mt-1 text-sm text-red-600">{errors.risk.message}</p>
+              )}
             </div>
-            {errors.risk && (
-              <p className="mt-1 text-sm text-red-600">{errors.risk.message}</p>
-            )}
+
+            {/* Risk in Dollars */}
+            <div>
+              <label htmlFor="risk_dollars" className="block text-sm font-medium text-gray-700">
+                Risk in Dollars ($)
+              </label>
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <DollarSign className="h-5 w-5 text-gray-600" />
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('risk_dollars', {
+                    min: { value: 0.01, message: 'Risk amount must be greater than 0' }
+                  })}
+                  placeholder="200.00"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                />
+              </div>
+              {errors.risk_dollars && (
+                <p className="mt-1 text-sm text-red-600">{errors.risk_dollars.message}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="text-sm text-gray-600">
+            <p>💡 <strong>Risk Fields:</strong> Provide either risk percentage OR risk in dollars. The other field will be calculated automatically based on your profile's account balance.</p>
           </div>
 
           {/* Notes */}

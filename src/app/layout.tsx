@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TradeTracker - Trading Journal Dashboard",
+  title: "TradeBud - Trading Journal Dashboard",
   description: "Professional trading journal with analytics and performance tracking",
 };
 

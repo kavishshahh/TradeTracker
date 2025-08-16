@@ -30,7 +30,7 @@ export default function Layout({ children }: LayoutProps) {
           {/* Logo */}
           <div className="flex h-16 items-center justify-between px-4 border-b">
             {sidebarOpen && (
-              <h1 className="text-xl font-bold text-gray-900">TradeTracker</h1>
+              <h1 className="text-xl font-bold text-gray-900">TradeBud</h1>
             )}
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}

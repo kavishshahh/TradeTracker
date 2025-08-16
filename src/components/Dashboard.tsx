@@ -405,7 +405,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Equity Curve */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Equity Curve - {formatDateRange(selectedDateRange)}</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Profit Curve - {formatDateRange(selectedDateRange)}</h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={equityCurveData}>
                 <CartesianGrid strokeDasharray="3 3" />

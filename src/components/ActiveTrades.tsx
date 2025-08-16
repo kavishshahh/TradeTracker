@@ -56,7 +56,7 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
     setValue('shares_to_exit', sharesToExit);
   };
 
-  const estimatedPnL = watchedPrice && watchedShares 
+  const estimatedPnL = watchedPrice && watchedShares && trade.buy_price
     ? (watchedPrice - trade.buy_price) * watchedShares 
     : 0;
 
@@ -291,7 +291,7 @@ export default function ActiveTrades() {
       
       <div className="divide-y divide-gray-200">
         {trades.map((trade) => {
-          const currentValue = trade.buy_price * trade.shares; // Placeholder for current market value
+          const currentValue = (trade.buy_price ?? 0) * trade.shares; // Placeholder for current market value
           const unrealizedPnL = 0; // Would calculate with real-time prices
           
           return (
@@ -320,7 +320,7 @@ export default function ActiveTrades() {
                 
                 <div className="ml-4 relative">
                   <button
-                    onClick={() => setOpenMenuId(openMenuId === trade.id ? null : trade.id)}
+                    onClick={() => setOpenMenuId(openMenuId === trade.id ? null : (trade.id ?? null))}
                     className="p-1 text-gray-400 hover:text-gray-600 rounded"
                   >
                     <MoreVertical className="h-4 w-4" />

@@ -7,17 +7,17 @@ import { Trade, TradeMetrics } from '@/types/trade';
 import { Calendar, DollarSign, Target, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
-    Area,
-    AreaChart,
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Line,
-    LineChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
 } from 'recharts';
 
 interface PeriodStats {
@@ -94,7 +94,7 @@ export default function ProgressTracker() {
       .sort(([a], [b]) => a.localeCompare(b))
       .forEach(([periodKey, periodTrades]) => {
         const pnlValues = periodTrades.map(trade => 
-          (trade.sell_price! - trade.buy_price) * trade.shares
+          ((trade.sell_price ?? 0) - (trade.buy_price ?? 0)) * trade.shares
         );
         
         const totalPnl = pnlValues.reduce((sum, pnl) => sum + pnl, 0);
@@ -339,13 +339,9 @@ export default function ProgressTracker() {
               />
               <Bar 
                 dataKey="pnl" 
-                fill={(entry) => entry >= 0 ? '#10B981' : '#EF4444'}
+                fill="#10B981"
                 radius={[2, 2, 0, 0]}
-              >
-                {periodStats.map((entry, index) => (
-                  <Bar key={index} fill={entry.pnl >= 0 ? '#10B981' : '#EF4444'} />
-                ))}
-              </Bar>
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

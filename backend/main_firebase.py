@@ -125,7 +125,7 @@ class TradeMetrics(BaseModel):
 
 class ExitTradeRequest(BaseModel):
     ticker: str
-    shares_to_exit: int
+    shares_to_exit: float
     sell_price: float
     notes: Optional[str] = ""
 

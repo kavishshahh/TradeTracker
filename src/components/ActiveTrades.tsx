@@ -116,9 +116,10 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
             </label>
             <input
               type="number"
+              step="0.01"
               {...register('shares_to_exit', { 
                 required: 'Number of shares is required',
-                min: { value: 1, message: 'Must exit at least 1 share' },
+                min: { value: 0.01, message: 'Must exit at least 0.01 share' },
                 max: { value: trade.shares, message: `Cannot exit more than ${trade.shares} shares` }
               })}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"

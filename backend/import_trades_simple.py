@@ -159,8 +159,9 @@ def import_trades(csv_file: str, user_id: str, db):
 
 def main():
     if len(sys.argv) != 3:
+        # python import_trades_simple.py VLnTlI0Z92aF7ygkE9GI5OixyCm1 "Market P_L tracker - Feb 25.csv"
         print("Usage: python import_trades_simple.py <user_id> <csv_file>")
-        print("Example: python import_trades_simple.py VLnTlI0Z92aF7ygkE9GI5OixyCm1 'Market P_L tracker - Jun 25.csv'")
+        print("Example: python import_trades_simple.py 3OZ3orlHzxSZQZ8rQ2GInTctkYb2 'Market P_L tracker - Jun 25.csv'")
         sys.exit(1)
     
     user_id = sys.argv[1]

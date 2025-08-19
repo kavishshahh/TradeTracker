@@ -7,6 +7,7 @@ import { Trade } from '@/types/trade';
 import { DollarSign, MoreVertical, TrendingDown, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { toast } from 'react-toastify';
 
 interface ExitTradeFormData {
   sell_price: number;
@@ -259,11 +260,20 @@ export default function ActiveTrades() {
       const activeTrades = response.trades.filter(trade => trade.status === 'open');
       setTrades(activeTrades);
       
-      // Show success message
-      alert(`${result.message}${pnl !== 0 ? ` P&L: ${formatCurrency(pnl)}` : ''}`);
+      // Show success toast
+      toast.success(`🎯 ${result.message}${pnl !== 0 ? ` P&L: ${formatCurrency(pnl)}` : ''}`, {
+        className: pnl >= 0 
+          ? '!bg-gradient-to-r !from-green-400 !to-green-600 !text-white'
+          : '!bg-gradient-to-r !from-orange-400 !to-red-500 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50',
+        autoClose: 4000
+      });
     } catch (error) {
       console.error('Error exiting trade:', error);
-      alert(`Failed to exit trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`❌ Failed to exit trade: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     }
   };
 

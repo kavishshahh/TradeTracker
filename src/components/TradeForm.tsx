@@ -5,6 +5,7 @@ import { addTrade } from '@/lib/api';
 import { CalendarIcon, DollarSign } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { toast } from 'react-toastify';
 
 interface TradeFormData {
   date: string;
@@ -74,11 +75,20 @@ export default function TradeForm() {
       setSubmitSuccess(true);
       reset();
       
+      // Show success toast
+      toast.success('🚀 Trade added successfully!', {
+        className: '!bg-gradient-to-r !from-green-400 !to-green-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
+      
       // Auto-hide success message after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
       console.error('Error adding trade:', error);
-      alert('Failed to add trade. Please try again.');
+      toast.error('❌ Failed to add trade. Please try again!', {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     } finally {
       setIsSubmitting(false);
     }

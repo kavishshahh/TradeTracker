@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Eye, EyeOff, Lock, Mail, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { toast } from 'react-toastify';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -30,14 +31,27 @@ export default function Login() {
       
       if (isSignUp) {
         await signUp(email, password);
+        toast.success('🎉 Account created successfully!', {
+          className: '!bg-gradient-to-r !from-green-400 !to-blue-500 !text-white',
+          progressClassName: '!bg-white !bg-opacity-50'
+        });
         router.push('/');
       } else {
         await signIn(email, password);
+        toast.success('👋 Welcome back!', {
+          className: '!bg-gradient-to-r !from-blue-400 !to-purple-500 !text-white',
+          progressClassName: '!bg-white !bg-opacity-50'
+        });
         router.push('/');
       }
     } catch (error: any) {
       console.error('Auth error:', error);
-      setError(error.message || 'Failed to authenticate');
+      const errorMessage = error.message || 'Failed to authenticate';
+      setError(errorMessage);
+      toast.error(`🔐 ${errorMessage}`, {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     } finally {
       setLoading(false);
     }

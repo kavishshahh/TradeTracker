@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Calendar, DollarSign, Edit2, Minus, Plus, Save, Trash2, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { toast } from 'react-toastify';
 
 interface ProfileFormData {
   account_balance: number;
@@ -209,9 +210,16 @@ export default function Profile() {
         
         setEditingMonth(null);
         setEditBalance(0);
+        toast.success('💰 Monthly balance saved!', {
+          className: '!bg-gradient-to-r !from-purple-400 !to-purple-600 !text-white',
+          progressClassName: '!bg-white !bg-opacity-50'
+        });
       } catch (error) {
         console.error('Error saving monthly balance:', error);
-        alert('Failed to save monthly balance. Please try again.');
+        toast.error('❌ Failed to save monthly balance!', {
+          className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+          progressClassName: '!bg-white !bg-opacity-50'
+        });
       }
     }
   };
@@ -248,9 +256,16 @@ export default function Profile() {
         notes: ''
       });
       setShowAddMonthForm(false);
+      toast.success('🎉 Monthly balance added!', {
+        className: '!bg-gradient-to-r !from-green-400 !to-blue-500 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     } catch (error) {
       console.error('Error adding monthly balance:', error);
-      alert('Failed to add monthly balance. Please try again.');
+      toast.error('❌ Failed to add monthly balance!', {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     }
   };
 
@@ -265,9 +280,16 @@ export default function Profile() {
       
       // Update local state
       setMonthBalances(prev => prev.filter(balance => balance.id !== balanceId));
+      toast.success('🗑️ Monthly balance deleted!', {
+        className: '!bg-gradient-to-r !from-orange-400 !to-red-500 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     } catch (error) {
       console.error('Error deleting monthly balance:', error);
-      alert('Failed to delete monthly balance. Please try again.');
+      toast.error('❌ Failed to delete monthly balance!', {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     }
   };
 
@@ -279,9 +301,16 @@ export default function Profile() {
       await updateUserProfile(currentUser!.uid, data);
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 3000);
+      toast.success('✨ Profile updated successfully!', {
+        className: '!bg-gradient-to-r !from-blue-400 !to-blue-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile. Please try again.');
+      toast.error('❌ Failed to update profile. Please try again!', {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     } finally {
       setIsSubmitting(false);
     }

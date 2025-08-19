@@ -872,7 +872,7 @@ export default function TradesView() {
                     P&L {sortField === 'pnl' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Risk %
+                    Risk
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Notes
@@ -925,7 +925,13 @@ export default function TradesView() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {trade.risk}%
+                        {(() => {
+                          const riskDollars = trade.risk_dollars || (trade.risk && trade.buy_price ? (trade.risk / 100) * trade.buy_price * trade.shares : 0);
+                          const riskPercent = trade.risk ? trade.risk.toFixed(2) : '0.00';
+                          return riskDollars > 0 
+                            ? `${formatCurrency(riskDollars)} (${riskPercent}%)`
+                            : 'N/A';
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                         {trade.notes || '-'}

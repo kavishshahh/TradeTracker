@@ -568,7 +568,7 @@ export default function TradesView() {
       : 0;
 
     const avgRisk = filteredTrades.length > 0 
-      ? filteredTrades.reduce((sum, trade) => sum + trade.risk, 0) / filteredTrades.length 
+      ? filteredTrades.reduce((sum, trade) => sum + (trade.risk || 0), 0) / filteredTrades.length 
       : 0;
 
     const avgRR = avgLoss > 0 ? avgWin / avgLoss : 0;

@@ -130,3 +130,52 @@ export async function getAccountBalance(userId: string): Promise<{ account_balan
   
   return response.json();
 }
+
+// Monthly Balance Management
+export async function getMonthlyBalances(userId: string): Promise<{ monthly_balances: any[] }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/monthly-balances/${userId}`, { headers });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch monthly balances');
+  }
+  
+  return response.json();
+}
+
+export async function saveMonthlyBalance(monthlyBalance: {
+  month: string;
+  start_balance: number;
+  end_balance?: number;
+  is_manual?: boolean;
+  notes?: string;
+}): Promise<{ message: string; balance_id: string; user_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/monthly-balances`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(monthlyBalance),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to save monthly balance');
+  }
+  
+  return response.json();
+}
+
+export async function deleteMonthlyBalance(balanceId: string): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/monthly-balances/${balanceId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to delete monthly balance');
+  }
+  
+  return response.json();
+}

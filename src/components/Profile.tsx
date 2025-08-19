@@ -1,9 +1,9 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserProfile, updateUserProfile } from '@/lib/api';
+import { deleteMonthlyBalance, getMonthlyBalances, getUserProfile, saveMonthlyBalance, updateUserProfile } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { Calendar, DollarSign, Edit2, Minus, Plus, Save, User } from 'lucide-react';
+import { Calendar, DollarSign, Edit2, Minus, Plus, Save, Trash2, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -22,10 +22,14 @@ interface FundFlow {
 }
 
 interface MonthBalance {
+  id?: string;
   month: string; // Format: "YYYY-MM"
-  startBalance: number;
-  endBalance: number;
-  isManual: boolean; // Whether this month's start balance was manually set
+  start_balance: number;
+  end_balance?: number;
+  is_manual: boolean; // Whether this month's start balance was manually set
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export default function Profile() {
@@ -43,6 +47,12 @@ export default function Profile() {
   const [monthBalances, setMonthBalances] = useState<MonthBalance[]>([]);
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const [editBalance, setEditBalance] = useState<number>(0);
+  const [showAddMonthForm, setShowAddMonthForm] = useState(false);
+  const [newMonthData, setNewMonthData] = useState({
+    month: new Date().toISOString().substring(0, 7), // Current month YYYY-MM
+    start_balance: 0,
+    notes: ''
+  });
   const { currentUser } = useAuth();
 
   const {
@@ -65,22 +75,28 @@ export default function Profile() {
   useEffect(() => {
     if (!currentUser) return;
     
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       try {
-        const response = await getUserProfile(currentUser.uid);
+        const [profileResponse, balancesResponse] = await Promise.all([
+          getUserProfile(currentUser.uid),
+          getMonthlyBalances(currentUser.uid)
+        ]);
+        
         reset({
-          account_balance: response.profile.account_balance || 10000,
-          currency: response.profile.currency || 'USD',
-          risk_tolerance: response.profile.risk_tolerance || 2.0
+          account_balance: profileResponse.profile.account_balance || 10000,
+          currency: profileResponse.profile.currency || 'USD',
+          risk_tolerance: profileResponse.profile.risk_tolerance || 2.0
         });
+        
+        setMonthBalances(balancesResponse.monthly_balances || []);
       } catch (error) {
-        console.error('Error fetching profile:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProfile();
+    fetchData();
   }, [currentUser, reset]);
 
   // Initialize month balances with default values
@@ -119,13 +135,13 @@ export default function Profile() {
       
       // Check if this month already has a manual balance
       const existingBalance = monthBalances.find(b => b.month === month);
-      const startBalance = existingBalance?.isManual ? existingBalance.startBalance : currentBalance;
+      const startBalance = existingBalance?.is_manual ? existingBalance.start_balance : currentBalance;
       
       balances.push({
         month,
-        startBalance,
-        endBalance,
-        isManual: existingBalance?.isManual || false
+        start_balance: startBalance,
+        end_balance: endBalance,
+        is_manual: existingBalance?.is_manual || false
       });
       
       currentBalance = endBalance;
@@ -140,12 +156,12 @@ export default function Profile() {
     const currentMonthBalance = monthBalances.find(b => b.month === currentMonth);
     
     if (currentMonthBalance) {
-      return currentMonthBalance.startBalance;
+      return currentMonthBalance.start_balance;
     }
     
     // If no current month, use the last month's end balance or default
     if (monthBalances.length > 0) {
-      return monthBalances[monthBalances.length - 1].endBalance;
+      return monthBalances[monthBalances.length - 1].end_balance || 0;
     }
     
     return 10000; // Default
@@ -175,15 +191,28 @@ export default function Profile() {
   };
 
   // Save month balance edit
-  const saveMonthBalance = () => {
+  const saveMonthBalance = async () => {
     if (editingMonth && editBalance > 0) {
-      setMonthBalances(prev => prev.map(balance => 
-        balance.month === editingMonth 
-          ? { ...balance, startBalance: editBalance, isManual: true }
-          : balance
-      ));
-      setEditingMonth(null);
-      setEditBalance(0);
+      try {
+        await saveMonthlyBalance({
+          month: editingMonth,
+          start_balance: editBalance,
+          is_manual: true
+        });
+        
+        // Update local state
+        setMonthBalances(prev => prev.map(balance => 
+          balance.month === editingMonth 
+            ? { ...balance, start_balance: editBalance, is_manual: true }
+            : balance
+        ));
+        
+        setEditingMonth(null);
+        setEditBalance(0);
+      } catch (error) {
+        console.error('Error saving monthly balance:', error);
+        alert('Failed to save monthly balance. Please try again.');
+      }
     }
   };
 
@@ -191,6 +220,55 @@ export default function Profile() {
   const cancelMonthBalanceEdit = () => {
     setEditingMonth(null);
     setEditBalance(0);
+  };
+
+  // Add new month balance
+  const addMonthBalance = async () => {
+    if (!newMonthData.month || newMonthData.start_balance <= 0) {
+      alert('Please enter a valid month and start balance');
+      return;
+    }
+
+    try {
+      await saveMonthlyBalance({
+        month: newMonthData.month,
+        start_balance: newMonthData.start_balance,
+        is_manual: true,
+        notes: newMonthData.notes
+      });
+
+      // Refresh monthly balances
+      const balancesResponse = await getMonthlyBalances(currentUser!.uid);
+      setMonthBalances(balancesResponse.monthly_balances || []);
+
+      // Reset form
+      setNewMonthData({
+        month: new Date().toISOString().substring(0, 7),
+        start_balance: 0,
+        notes: ''
+      });
+      setShowAddMonthForm(false);
+    } catch (error) {
+      console.error('Error adding monthly balance:', error);
+      alert('Failed to add monthly balance. Please try again.');
+    }
+  };
+
+  // Delete month balance
+  const handleDeleteMonthBalance = async (balanceId: string) => {
+    if (!confirm('Are you sure you want to delete this monthly balance?')) {
+      return;
+    }
+
+    try {
+      await deleteMonthlyBalance(balanceId);
+      
+      // Update local state
+      setMonthBalances(prev => prev.filter(balance => balance.id !== balanceId));
+    } catch (error) {
+      console.error('Error deleting monthly balance:', error);
+      alert('Failed to delete monthly balance. Please try again.');
+    }
   };
 
   const onSubmit = async (data: ProfileFormData) => {
@@ -392,13 +470,66 @@ export default function Profile() {
 
       {/* Month Balance Management */}
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <div className="mb-6">
-          <h3 className="text-xl font-bold text-gray-900">Month Balance Management</h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Month start balances automatically continue from previous month's ending balance. 
-            You can manually adjust past months if needed.
-          </p>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Monthly Balance Tracking</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Set starting balances for each month. If not set, the system carries forward from the previous month.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddMonthForm(!showAddMonthForm)}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            type="button"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Month
+          </button>
         </div>
+
+        {showAddMonthForm && (
+          <div className="mb-6 p-4 border border-gray-200 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <input
+                type="month"
+                value={newMonthData.month}
+                onChange={(e) => setNewMonthData(prev => ({ ...prev, month: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Start Balance"
+                value={newMonthData.start_balance || ''}
+                onChange={(e) => setNewMonthData(prev => ({ ...prev, start_balance: parseFloat(e.target.value) || 0 }))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="text"
+                placeholder="Notes (optional)"
+                value={newMonthData.notes}
+                onChange={(e) => setNewMonthData(prev => ({ ...prev, notes: e.target.value }))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="mt-3 flex space-x-2">
+              <button
+                onClick={addMonthBalance}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                type="button"
+              >
+                Add Month
+              </button>
+              <button
+                onClick={() => setShowAddMonthForm(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {monthBalances.length > 0 ? (
           <div className="space-y-3">
@@ -406,10 +537,15 @@ export default function Profile() {
               <div key={balance.month} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <Calendar className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-900">
-                    {new Date(balance.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </span>
-                  {balance.isManual && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {new Date(balance.month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </span>
+                    {balance.notes && (
+                      <div className="text-xs text-gray-500 mt-1">{balance.notes}</div>
+                    )}
+                  </div>
+                  {balance.is_manual && (
                     <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
                       Manual
                     </span>
@@ -417,24 +553,37 @@ export default function Profile() {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <div className="text-sm text-gray-500">Start: {formatCurrency(balance.startBalance)}</div>
-                    <div className="text-sm font-medium text-gray-900">End: {formatCurrency(balance.endBalance)}</div>
+                    <div className="text-sm text-gray-500">Start: {formatCurrency(balance.start_balance)}</div>
+                    {balance.end_balance && (
+                      <div className="text-sm font-medium text-gray-900">End: {formatCurrency(balance.end_balance)}</div>
+                    )}
                   </div>
-                  <button
-                    onClick={() => startEditingMonth(balance.month, balance.startBalance)}
-                    className="p-1 text-gray-400 hover:text-gray-600"
-                    type="button"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => startEditingMonth(balance.month, balance.start_balance)}
+                      className="p-1 text-gray-400 hover:text-gray-600"
+                      type="button"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    {balance.id && (
+                      <button
+                        onClick={() => handleDeleteMonthBalance(balance.id!)}
+                        className="p-1 text-red-400 hover:text-red-600"
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
-            <p>No month balances calculated yet.</p>
-            <p className="text-sm">Add some fund flows to see automatic month balance calculations.</p>
+            <p>No monthly balances set yet.</p>
+            <p className="text-sm">Add monthly starting balances to track your account growth over time.</p>
           </div>
         )}
 

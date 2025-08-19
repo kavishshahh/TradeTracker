@@ -137,6 +137,35 @@ class UserProfile(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+class MonthlyBalance(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None  # Set by the endpoint based on auth
+    month: str  # Format: "YYYY-MM"
+    start_balance: float
+    end_balance: Optional[float] = None
+    is_manual: bool = False  # Whether start balance was manually set
+    notes: Optional[str] = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+# Mock data fallback (same as main_simple.py)
+MOCK_TRADES = [
+    {
+        "id": "1",
+        "user_id": "user123",
+        "date": "2024-01-15",
+        "ticker": "AAPL",
+        "buy_price": 150.00,
+        "sell_price": 165.00,
+        "shares": 100,
+        "risk": 2.0,
+        "notes": "Strong breakout pattern, good volume",
+        "status": "closed",
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-16T15:45:00Z"
+    },
+]
 
 @app.get("/")
 async def root():
@@ -779,6 +808,155 @@ async def get_account_balance(user_id: str, current_user: str = Depends(get_curr
             return {"account_balance": 10000.0}  # Mock default
     except Exception as e:
         print(f"❌ Error fetching account balance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Monthly Balance Management Endpoints
+
+@app.get("/monthly-balances/{user_id}")
+async def get_monthly_balances(user_id: str, current_user: str = Depends(get_current_user)):
+    """Get all monthly balances for a user"""
+    try:
+        print(f"🔍 Get monthly balances request: user={user_id}")
+        
+        # Ensure user can only access their own monthly balances
+        if user_id != current_user:
+            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s monthly balances")
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if db:
+            # Use Firebase Firestore
+            balances_ref = db.collection('monthly_balances')
+            query = balances_ref.where("user_id", "==", user_id).order_by("month")
+            
+            docs = query.get()
+            balances = []
+            for doc in docs:
+                balance_data = doc.to_dict()
+                balance_data['id'] = doc.id
+                
+                # Convert datetime objects to strings
+                for field in ['created_at', 'updated_at']:
+                    if isinstance(balance_data.get(field), datetime):
+                        balance_data[field] = balance_data[field].isoformat()
+                
+                balances.append(balance_data)
+            
+            print(f"✅ Found {len(balances)} monthly balances for user {user_id}")
+            return {"monthly_balances": balances}
+        else:
+            # Mock data fallback
+            return {"monthly_balances": []}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching monthly balances: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/monthly-balances")
+async def create_or_update_monthly_balance(balance: MonthlyBalance, current_user: str = Depends(get_current_user)):
+    """Create or update a monthly balance"""
+    try:
+        print(f"🔍 Create/update monthly balance request: user={current_user}")
+        print(f"📊 Monthly balance data received: {balance.model_dump()}")
+        
+        # Ensure user can only create/update their own monthly balances
+        balance.user_id = current_user
+        
+        # Validation
+        if not balance.month:
+            raise HTTPException(status_code=422, detail="Month is required")
+        
+        if balance.start_balance is None or balance.start_balance <= 0:
+            raise HTTPException(status_code=422, detail="Start balance must be a positive number")
+        
+        # Validate month format (YYYY-MM)
+        try:
+            datetime.strptime(balance.month, '%Y-%m')
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Month must be in YYYY-MM format")
+        
+        balance.updated_at = datetime.now()
+        
+        if db:
+            # Use Firebase Firestore
+            balances_ref = db.collection('monthly_balances')
+            
+            # Check if monthly balance already exists
+            existing_query = balances_ref.where("user_id", "==", current_user).where("month", "==", balance.month).limit(1)
+            existing_docs = list(existing_query.get())
+            
+            if existing_docs:
+                # Update existing
+                doc_ref = existing_docs[0].reference
+                update_data = balance.model_dump(exclude={'id', 'created_at'})
+                # Remove None values
+                update_data = {k: v for k, v in update_data.items() if v is not None}
+                doc_ref.update(update_data)
+                balance_id = existing_docs[0].id
+                print(f"✅ Updated existing monthly balance: {balance_id}")
+            else:
+                # Create new
+                balance.created_at = datetime.now()
+                doc_data = balance.model_dump(exclude={'id'})
+                # Remove None values
+                doc_data = {k: v for k, v in doc_data.items() if v is not None}
+                doc_ref = balances_ref.add(doc_data)
+                balance_id = doc_ref[1].id
+                print(f"✅ Created new monthly balance: {balance_id}")
+            
+            return {
+                "message": "Monthly balance saved successfully",
+                "balance_id": balance_id,
+                "user_id": current_user
+            }
+        else:
+            # Mock data fallback
+            return {
+                "message": "Monthly balance saved successfully (mock)",
+                "balance_id": "mock_id",
+                "user_id": current_user
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error saving monthly balance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/monthly-balances/{balance_id}")
+async def delete_monthly_balance(balance_id: str, current_user: str = Depends(get_current_user)):
+    """Delete a monthly balance"""
+    try:
+        print(f"🔍 Delete monthly balance request: balance_id={balance_id}, user={current_user}")
+        
+        if db:
+            # Use Firebase Firestore
+            balances_ref = db.collection('monthly_balances')
+            doc_ref = balances_ref.document(balance_id)
+            doc = doc_ref.get()
+            
+            if not doc.exists:
+                raise HTTPException(status_code=404, detail="Monthly balance not found")
+            
+            balance_data = doc.to_dict()
+            
+            # Ensure user can only delete their own monthly balances
+            if balance_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            doc_ref.delete()
+            print(f"✅ Deleted monthly balance: {balance_id}")
+            
+            return {"message": "Monthly balance deleted successfully"}
+        else:
+            # Mock data fallback
+            return {"message": "Monthly balance deleted successfully (mock)"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting monthly balance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")

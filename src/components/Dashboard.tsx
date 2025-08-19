@@ -2,28 +2,28 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
-import { getMetrics, getTrades } from '@/lib/api';
+import { getMetrics, getMonthlyBalances, getTrades } from '@/lib/api';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { Trade, TradeMetrics } from '@/types/trade';
 import { BarChart, Calendar as CalendarIcon, DollarSign, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import {
-    CartesianGrid,
-    Cell,
-    Line,
-    LineChart,
-    Pie,
-    PieChart,
-    PolarAngleAxis,
-    PolarGrid,
-    PolarRadiusAxis,
-    Radar,
-    RadarChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
 } from 'recharts';
 
 interface MetricCardProps {
@@ -69,6 +69,7 @@ function MetricCard({ title, value, icon: Icon, trend, trendValue }: MetricCardP
 export default function Dashboard() {
   const [metrics, setMetrics] = useState<TradeMetrics | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [monthlyBalances, setMonthlyBalances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -119,13 +120,15 @@ export default function Dashboard() {
       setLoading(true);
       const { startDate, endDate } = getDateRange(selectedDateRange);
       
-      const [metricsData, tradesData] = await Promise.all([
+      const [metricsData, tradesData, monthlyBalancesData] = await Promise.all([
         getMetrics(currentUser.uid, startDate, endDate),
-        getTrades(currentUser.uid, startDate, endDate)
+        getTrades(currentUser.uid, startDate, endDate),
+        getMonthlyBalances(currentUser.uid)
       ]);
       
       setMetrics(metricsData);
       setTrades(tradesData.trades);
+      setMonthlyBalances(monthlyBalancesData.monthly_balances || []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -276,8 +279,8 @@ export default function Dashboard() {
     );
   }
 
-  // Prepare equity curve data (simplified without fund flows)
-  const equityCurveData = trades
+  // Prepare P&L curve data (original cumulative P&L from trades)
+  const pnlCurveData = trades
     .filter(trade => trade.status === 'closed' && trade.sell_price && trade.buy_price)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .reduce((acc, trade, index) => {
@@ -291,8 +294,78 @@ export default function Dashboard() {
       return acc;
     }, [] as { date: string; equity: number; pnl: number }[]);
 
+  // Create account equity curve with monthly balances and current month profit
+  const createAccountEquityCurve = () => {
+    if (monthlyBalances.length === 0) {
+      return [];
+    }
+
+    const equityData: { date: string; equity: number; pnl: number; type: string }[] = [];
+    
+    // Sort monthly balances chronologically
+    const sortedBalances = [...monthlyBalances].sort((a, b) => a.month.localeCompare(b.month));
+    
+    // Add monthly balance points
+    sortedBalances.forEach((balance, index) => {
+      // Add start of month point
+      equityData.push({
+        date: `${balance.month}-01`,
+        equity: balance.start_balance,
+        pnl: index > 0 ? balance.start_balance - sortedBalances[index - 1].start_balance : 0,
+        type: 'month_start'
+      });
+      
+      // Add end of month point if available
+      if (balance.end_balance) {
+        const daysInMonth = new Date(
+          parseInt(balance.month.split('-')[0]), 
+          parseInt(balance.month.split('-')[1]), 
+          0
+        ).getDate();
+        
+        equityData.push({
+          date: `${balance.month}-${daysInMonth.toString().padStart(2, '0')}`,
+          equity: balance.end_balance,
+          pnl: balance.end_balance - balance.start_balance,
+          type: 'month_end'
+        });
+      }
+    });
+
+    // Add current month's trading P&L if we're in the current month
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    const currentMonthBalance = monthlyBalances.find(b => b.month === currentMonth);
+    
+    if (currentMonthBalance) {
+      // Calculate current month's trading P&L
+      const currentMonthTrades = trades.filter(trade => {
+        return trade.date.startsWith(currentMonth) && 
+               trade.status === 'closed' && 
+               trade.sell_price && 
+               trade.buy_price;
+      });
+      
+      const currentMonthPnL = currentMonthTrades.reduce((sum, trade) => {
+        return sum + (trade.sell_price! - trade.buy_price!) * trade.shares;
+      }, 0);
+      
+      // Add current point
+      equityData.push({
+        date: new Date().toISOString().split('T')[0],
+        equity: currentMonthBalance.start_balance + currentMonthPnL,
+        pnl: currentMonthPnL,
+        type: 'current'
+      });
+    }
+    
+    return equityData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+
+  const accountEquityCurveData = createAccountEquityCurve();
+
   // Check if we have enough data for charts
-  const hasChartData = equityCurveData.length > 0;
+  const hasPnLChartData = pnlCurveData.length > 0;
+  const hasEquityChartData = accountEquityCurveData.length > 0;
 
   // Prepare win/loss pie chart data
   const pieData = [
@@ -401,27 +474,115 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Grid */}
-      {hasChartData ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Equity Curve */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Profit Curve - {formatDateRange(selectedDateRange)}</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={equityCurveData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip formatter={(value) => formatCurrency(value as number)} />
-                <Line 
-                  type="monotone" 
-                  dataKey="equity" 
-                  stroke="#3B82F6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+      {(hasPnLChartData || hasEquityChartData) ? (
+        <div className="space-y-6">
+          {/* Trading P&L and Account Equity Curves */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Trading P&L Curve */}
+            {hasPnLChartData && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  Trading P&L Curve - {formatDateRange(selectedDateRange)}
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={pnlCurveData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis tickFormatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip 
+                      formatter={(value, name) => [formatCurrency(value as number), 'Cumulative P&L']}
+                      labelFormatter={(value) => new Date(value).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                      contentStyle={{
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="equity" 
+                      stroke="#3B82F6" 
+                      strokeWidth={2}
+                      dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Account Equity Curve */}
+            {hasEquityChartData && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  Account Equity Value Curve - {formatDateRange(selectedDateRange)}
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={accountEquityCurveData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    />
+                    <YAxis tickFormatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip 
+                      formatter={(value, name) => [formatCurrency(value as number), 'Account Value']}
+                      labelFormatter={(value) => new Date(value).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                      contentStyle={{
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="equity" 
+                      stroke="#10B981" 
+                      strokeWidth={2}
+                      dot={(props) => {
+                        const { payload } = props;
+                        let color = '#10B981'; // Default green
+                        if (payload?.type === 'current') color = '#F59E0B'; // Orange for current
+                        if (payload?.type === 'month_start') color = '#8B5CF6'; // Purple for month starts
+                        return <circle {...props} fill={color} r={4} stroke={color} strokeWidth={2} />;
+                      }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+                
+                {/* Legend for Account Equity */}
+                <div className="mt-4 flex flex-wrap gap-4 text-xs">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="text-gray-600">Month End</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <span className="text-gray-600">Month Start</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span className="text-gray-600">Current (Live)</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Additional Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Win/Loss Distribution */}
         <div className="bg-white rounded-lg shadow p-6">
@@ -498,8 +659,9 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
+          </div>
+          </div>
         </div>
-      </div>
       ) : (
         <div className="bg-white rounded-lg shadow p-8 text-center">
           <div className="text-gray-400 mb-4">

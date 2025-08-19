@@ -5,10 +5,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getMetrics, getMonthlyBalances, getTrades } from '@/lib/api';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { Trade, TradeMetrics } from '@/types/trade';
-import { BarChart, Calendar as CalendarIcon, DollarSign, Target, TrendingDown, TrendingUp } from 'lucide-react';
+import { Calendar as CalendarIcon, DollarSign, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Line,
@@ -32,6 +36,20 @@ interface MetricCardProps {
   icon: React.ComponentType<{ className?: string }>;
   trend?: 'up' | 'down' | 'neutral';
   trendValue?: string;
+}
+
+interface PeriodStats {
+  period: string;
+  pnl: number;
+  winRate: number;
+  expectancy: number;
+  trades: number;
+  runningBalance: number;
+}
+
+interface MonthShortcut {
+  label: string;
+  range: DateRange;
 }
 
 function MetricCard({ title, value, icon: Icon, trend, trendValue }: MetricCardProps) {
@@ -75,29 +93,25 @@ export default function Dashboard() {
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
   });
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    to: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(() => {
+    const now = new Date();
+    return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1),
+      to: new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    };
   });
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
   const calendarRef = useRef<HTMLDivElement>(null);
   const { currentUser } = useAuth();
 
   // Helper function to get date range start and end dates
   const getDateRange = useCallback((range: DateRange | undefined) => {
     if (!range?.from || !range?.to) {
-      // Default to current month if no range is selected
-      const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
-      const formatDate = (date: Date) => {
-        return date.toISOString().split('T')[0];
-      };
-      
+      // Return undefined for "All Time" - let backend handle no date filtering
       return {
-        startDate: formatDate(startDate),
-        endDate: formatDate(endDate)
+        startDate: undefined,
+        endDate: undefined
       };
     }
     
@@ -178,11 +192,74 @@ export default function Dashboard() {
     setIsCalendarOpen(false);
   };
 
+  // Generate month shortcuts
+  const getMonthShortcuts = useCallback((): MonthShortcut[] => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    return [
+      {
+        label: 'This Month',
+        range: {
+          from: new Date(currentYear, currentMonth, 1),
+          to: new Date(currentYear, currentMonth + 1, 0)
+        }
+      },
+      {
+        label: 'Last Month',
+        range: {
+          from: new Date(currentYear, currentMonth - 1, 1),
+          to: new Date(currentYear, currentMonth, 0)
+        }
+      },
+      {
+        label: 'Last 3 Months',
+        range: {
+          from: new Date(currentYear, currentMonth - 2, 1),
+          to: new Date(currentYear, currentMonth + 1, 0)
+        }
+      },
+      {
+        label: 'This Quarter',
+        range: {
+          from: new Date(currentYear, Math.floor(currentMonth / 3) * 3, 1),
+          to: new Date(currentYear, Math.floor(currentMonth / 3) * 3 + 3, 0)
+        }
+      },
+      {
+        label: 'This Year',
+        range: {
+          from: new Date(currentYear, 0, 1),
+          to: new Date(currentYear, 11, 31)
+        }
+      },
+      {
+        label: 'Last Year',
+        range: {
+          from: new Date(currentYear - 1, 0, 1),
+          to: new Date(currentYear - 1, 11, 31)
+        }
+      }
+    ];
+  }, []);
+
+  // Handle month shortcut selection
+  const handleMonthShortcut = (shortcut: MonthShortcut) => {
+    setSelectedDateRange(shortcut.range);
+    setDateRange(shortcut.range);
+  };
+
+  // Clear date filter
+  const clearDateFilter = () => {
+    setSelectedDateRange(undefined);
+    setDateRange(undefined);
+  };
+
   // Helper function to format date range for display
   const formatDateRange = (range: DateRange | undefined) => {
     if (!range?.from || !range?.to) {
-      const now = new Date();
-      return now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      return 'All Time';
     }
     
     if (range.from.getMonth() === range.to.getMonth() && range.from.getFullYear() === range.to.getFullYear()) {
@@ -363,6 +440,122 @@ export default function Dashboard() {
 
   const accountEquityCurveData = createAccountEquityCurve();
 
+  // Generate period stats based on selected date range
+  const generatePeriodStats = (): PeriodStats[] => {
+    if (!trades.length) return [];
+
+    // Filter trades by selected date range
+    const { startDate, endDate } = getDateRange(selectedDateRange);
+    const filteredTrades = trades.filter(trade => {
+      // If no date range is set (All Time), include all trades
+      if (!startDate || !endDate) return true;
+      
+      const tradeDate = trade.date;
+      return tradeDate >= startDate && tradeDate <= endDate;
+    });
+
+    const closedTrades = filteredTrades
+      .filter(trade => trade.status === 'closed' && trade.sell_price)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    if (closedTrades.length === 0) return [];
+
+    // Determine period type based on date range span
+    let useWeekly = true; // Default to weekly for "All Time"
+    
+    if (startDate && endDate) {
+      const rangeStart = new Date(startDate);
+      const rangeEnd = new Date(endDate);
+      const daysDiff = Math.ceil((rangeEnd.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
+      useWeekly = daysDiff <= 90; // Use weekly for ranges <= 3 months, monthly for longer
+    } else {
+      // For "All Time", use monthly if we have many trades spread over a long period
+      const dateRange = closedTrades.length > 0 
+        ? new Date(closedTrades[closedTrades.length - 1].date).getTime() - new Date(closedTrades[0].date).getTime()
+        : 0;
+      const daysDiff = Math.ceil(dateRange / (1000 * 60 * 60 * 24));
+      useWeekly = daysDiff <= 90;
+    }
+
+    const periods = new Map<string, Trade[]>();
+    
+    closedTrades.forEach(trade => {
+      const date = new Date(trade.date);
+      let periodKey: string;
+      
+      if (useWeekly) {
+        // Get week start (Sunday)
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        periodKey = weekStart.toISOString().split('T')[0];
+      } else {
+        // Monthly
+        periodKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      }
+      
+      if (!periods.has(periodKey)) {
+        periods.set(periodKey, []);
+      }
+      periods.get(periodKey)!.push(trade);
+    });
+
+    const stats: PeriodStats[] = [];
+    let runningBalance = 0;
+
+    Array.from(periods.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([periodKey, periodTrades]) => {
+        const pnlValues = periodTrades.map(trade => 
+          ((trade.sell_price ?? 0) - (trade.buy_price ?? 0)) * trade.shares
+        );
+        
+        const totalPnl = pnlValues.reduce((sum, pnl) => sum + pnl, 0);
+        const winningTrades = pnlValues.filter(pnl => pnl > 0);
+        const losingTrades = pnlValues.filter(pnl => pnl < 0);
+        
+        const winRate = periodTrades.length > 0 
+          ? (winningTrades.length / periodTrades.length) * 100 
+          : 0;
+          
+        const avgWin = winningTrades.length > 0 
+          ? winningTrades.reduce((sum, win) => sum + win, 0) / winningTrades.length 
+          : 0;
+          
+        const avgLoss = losingTrades.length > 0 
+          ? Math.abs(losingTrades.reduce((sum, loss) => sum + loss, 0) / losingTrades.length) 
+          : 0;
+          
+        const expectancy = (winRate / 100 * avgWin) - ((100 - winRate) / 100 * avgLoss);
+        
+        runningBalance += totalPnl;
+
+        let displayPeriod: string;
+        if (useWeekly) {
+          const date = new Date(periodKey);
+          displayPeriod = `Week of ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        } else {
+          const [year, month] = periodKey.split('-');
+          const date = new Date(parseInt(year), parseInt(month) - 1);
+          displayPeriod = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+
+        stats.push({
+          period: displayPeriod,
+          pnl: totalPnl,
+          winRate,
+          expectancy,
+          trades: periodTrades.length,
+          runningBalance
+        });
+      });
+
+    return stats;
+  };
+
+  const periodStats = generatePeriodStats();
+  const latestPeriod = periodStats[periodStats.length - 1];
+  const previousPeriod = periodStats[periodStats.length - 2];
+
   // Check if we have enough data for charts
   const hasPnLChartData = pnlCurveData.length > 0;
   const hasEquityChartData = accountEquityCurveData.length > 0;
@@ -438,8 +631,43 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-        )}
-      </div>
+                  )}
+        </div>
+
+        {/* Quick Date Filters */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-3">Quick Date Filters</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={clearDateFilter}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                !selectedDateRange
+                  ? 'bg-blue-100 text-blue-800 border-blue-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              } border`}
+            >
+              All Time
+            </button>
+            {getMonthShortcuts().map((shortcut) => {
+              const isSelected = selectedDateRange?.from?.getTime() === shortcut.range.from?.getTime() &&
+                                selectedDateRange?.to?.getTime() === shortcut.range.to?.getTime();
+              
+              return (
+                <button
+                  key={shortcut.label}
+                  onClick={() => handleMonthShortcut(shortcut)}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    isSelected
+                      ? 'bg-blue-100 text-blue-800 border-blue-200'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } border`}
+                >
+                  {shortcut.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -460,7 +688,7 @@ export default function Dashboard() {
         <MetricCard
           title="Profit Factor"
           value={metrics.profit_factor.toFixed(2)}
-          icon={BarChart}
+          icon={TrendingUp}
           trend={metrics.profit_factor >= 1 ? 'up' : 'down'}
           trendValue={`${metrics.profit_factor >= 1 ? 'Profitable' : 'Unprofitable'}`}
         />
@@ -676,6 +904,238 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Progress Tracking Section */}
+      <div className="space-y-6">
+        {/* Period Progress Header */}
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Period Performance</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Track your trading performance over time for {formatDateRange(selectedDateRange)}
+          </p>
+        </div>
+
+        {/* Current Period Stats */}
+        {latestPeriod && (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <DollarSign className="h-8 w-8 text-blue-500" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      Latest Period P&L
+                    </dt>
+                    <dd className={`text-2xl font-semibold ${
+                      latestPeriod.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {formatCurrency(latestPeriod.pnl)}
+                    </dd>
+                    {previousPeriod && (
+                      <dd className="text-sm text-gray-500">
+                        vs {formatCurrency(previousPeriod.pnl)} last period
+                      </dd>
+                    )}
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <Target className="h-8 w-8 text-green-500" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Win Rate</dt>
+                    <dd className="text-2xl font-semibold text-gray-900">
+                      {formatPercentage(latestPeriod.winRate)}
+                    </dd>
+                    {previousPeriod && (
+                      <dd className="text-sm text-gray-500">
+                        vs {formatPercentage(previousPeriod.winRate)} last period
+                      </dd>
+                    )}
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <TrendingUp className="h-8 w-8 text-purple-500" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Expectancy</dt>
+                    <dd className={`text-2xl font-semibold ${
+                      latestPeriod.expectancy >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {formatCurrency(latestPeriod.expectancy)}
+                    </dd>
+                    {previousPeriod && (
+                      <dd className="text-sm text-gray-500">
+                        vs {formatCurrency(previousPeriod.expectancy)} last period
+                      </dd>
+                    )}
+                  </dl>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <CalendarIcon className="h-8 w-8 text-orange-500" />
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Trades</dt>
+                    <dd className="text-2xl font-semibold text-gray-900">
+                      {latestPeriod.trades}
+                    </dd>
+                    {previousPeriod && (
+                      <dd className="text-sm text-gray-500">
+                        vs {previousPeriod.trades} last period
+                      </dd>
+                    )}
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Progress Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Account Balance Over Time */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Account Balance Over Time
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={periodStats}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="period" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
+                <Tooltip 
+                  formatter={(value) => [formatCurrency(value as number), 'Balance']}
+                  labelStyle={{ color: '#374151' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="runningBalance"
+                  stroke="#3B82F6"
+                  fill="#3B82F6"
+                  fillOpacity={0.1}
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Period P&L */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Period P&L
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={periodStats}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="period" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
+                <Tooltip 
+                  formatter={(value) => [formatCurrency(value as number), 'P&L']}
+                  labelStyle={{ color: '#374151' }}
+                />
+                <Bar 
+                  dataKey="pnl" 
+                  fill="#10B981"
+                  radius={[2, 2, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Win Rate Trend */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Win Rate Trend
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={periodStats}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="period" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis 
+                  domain={[0, 100]}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <Tooltip 
+                  formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Win Rate']}
+                  labelStyle={{ color: '#374151' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="winRate"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Trading Activity */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Trading Activity
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={periodStats}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="period" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis />
+                <Tooltip 
+                  formatter={(value) => [value, 'Trades']}
+                  labelStyle={{ color: '#374151' }}
+                />
+                <Bar 
+                  dataKey="trades" 
+                  fill="#6366F1"
+                  radius={[2, 2, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
 
     </div>
   );

@@ -137,65 +137,6 @@ class UserProfile(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-# Mock data fallback (same as main_simple.py)
-# MOCK_TRADES = [
-#     {
-#         "id": "1",
-#         "user_id": "user123",
-#         "date": "2024-01-15",
-#         "ticker": "AAPL",
-#         "buy_price": 150.00,
-#         "sell_price": 165.00,
-#         "shares": 100,
-#         "risk": 2.0,
-#         "notes": "Strong breakout pattern, good volume",
-#         "status": "closed",
-#         "created_at": "2024-01-15T10:30:00Z",
-#         "updated_at": "2024-01-16T15:45:00Z"
-#     },
-#     {
-#         "id": "2",
-#         "user_id": "user123",
-#         "date": "2024-01-18",
-#         "ticker": "TSLA",
-#         "buy_price": 240.00,
-#         "sell_price": 225.00,
-#         "shares": 50,
-#         "risk": 1.5,
-#         "notes": "Failed support level, quick exit",
-#         "status": "closed",
-#         "created_at": "2024-01-18T09:15:00Z",
-#         "updated_at": "2024-01-18T14:20:00Z"
-#     },
-#     {
-#         "id": "3",
-#         "user_id": "user123",
-#         "date": "2024-01-22",
-#         "ticker": "MSFT",
-#         "buy_price": 380.00,
-#         "sell_price": 395.00,
-#         "shares": 25,
-#         "risk": 1.8,
-#         "notes": "Earnings play, exceeded expectations",
-#         "status": "closed",
-#         "created_at": "2024-01-22T08:45:00Z",
-#         "updated_at": "2024-01-23T16:30:00Z"
-#     },
-#     {
-#         "id": "4",
-#         "user_id": "user123",
-#         "date": "2024-01-25",
-#         "ticker": "NVDA",
-#         "buy_price": 620.00,
-#         "sell_price": None,
-#         "shares": 10,
-#         "risk": 2.5,
-#         "notes": "AI sector momentum, holding for trend",
-#         "status": "open",
-#         "created_at": "2024-01-25T11:00:00Z",
-#         "updated_at": "2024-01-25T11:00:00Z"
-#     }
-# ]
 
 @app.get("/")
 async def root():

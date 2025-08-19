@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { BarChart3, BookOpen, Calendar, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
+import { BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
@@ -17,6 +17,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: BarChart3 },
     { name: 'Add Trade', href: '/add-trade', icon: Plus },
+    { name: 'Trades', href: '/trades', icon: List },
     { name: 'Calendar', href: '/calendar', icon: Calendar },
     { name: 'Progress', href: '/progress', icon: TrendingUp },
     { name: 'Journal', href: '/journal', icon: BookOpen },

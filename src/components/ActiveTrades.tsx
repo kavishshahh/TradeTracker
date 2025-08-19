@@ -52,7 +52,7 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
   };
 
   const setPartialExit = (fraction: number) => {
-    const sharesToExit = Math.floor(trade.shares * fraction);
+    const sharesToExit = Math.round((trade.shares * fraction) * 100) / 100; // Round to 2 decimal places
     setValue('shares_to_exit', sharesToExit);
   };
 
@@ -140,14 +140,14 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
                 onClick={() => setPartialExit(1/3)}
                 className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
               >
-                1/3 ({Math.floor(trade.shares / 3)})
+                1/3 ({Math.round((trade.shares / 3) * 100) / 100})
               </button>
               <button
                 type="button"
                 onClick={() => setPartialExit(1/2)}
                 className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
               >
-                1/2 ({Math.floor(trade.shares / 2)})
+                1/2 ({Math.round((trade.shares / 2) * 100) / 100})
               </button>
               <button
                 type="button"

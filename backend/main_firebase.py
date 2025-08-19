@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, validator
+from typing import List, Optional, Union
 from datetime import datetime, date
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
@@ -125,9 +125,17 @@ class TradeMetrics(BaseModel):
 
 class ExitTradeRequest(BaseModel):
     ticker: str
-    shares_to_exit: float
-    sell_price: float
+    shares_to_exit: Union[float, str]
+    sell_price: Union[float, str]
     notes: Optional[str] = ""
+    
+    @validator('shares_to_exit', pre=True)
+    def parse_shares_to_exit(cls, v):
+        return float(v) if v is not None else 0.0
+    
+    @validator('sell_price', pre=True)
+    def parse_sell_price(cls, v):
+        return float(v) if v is not None else 0.0
 
 class UserProfile(BaseModel):
     user_id: Optional[str] = None
@@ -340,7 +348,8 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
                     'buy_price': trade_data['buy_price'],
                     'sell_price': exit_request.sell_price,
                     'shares': exit_request.shares_to_exit,
-                    'risk': trade_data['risk'],
+                    'risk': trade_data.get('risk'),
+                    'risk_dollars': trade_data.get('risk_dollars'),
                     'notes': f"{trade_data.get('notes', '')} | Partial exit: {exit_request.notes}".strip(' |'),
                     'status': 'closed',
                     'created_at': trade_data['created_at'],
@@ -392,7 +401,8 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
                     "buy_price": trade['buy_price'],
                     "sell_price": exit_request.sell_price,
                     "shares": exit_request.shares_to_exit,
-                    "risk": trade['risk'],
+                    "risk": trade.get('risk'),
+                    "risk_dollars": trade.get('risk_dollars'),
                     "notes": f"{trade.get('notes', '')} | Partial exit: {exit_request.notes}".strip(' |'),
                     "status": "closed",
                     "created_at": trade['created_at'],

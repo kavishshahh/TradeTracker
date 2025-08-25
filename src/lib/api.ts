@@ -131,50 +131,52 @@ export async function getAccountBalance(userId: string): Promise<{ account_balan
   return response.json();
 }
 
-// Monthly Balance Management
-export async function getMonthlyBalances(userId: string): Promise<{ monthly_balances: any[] }> {
+// Monthly Returns Management
+export async function getMonthlyReturns(userId: string): Promise<{ monthly_returns: any[] }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/monthly-balances/${userId}`, { headers });
+  const response = await fetch(`${API_BASE_URL}/monthly-returns/${userId}`, { headers });
   
   if (!response.ok) {
-    throw new Error('Failed to fetch monthly balances');
+    throw new Error('Failed to fetch monthly returns');
   }
   
   return response.json();
 }
 
-export async function saveMonthlyBalance(monthlyBalance: {
+export async function saveMonthlyReturn(monthlyReturn: {
   month: string;
-  start_balance: number;
-  end_balance?: number;
-  is_manual?: boolean;
-  notes?: string;
-}): Promise<{ message: string; balance_id: string; user_id: string }> {
+  start_cap: number;
+  close_cap?: number;
+  percentage_return?: number;
+  dollar_return?: number;
+  inr_return?: number;
+  comments?: string;
+}): Promise<{ message: string; return_id: string; user_id: string }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/monthly-balances`, {
+  const response = await fetch(`${API_BASE_URL}/monthly-returns`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(monthlyBalance),
+    body: JSON.stringify(monthlyReturn),
   });
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Failed to save monthly balance');
+    throw new Error(error.detail || 'Failed to save monthly return');
   }
   
   return response.json();
 }
 
-export async function deleteMonthlyBalance(balanceId: string): Promise<{ message: string }> {
+export async function deleteMonthlyReturn(returnId: string): Promise<{ message: string }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE_URL}/monthly-balances/${balanceId}`, {
+  const response = await fetch(`${API_BASE_URL}/monthly-returns/${returnId}`, {
     method: 'DELETE',
     headers,
   });
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Failed to delete monthly balance');
+    throw new Error(error.detail || 'Failed to delete monthly return');
   }
   
   return response.json();

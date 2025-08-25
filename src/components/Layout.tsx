@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, User, X } from 'lucide-react';
+import { BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { ToastContainer } from 'react-toastify';
@@ -22,6 +22,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Trades', href: '/trades', icon: List },
     { name: 'Calendar', href: '/calendar', icon: Calendar },
     { name: 'Journal', href: '/journal', icon: BookOpen },
+    { name: 'Monthly Returns', href: '/monthly-returns', icon: TrendingUp },
   ];
 
   return (

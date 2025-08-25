@@ -145,14 +145,16 @@ class UserProfile(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-class MonthlyBalance(BaseModel):
+class MonthlyReturn(BaseModel):
     id: Optional[str] = None
     user_id: Optional[str] = None  # Set by the endpoint based on auth
-    month: str  # Format: "YYYY-MM"
-    start_balance: float
-    end_balance: Optional[float] = None
-    is_manual: bool = False  # Whether start balance was manually set
-    notes: Optional[str] = ""
+    month: str  # Format: "Month YYYY" (e.g., "December 2024")
+    start_cap: float
+    close_cap: Optional[float] = None
+    percentage_return: Optional[float] = None
+    dollar_return: Optional[float] = None
+    inr_return: Optional[float] = None
+    comments: Optional[str] = ""
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -820,153 +822,179 @@ async def get_account_balance(user_id: str, current_user: str = Depends(get_curr
         print(f"❌ Error fetching account balance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Monthly Balance Management Endpoints
+# Monthly Returns Management Endpoints
 
-@app.get("/monthly-balances/{user_id}")
-async def get_monthly_balances(user_id: str, current_user: str = Depends(get_current_user)):
-    """Get all monthly balances for a user"""
+@app.get("/monthly-returns/{user_id}")
+async def get_monthly_returns(user_id: str, current_user: str = Depends(get_current_user)):
+    """Get all monthly returns for a user"""
     try:
-        print(f"🔍 Get monthly balances request: user={user_id}")
+        print(f"🔍 Get monthly returns request: user={user_id}")
         
-        # Ensure user can only access their own monthly balances
+        # Ensure user can only access their own monthly returns
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s monthly balances")
+            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s monthly returns")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
             # Use Firebase Firestore
-            balances_ref = db.collection('monthly_balances')
-            query = balances_ref.where("user_id", "==", user_id).order_by("month")
+            returns_ref = db.collection('monthly_returns')
+            query = returns_ref.where("user_id", "==", user_id).order_by("created_at")
             
             docs = query.get()
-            balances = []
+            returns = []
             for doc in docs:
-                balance_data = doc.to_dict()
-                balance_data['id'] = doc.id
+                return_data = doc.to_dict()
+                return_data['id'] = doc.id
                 
                 # Convert datetime objects to strings
                 for field in ['created_at', 'updated_at']:
-                    if isinstance(balance_data.get(field), datetime):
-                        balance_data[field] = balance_data[field].isoformat()
+                    if isinstance(return_data.get(field), datetime):
+                        return_data[field] = return_data[field].isoformat()
                 
-                balances.append(balance_data)
+                returns.append(return_data)
             
-            print(f"✅ Found {len(balances)} monthly balances for user {user_id}")
-            return {"monthly_balances": balances}
+            print(f"✅ Found {len(returns)} monthly returns for user {user_id}")
+            return {"monthly_returns": returns}
         else:
             # Mock data fallback
-            return {"monthly_balances": []}
+            mock_returns = [
+                {
+                    "id": "1",
+                    "user_id": user_id,
+                    "month": "December 2024",
+                    "start_cap": 705.81,
+                    "close_cap": 1190.38,
+                    "percentage_return": 68.65,
+                    "dollar_return": 484.57,
+                    "inr_return": 42157.59,
+                    "comments": ""
+                },
+                {
+                    "id": "2",
+                    "user_id": user_id,
+                    "month": "January 2025",
+                    "start_cap": 1190.38,
+                    "close_cap": 1154.54,
+                    "percentage_return": -3.01,
+                    "dollar_return": -35.84,
+                    "inr_return": -3118.08,
+                    "comments": ""
+                }
+            ]
+            return {"monthly_returns": mock_returns}
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error fetching monthly balances: {e}")
+        print(f"❌ Error fetching monthly returns: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/monthly-balances")
-async def create_or_update_monthly_balance(balance: MonthlyBalance, current_user: str = Depends(get_current_user)):
-    """Create or update a monthly balance"""
+@app.post("/monthly-returns")
+async def create_or_update_monthly_return(monthly_return: MonthlyReturn, current_user: str = Depends(get_current_user)):
+    """Create or update a monthly return"""
     try:
-        print(f"🔍 Create/update monthly balance request: user={current_user}")
-        print(f"📊 Monthly balance data received: {balance.model_dump()}")
+        print(f"🔍 Create/update monthly return request: user={current_user}")
+        print(f"📊 Monthly return data received: {monthly_return.model_dump()}")
         
-        # Ensure user can only create/update their own monthly balances
-        balance.user_id = current_user
+        # Ensure user can only create/update their own monthly returns
+        monthly_return.user_id = current_user
         
         # Validation
-        if not balance.month:
+        if not monthly_return.month:
             raise HTTPException(status_code=422, detail="Month is required")
         
-        if balance.start_balance is None or balance.start_balance <= 0:
-            raise HTTPException(status_code=422, detail="Start balance must be a positive number")
+        if monthly_return.start_cap is None or monthly_return.start_cap <= 0:
+            raise HTTPException(status_code=422, detail="Start capital must be a positive number")
         
-        # Validate month format (YYYY-MM)
-        try:
-            datetime.strptime(balance.month, '%Y-%m')
-        except ValueError:
-            raise HTTPException(status_code=422, detail="Month must be in YYYY-MM format")
+        # Calculate returns if close_cap is provided
+        if monthly_return.close_cap is not None:
+            if monthly_return.percentage_return is None:
+                monthly_return.percentage_return = ((monthly_return.close_cap - monthly_return.start_cap) / monthly_return.start_cap) * 100
+            
+            if monthly_return.dollar_return is None:
+                monthly_return.dollar_return = monthly_return.close_cap - monthly_return.start_cap
         
-        balance.updated_at = datetime.now()
+        monthly_return.updated_at = datetime.now()
         
         if db:
             # Use Firebase Firestore
-            balances_ref = db.collection('monthly_balances')
+            returns_ref = db.collection('monthly_returns')
             
-            # Check if monthly balance already exists
-            existing_query = balances_ref.where("user_id", "==", current_user).where("month", "==", balance.month).limit(1)
+            # Check if monthly return already exists
+            existing_query = returns_ref.where("user_id", "==", current_user).where("month", "==", monthly_return.month).limit(1)
             existing_docs = list(existing_query.get())
             
             if existing_docs:
                 # Update existing
                 doc_ref = existing_docs[0].reference
-                update_data = balance.model_dump(exclude={'id', 'created_at'})
+                update_data = monthly_return.model_dump(exclude={'id', 'created_at'})
                 # Remove None values
                 update_data = {k: v for k, v in update_data.items() if v is not None}
                 doc_ref.update(update_data)
-                balance_id = existing_docs[0].id
-                print(f"✅ Updated existing monthly balance: {balance_id}")
+                return_id = existing_docs[0].id
+                print(f"✅ Updated existing monthly return: {return_id}")
             else:
                 # Create new
-                balance.created_at = datetime.now()
-                doc_data = balance.model_dump(exclude={'id'})
+                monthly_return.created_at = datetime.now()
+                doc_data = monthly_return.model_dump(exclude={'id'})
                 # Remove None values
                 doc_data = {k: v for k, v in doc_data.items() if v is not None}
-                doc_ref = balances_ref.add(doc_data)
-                balance_id = doc_ref[1].id
-                print(f"✅ Created new monthly balance: {balance_id}")
+                doc_ref = returns_ref.add(doc_data)
+                return_id = doc_ref[1].id
+                print(f"✅ Created new monthly return: {return_id}")
             
             return {
-                "message": "Monthly balance saved successfully",
-                "balance_id": balance_id,
+                "message": "Monthly return saved successfully",
+                "return_id": return_id,
                 "user_id": current_user
             }
         else:
             # Mock data fallback
             return {
-                "message": "Monthly balance saved successfully (mock)",
-                "balance_id": "mock_id",
+                "message": "Monthly return saved successfully (mock)",
+                "return_id": "mock_id",
                 "user_id": current_user
             }
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error saving monthly balance: {e}")
+        print(f"❌ Error saving monthly return: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/monthly-balances/{balance_id}")
-async def delete_monthly_balance(balance_id: str, current_user: str = Depends(get_current_user)):
-    """Delete a monthly balance"""
+@app.delete("/monthly-returns/{return_id}")
+async def delete_monthly_return(return_id: str, current_user: str = Depends(get_current_user)):
+    """Delete a monthly return"""
     try:
-        print(f"🔍 Delete monthly balance request: balance_id={balance_id}, user={current_user}")
+        print(f"🔍 Delete monthly return request: return_id={return_id}, user={current_user}")
         
         if db:
             # Use Firebase Firestore
-            balances_ref = db.collection('monthly_balances')
-            doc_ref = balances_ref.document(balance_id)
+            returns_ref = db.collection('monthly_returns')
+            doc_ref = returns_ref.document(return_id)
             doc = doc_ref.get()
             
             if not doc.exists:
-                raise HTTPException(status_code=404, detail="Monthly balance not found")
+                raise HTTPException(status_code=404, detail="Monthly return not found")
             
-            balance_data = doc.to_dict()
+            return_data = doc.to_dict()
             
-            # Ensure user can only delete their own monthly balances
-            if balance_data.get('user_id') != current_user:
+            # Ensure user can only delete their own monthly returns
+            if return_data.get('user_id') != current_user:
                 raise HTTPException(status_code=403, detail="Access denied")
             
             doc_ref.delete()
-            print(f"✅ Deleted monthly balance: {balance_id}")
+            print(f"✅ Deleted monthly return: {return_id}")
             
-            return {"message": "Monthly balance deleted successfully"}
+            return {"message": "Monthly return deleted successfully"}
         else:
             # Mock data fallback
-            return {"message": "Monthly balance deleted successfully (mock)"}
+            return {"message": "Monthly return deleted successfully (mock)"}
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error deleting monthly balance: {e}")
+        print(f"❌ Error deleting monthly return: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")

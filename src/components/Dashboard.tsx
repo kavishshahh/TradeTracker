@@ -2,7 +2,7 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
-import { getMetrics, getMonthlyBalances, getTrades } from '@/lib/api';
+import { getMetrics, getMonthlyReturns, getTrades } from '@/lib/api';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import { Trade, TradeMetrics } from '@/types/trade';
 import { Calendar as CalendarIcon, DollarSign, Target, TrendingDown, TrendingUp } from 'lucide-react';
@@ -134,15 +134,40 @@ export default function Dashboard() {
       setLoading(true);
       const { startDate, endDate } = getDateRange(selectedDateRange);
       
-      const [metricsData, tradesData, monthlyBalancesData] = await Promise.all([
+      const [metricsData, tradesData, monthlyReturnsData] = await Promise.all([
         getMetrics(currentUser.uid, startDate, endDate),
         getTrades(currentUser.uid, startDate, endDate),
-        getMonthlyBalances(currentUser.uid)
+        getMonthlyReturns(currentUser.uid)
       ]);
       
       setMetrics(metricsData);
       setTrades(tradesData.trades);
-      setMonthlyBalances(monthlyBalancesData.monthly_balances || []);
+      
+      // Transform monthly returns data to match expected format
+      const transformedReturns = (monthlyReturnsData.monthly_returns || []).map((returnData: any) => {
+        // Convert "December 2024" format to "2024-12" format
+        const monthYearMatch = returnData.month.match(/(\w+)\s+(\d{4})/);
+        let formattedMonth = returnData.month;
+        
+        if (monthYearMatch) {
+          const [, monthName, year] = monthYearMatch;
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                             'July', 'August', 'September', 'October', 'November', 'December'];
+          const monthIndex = monthNames.indexOf(monthName);
+          if (monthIndex !== -1) {
+            formattedMonth = `${year}-${(monthIndex + 1).toString().padStart(2, '0')}`;
+          }
+        }
+        
+        return {
+          ...returnData,
+          month: formattedMonth,
+          start_balance: returnData.start_cap,
+          end_balance: returnData.close_cap
+        };
+      });
+      
+      setMonthlyBalances(transformedReturns);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

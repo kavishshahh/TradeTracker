@@ -2,10 +2,10 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
-import { getTrades } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
-import { Trade } from '@/types/trade';
-import { BarChart3, Calendar as CalendarIcon, DollarSign, Download, Filter, Search, Target, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { getFeesConfig, getTrades } from '@/lib/api';
+import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency } from '@/lib/utils';
+import { FeesConfig, Trade } from '@/types/trade';
+import { BarChart3, Calculator, Calendar as CalendarIcon, DollarSign, Download, Filter, Search, Target, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 
@@ -16,15 +16,22 @@ interface MonthShortcut {
 
 interface TradeDetailModalProps {
   trade: Trade | null;
+  feesConfig: FeesConfig | null;
+  showNetProfits: boolean;
   onClose: () => void;
 }
 
-function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
+function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeDetailModalProps) {
   if (!trade) return null;
 
-  const pnl = trade.sell_price && trade.buy_price
+  const grossPnl = trade.sell_price && trade.buy_price
     ? (trade.sell_price - trade.buy_price) * trade.shares 
     : 0;
+  
+  const netPnl = feesConfig ? calculateNetPnL(trade, feesConfig) : grossPnl;
+  const pnl = showNetProfits ? netPnl : grossPnl;
+  
+  const fees = feesConfig ? calculateCompleteTradeFees(trade, feesConfig) : null;
   
   const dollarValue = trade.buy_price ? trade.buy_price * trade.shares : 0;
   
@@ -79,7 +86,7 @@ function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
           </div>
 
           {/* Key Metrics */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid gap-4 ${fees && trade.status === 'closed' ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
             <div className="bg-blue-50 rounded-lg p-4">
               <div className="flex items-center">
                 <DollarSign className="h-5 w-5 text-blue-500 mr-2" />
@@ -99,7 +106,7 @@ function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                 )}
                 <div>
                   <p className={`text-xs font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    P&L
+                    P&L ({showNetProfits ? 'Net' : 'Gross'})
                   </p>
                   <p className={`text-lg font-semibold ${pnl >= 0 ? 'text-green-900' : 'text-red-900'}`}>
                     {trade.status === 'closed' ? formatCurrency(pnl) : 'Open'}
@@ -108,12 +115,27 @@ function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
               </div>
             </div>
 
-            <div className="bg-orange-50 rounded-lg p-4">
+            {/* Fees Card */}
+            {fees && trade.status === 'closed' && (
+              <div className="bg-orange-50 rounded-lg p-4">
+                <div className="flex items-center">
+                  <Calculator className="h-5 w-5 text-orange-500 mr-2" />
+                  <div>
+                    <p className="text-xs font-medium text-orange-600">Trading Fees</p>
+                    <p className="text-lg font-semibold text-orange-900">
+                      {formatCurrency(fees.totalFees)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-yellow-50 rounded-lg p-4">
               <div className="flex items-center">
-                <Target className="h-5 w-5 text-orange-500 mr-2" />
+                <Target className="h-5 w-5 text-yellow-600 mr-2" />
                 <div>
-                  <p className="text-xs font-medium text-orange-600">Risk Amount</p>
-                  <p className="text-lg font-semibold text-orange-900">
+                  <p className="text-xs font-medium text-yellow-700">Risk Amount</p>
+                  <p className="text-lg font-semibold text-yellow-900">
                     {riskAmount > 0 ? formatCurrency(riskAmount) : 'Not set'}
                   </p>
                 </div>
@@ -230,7 +252,7 @@ function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Actual P&L:</span>
+                  <span className="text-gray-500">{showNetProfits ? 'Net' : 'Gross'} P&L:</span>
                   <p className={`font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(pnl)}
                   </p>
@@ -242,6 +264,62 @@ function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
                   </p>
                 </div>
               </div>
+              
+              {/* Fees Breakdown */}
+              {fees && feesConfig && (
+                <div className="border-t border-gray-200 pt-3">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Fees Breakdown</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <span className="text-gray-500">Brokerage:</span>
+                      <p className="font-medium text-orange-600">
+                        -{formatCurrency(fees.breakdown.buyBrokerage + fees.breakdown.sellBrokerage)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Exchange Charges:</span>
+                      <p className="font-medium text-orange-600">
+                        -{formatCurrency(fees.breakdown.buyExchangeCharges + fees.breakdown.sellExchangeCharges)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">IFSCA Fees:</span>
+                      <p className="font-medium text-orange-600">
+                        -{formatCurrency(fees.breakdown.buyIfscaFees + fees.breakdown.sellIfscaFees)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Platform Fees:</span>
+                      <p className="font-medium text-orange-600">
+                        -{formatCurrency(fees.breakdown.platformFees)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {showNetProfits && grossPnl !== netPnl && (
+                    <div className="mt-3 pt-2 border-t border-gray-200">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Gross P&L:</span>
+                        <span className={`font-medium ${grossPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(grossPnl)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Total Fees:</span>
+                        <span className="font-medium text-orange-600">
+                          -{formatCurrency(fees.totalFees)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm border-t border-gray-200 pt-1 mt-1">
+                        <span className="text-gray-900 font-medium">Net P&L:</span>
+                        <span className={`font-semibold ${netPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(netPnl)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -263,6 +341,8 @@ function TradeDetailModal({ trade, onClose }: TradeDetailModalProps) {
 export default function TradesView() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
+  const [feesConfig, setFeesConfig] = useState<FeesConfig | null>(null);
+  const [showNetProfits, setShowNetProfits] = useState(true);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'closed'>('all');
@@ -274,6 +354,20 @@ export default function TradesView() {
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   const { currentUser } = useAuth();
+
+  // Default fees configuration
+  const getDefaultFeesConfig = (): FeesConfig => ({
+    brokerage_percentage: 0.25,
+    brokerage_max_usd: 25,
+    exchange_transaction_charges_percentage: 0.12,
+    ifsca_turnover_fees_percentage: 0.0001,
+    platform_fee_usd: 0,
+    withdrawal_fee_usd: 0,
+    amc_yearly_usd: 0,
+    account_opening_fee_usd: 0,
+    tracking_charges_usd: 0,
+    profile_verification_fee_usd: 0,
+  });
 
   // Generate month shortcuts
   const getMonthShortcuts = useCallback((): MonthShortcut[] => {
@@ -351,17 +445,21 @@ export default function TradesView() {
       setLoading(true);
       const dateRangeParams = getDateRange(selectedDateRange);
       
-      const response = await getTrades(
-        currentUser.uid,
-        dateRangeParams?.startDate,
-        dateRangeParams?.endDate
-      );
+      const [tradesResponse, feesResponse] = await Promise.all([
+        getTrades(
+          currentUser.uid,
+          dateRangeParams?.startDate,
+          dateRangeParams?.endDate
+        ),
+        getFeesConfig(currentUser.uid).catch(() => ({ fees_config: getDefaultFeesConfig() }))
+      ]);
       
-      const sortedTrades = response.trades.sort((a, b) => 
+      const sortedTrades = tradesResponse.trades.sort((a, b) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       
       setTrades(sortedTrades);
+      setFeesConfig(feesResponse.fees_config);
     } catch (error) {
       console.error('Error fetching trades:', error);
     } finally {
@@ -404,10 +502,12 @@ export default function TradesView() {
           bVal = b.ticker;
           break;
         case 'pnl':
-          const aPnl = a.sell_price && a.buy_price ? (a.sell_price - a.buy_price) * a.shares : 0;
-          const bPnl = b.sell_price && b.buy_price ? (b.sell_price - b.buy_price) * b.shares : 0;
-          aVal = aPnl;
-          bVal = bPnl;
+          const aGrossPnl = a.sell_price && a.buy_price ? (a.sell_price - a.buy_price) * a.shares : 0;
+          const bGrossPnl = b.sell_price && b.buy_price ? (b.sell_price - b.buy_price) * b.shares : 0;
+          const aNetPnl = feesConfig ? calculateNetPnL(a, feesConfig) : aGrossPnl;
+          const bNetPnl = feesConfig ? calculateNetPnL(b, feesConfig) : bGrossPnl;
+          aVal = showNetProfits ? aNetPnl : aGrossPnl;
+          bVal = showNetProfits ? bNetPnl : bGrossPnl;
           break;
         default:
           aVal = a.date;
@@ -486,14 +586,21 @@ export default function TradesView() {
     
     const totalPnL = closedTrades.reduce((sum, trade) => {
       if (trade.sell_price && trade.buy_price) {
-        return sum + (trade.sell_price - trade.buy_price) * trade.shares;
+        if (showNetProfits && feesConfig) {
+          return sum + calculateNetPnL(trade, feesConfig);
+        } else {
+          return sum + (trade.sell_price - trade.buy_price) * trade.shares;
+        }
       }
       return sum;
     }, 0);
 
     const winningTrades = closedTrades.filter(trade => {
       if (trade.sell_price && trade.buy_price) {
-        return (trade.sell_price - trade.buy_price) * trade.shares > 0;
+        const pnl = showNetProfits && feesConfig 
+          ? calculateNetPnL(trade, feesConfig)
+          : (trade.sell_price - trade.buy_price) * trade.shares;
+        return pnl > 0;
       }
       return false;
     }).length;
@@ -655,11 +762,39 @@ export default function TradesView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">All Trades</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          View and filter all your trades for {formatDateRange(selectedDateRange)}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">All Trades</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            View and filter all your trades for {formatDateRange(selectedDateRange)}
+          </p>
+        </div>
+        
+        {/* Profit Type Toggle */}
+        {feesConfig && (
+          <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setShowNetProfits(false)}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                !showNetProfits 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Gross P&L
+            </button>
+            <button
+              onClick={() => setShowNetProfits(true)}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                showNetProfits 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Net P&L (After Fees)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -677,7 +812,9 @@ export default function TradesView() {
           <div className="text-2xl font-semibold text-gray-600">{stats.closedTrades}</div>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Total P&L</div>
+          <div className="text-sm font-medium text-gray-500">
+            Total P&L {showNetProfits ? '(Net)' : '(Gross)'}
+          </div>
           <div className={`text-2xl font-semibold ${stats.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatCurrency(stats.totalPnL)}
           </div>
@@ -869,7 +1006,7 @@ export default function TradesView() {
                     className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                     onClick={() => handleSort('pnl')}
                   >
-                    P&L {sortField === 'pnl' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    P&L {showNetProfits ? '(Net)' : '(Gross)'} {sortField === 'pnl' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Risk
@@ -881,9 +1018,11 @@ export default function TradesView() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredTrades.map((trade) => {
-                  const pnl = trade.sell_price && trade.buy_price
+                  const grossPnl = trade.sell_price && trade.buy_price
                     ? (trade.sell_price - trade.buy_price) * trade.shares 
                     : 0;
+                  const netPnl = feesConfig ? calculateNetPnL(trade, feesConfig) : grossPnl;
+                  const pnl = showNetProfits ? netPnl : grossPnl;
                   
                   return (
                     <tr 
@@ -947,7 +1086,9 @@ export default function TradesView() {
 
       {/* Trade Detail Modal */}
       <TradeDetailModal 
-        trade={selectedTrade} 
+        trade={selectedTrade}
+        feesConfig={feesConfig}
+        showNetProfits={showNetProfits}
         onClose={() => setSelectedTrade(null)} 
       />
     </div>

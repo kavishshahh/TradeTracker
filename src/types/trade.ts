@@ -15,6 +15,19 @@ export interface Trade {
   updated_at?: string;
 }
 
+export interface FeesConfig {
+  brokerage_percentage: number; // Per transaction percentage
+  brokerage_max_usd: number; // Maximum brokerage fee in USD
+  exchange_transaction_charges_percentage: number; // Exchange transaction charges %
+  ifsca_turnover_fees_percentage: number; // IFSCA turnover fees %
+  platform_fee_usd: number; // Platform fees per transaction
+  withdrawal_fee_usd: number; // Withdrawal fees
+  amc_yearly_usd: number; // Annual maintenance charges
+  account_opening_fee_usd: number; // One-time account opening fee
+  tracking_charges_usd: number; // Monthly tracking charges
+  profile_verification_fee_usd: number; // One-time KYC fee
+}
+
 export interface TradeMetrics {
   net_pnl: number;
   trade_expectancy: number;

@@ -1,4 +1,4 @@
-import { Trade, TradeMetrics } from '@/types/trade';
+import { FeesConfig, Trade, TradeMetrics } from '@/types/trade';
 import { auth } from './firebase';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
@@ -177,6 +177,34 @@ export async function deleteMonthlyReturn(returnId: string): Promise<{ message: 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Failed to delete monthly return');
+  }
+  
+  return response.json();
+}
+
+// Fees Configuration Management
+export async function getFeesConfig(userId: string): Promise<{ fees_config: FeesConfig }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/fees-config/${userId}`, { headers });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch fees configuration');
+  }
+  
+  return response.json();
+}
+
+export async function saveFeesConfig(feesConfig: FeesConfig): Promise<{ message: string; user_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/fees-config`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(feesConfig),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to save fees configuration');
   }
   
   return response.json();

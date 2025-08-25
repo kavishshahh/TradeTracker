@@ -1,8 +1,9 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { deleteMonthlyReturn, getMonthlyReturns, saveMonthlyReturn } from '@/lib/api';
-import { Calendar, DollarSign, Edit, Plus, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { deleteMonthlyReturn, getFeesConfig, getMonthlyReturns, saveMonthlyReturn } from '@/lib/api';
+import { FeesConfig } from '@/types/trade';
+import { Calendar, DollarSign, Edit, Info, Plus, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -23,6 +24,7 @@ export default function MonthlyReturns() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingReturn, setEditingReturn] = useState<MonthlyReturn | null>(null);
+  const [feesConfig, setFeesConfig] = useState<FeesConfig | null>(null);
   const [totalReturn, setTotalReturn] = useState({
     totalPercentage: 0,
     totalDollar: 0,
@@ -30,14 +32,33 @@ export default function MonthlyReturns() {
   });
   const { currentUser } = useAuth();
 
+  // Default fees configuration
+  const getDefaultFeesConfig = (): FeesConfig => ({
+    brokerage_percentage: 0.25,
+    brokerage_max_usd: 25,
+    exchange_transaction_charges_percentage: 0.12,
+    ifsca_turnover_fees_percentage: 0.0001,
+    platform_fee_usd: 0,
+    withdrawal_fee_usd: 0,
+    amc_yearly_usd: 0,
+    account_opening_fee_usd: 0,
+    tracking_charges_usd: 0,
+    profile_verification_fee_usd: 0,
+  });
+
   const fetchMonthlyReturns = async () => {
     if (!currentUser) return;
     
     try {
       setLoading(true);
-      const response = await getMonthlyReturns(currentUser.uid);
+      const [response, feesResponse] = await Promise.all([
+        getMonthlyReturns(currentUser.uid),
+        getFeesConfig(currentUser.uid).catch(() => ({ fees_config: getDefaultFeesConfig() }))
+      ]);
+      
       const returns = response.monthly_returns;
       setMonthlyData(returns);
+      setFeesConfig(feesResponse.fees_config);
       
       // Calculate totals
       const totalDollar = returns.reduce((sum, item) => sum + (item.dollar_return || 0), 0);
@@ -168,6 +189,26 @@ export default function MonthlyReturns() {
           </button>
         </div>
       </div>
+
+      {/* Fees Information Banner */}
+      {feesConfig && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <Info className="h-5 w-5 text-blue-500 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-900">Trading Fees Information</h3>
+              <p className="text-sm text-blue-700 mt-1">
+                Monthly returns should reflect your actual account performance including all trading fees. 
+                Your current fees configuration includes {feesConfig.brokerage_percentage}% brokerage (max ${feesConfig.brokerage_max_usd}), 
+                {feesConfig.exchange_transaction_charges_percentage}% exchange charges, and other applicable fees.
+              </p>
+              <p className="text-xs text-blue-600 mt-2">
+                💡 Tip: Account for fees when calculating your monthly P&L to get accurate performance metrics.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

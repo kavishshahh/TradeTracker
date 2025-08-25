@@ -158,6 +158,22 @@ class MonthlyReturn(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+class FeesConfig(BaseModel):
+    id: Optional[str] = None
+    user_id: Optional[str] = None  # Set by the endpoint based on auth
+    brokerage_percentage: float = 0.25  # Per transaction percentage
+    brokerage_max_usd: float = 25.0  # Maximum brokerage fee in USD
+    exchange_transaction_charges_percentage: float = 0.12  # Exchange transaction charges %
+    ifsca_turnover_fees_percentage: float = 0.0001  # IFSCA turnover fees %
+    platform_fee_usd: float = 0.0  # Platform fees per transaction
+    withdrawal_fee_usd: float = 0.0  # Withdrawal fees
+    amc_yearly_usd: float = 0.0  # Annual maintenance charges
+    account_opening_fee_usd: float = 0.0  # One-time account opening fee
+    tracking_charges_usd: float = 0.0  # Monthly tracking charges
+    profile_verification_fee_usd: float = 0.0  # One-time KYC fee
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
 
 # Mock data fallback (same as main_simple.py)
 MOCK_TRADES = [
@@ -995,6 +1011,116 @@ async def delete_monthly_return(return_id: str, current_user: str = Depends(get_
         raise
     except Exception as e:
         print(f"❌ Error deleting monthly return: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Fees Configuration Management Endpoints
+
+@app.get("/fees-config/{user_id}")
+async def get_fees_config(user_id: str, current_user: str = Depends(get_current_user)):
+    """Get fees configuration for a user"""
+    try:
+        print(f"🔍 Get fees config request: user={user_id}")
+        
+        # Ensure user can only access their own fees configuration
+        if user_id != current_user:
+            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s fees config")
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if db:
+            # Use Firebase Firestore
+            fees_ref = db.collection('fees_configs')
+            doc = fees_ref.document(user_id).get()
+            
+            if doc.exists:
+                fees_data = doc.to_dict()
+                fees_data['user_id'] = user_id
+                
+                # Convert datetime objects to strings
+                for field in ['created_at', 'updated_at']:
+                    if isinstance(fees_data.get(field), datetime):
+                        fees_data[field] = fees_data[field].isoformat()
+                
+                print(f"✅ Found fees config for user {user_id}")
+                return {"fees_config": fees_data}
+            else:
+                # Return default fees configuration
+                default_config = FeesConfig(user_id=user_id)
+                print(f"📝 Returning default fees config for user {user_id}")
+                return {"fees_config": default_config.model_dump(exclude={'id', 'created_at', 'updated_at'})}
+        else:
+            # Mock data fallback
+            default_config = FeesConfig(user_id=user_id)
+            return {"fees_config": default_config.model_dump(exclude={'id', 'created_at', 'updated_at'})}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error fetching fees config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fees-config")
+async def save_fees_config(fees_config: FeesConfig, current_user: str = Depends(get_current_user)):
+    """Save or update fees configuration"""
+    try:
+        print(f"🔍 Save fees config request: user={current_user}")
+        print(f"📊 Fees config data received: {fees_config.model_dump()}")
+        
+        # Ensure user can only save their own fees configuration
+        fees_config.user_id = current_user
+        
+        # Validation
+        if fees_config.brokerage_percentage < 0 or fees_config.brokerage_percentage > 10:
+            raise HTTPException(status_code=422, detail="Brokerage percentage must be between 0% and 10%")
+        
+        if fees_config.brokerage_max_usd < 0:
+            raise HTTPException(status_code=422, detail="Maximum brokerage fee cannot be negative")
+        
+        if fees_config.exchange_transaction_charges_percentage < 0:
+            raise HTTPException(status_code=422, detail="Exchange charges percentage cannot be negative")
+        
+        if fees_config.ifsca_turnover_fees_percentage < 0:
+            raise HTTPException(status_code=422, detail="IFSCA fees percentage cannot be negative")
+        
+        # Validate that all fee amounts are non-negative
+        for field in ['platform_fee_usd', 'withdrawal_fee_usd', 'amc_yearly_usd', 
+                     'account_opening_fee_usd', 'tracking_charges_usd', 'profile_verification_fee_usd']:
+            if getattr(fees_config, field) < 0:
+                raise HTTPException(status_code=422, detail=f"{field} cannot be negative")
+        
+        fees_config.updated_at = datetime.now()
+        
+        if db:
+            # Use Firebase Firestore
+            fees_ref = db.collection('fees_configs')
+            doc_ref = fees_ref.document(current_user)
+            
+            # Check if fees config already exists
+            fees_exists = doc_ref.get().exists
+            print(f"📋 Fees config exists: {fees_exists}")
+            
+            if not fees_exists:
+                fees_config.created_at = datetime.now()
+                print(f"🆕 Creating new fees config with created_at: {fees_config.created_at}")
+            
+            # Prepare data for Firestore
+            config_data = fees_config.model_dump(exclude={'id'})
+            
+            # Save fees configuration
+            print(f"💾 Saving fees config data to Firestore")
+            doc_ref.set(config_data, merge=True)
+            print(f"✅ Fees config saved successfully for user: {current_user}")
+            
+            return {"message": "Fees configuration saved successfully", "user_id": current_user}
+        else:
+            # Mock data fallback
+            print(f"📝 Using mock data for fees config save: {current_user}")
+            return {"message": "Fees configuration saved successfully (mock)", "user_id": current_user}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error saving fees config: {e}")
+        print(f"🔍 Raw data that caused error: {fees_config.model_dump()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")

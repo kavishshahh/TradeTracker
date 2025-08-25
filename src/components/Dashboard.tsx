@@ -2,10 +2,10 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
-import { getMetrics, getMonthlyReturns, getTrades } from '@/lib/api';
-import { formatCurrency, formatPercentage } from '@/lib/utils';
-import { Trade, TradeMetrics } from '@/types/trade';
-import { Calendar as CalendarIcon, DollarSign, Target, TrendingDown, TrendingUp } from 'lucide-react';
+import { getFeesConfig, getMetrics, getMonthlyReturns, getTrades } from '@/lib/api';
+import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency, formatPercentage } from '@/lib/utils';
+import { FeesConfig, Trade, TradeMetrics } from '@/types/trade';
+import { Calculator, Calendar as CalendarIcon, DollarSign, Target, TrendingDown, TrendingUp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import {
@@ -88,6 +88,8 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState<TradeMetrics | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [monthlyBalances, setMonthlyBalances] = useState<any[]>([]);
+  const [feesConfig, setFeesConfig] = useState<FeesConfig | null>(null);
+  const [showNetProfits, setShowNetProfits] = useState(true); // Toggle between gross and net
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
@@ -126,6 +128,20 @@ export default function Dashboard() {
     };
   }, []);
 
+  // Default fees configuration
+  const getDefaultFeesConfig = (): FeesConfig => ({
+    brokerage_percentage: 0.25,
+    brokerage_max_usd: 25,
+    exchange_transaction_charges_percentage: 0.12,
+    ifsca_turnover_fees_percentage: 0.0001,
+    platform_fee_usd: 0,
+    withdrawal_fee_usd: 0,
+    amc_yearly_usd: 0,
+    account_opening_fee_usd: 0,
+    tracking_charges_usd: 0,
+    profile_verification_fee_usd: 0,
+  });
+
   // Fetch data for selected date range
   const fetchData = useCallback(async () => {
     if (!currentUser) return;
@@ -134,14 +150,16 @@ export default function Dashboard() {
       setLoading(true);
       const { startDate, endDate } = getDateRange(selectedDateRange);
       
-      const [metricsData, tradesData, monthlyReturnsData] = await Promise.all([
+      const [metricsData, tradesData, monthlyReturnsData, feesConfigData] = await Promise.all([
         getMetrics(currentUser.uid, startDate, endDate),
         getTrades(currentUser.uid, startDate, endDate),
-        getMonthlyReturns(currentUser.uid)
+        getMonthlyReturns(currentUser.uid),
+        getFeesConfig(currentUser.uid).catch(() => ({ fees_config: getDefaultFeesConfig() }))
       ]);
       
       setMetrics(metricsData);
       setTrades(tradesData.trades);
+      setFeesConfig(feesConfigData.fees_config);
       
       // Transform monthly returns data to match expected format
       const transformedReturns = (monthlyReturnsData.monthly_returns || []).map((returnData: any) => {
@@ -174,6 +192,55 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, [currentUser, selectedDateRange, getDateRange]);
+
+  // Calculate adjusted metrics with fees
+  const calculateAdjustedMetrics = useCallback((originalMetrics: TradeMetrics, trades: Trade[], feesConfig: FeesConfig) => {
+    if (!feesConfig) return originalMetrics;
+
+    const closedTrades = trades.filter(trade => trade.status === 'closed' && trade.sell_price && trade.buy_price);
+    
+    let totalNetPnL = 0;
+    let totalFees = 0;
+    let winningTradesNet = 0;
+    let losingTradesNet = 0;
+    let totalWinsNet = 0;
+    let totalLossesNet = 0;
+
+    closedTrades.forEach(trade => {
+      const netPnL = calculateNetPnL(trade, feesConfig);
+      const fees = calculateCompleteTradeFees(trade, feesConfig);
+      
+      totalNetPnL += netPnL;
+      totalFees += fees.totalFees;
+      
+      if (netPnL > 0) {
+        winningTradesNet++;
+        totalWinsNet += netPnL;
+      } else if (netPnL < 0) {
+        losingTradesNet++;
+        totalLossesNet += Math.abs(netPnL);
+      }
+    });
+
+    const winPercentageNet = closedTrades.length > 0 ? (winningTradesNet / closedTrades.length) * 100 : 0;
+    const avgWinNet = winningTradesNet > 0 ? totalWinsNet / winningTradesNet : 0;
+    const avgLossNet = losingTradesNet > 0 ? totalLossesNet / losingTradesNet : 0;
+    const profitFactorNet = totalLossesNet > 0 ? totalWinsNet / totalLossesNet : 0;
+    const tradeExpectancyNet = closedTrades.length > 0 ? totalNetPnL / closedTrades.length : 0;
+
+    return {
+      ...originalMetrics,
+      net_pnl: totalNetPnL,
+      total_fees: totalFees,
+      win_percentage: winPercentageNet,
+      winning_trades: winningTradesNet,
+      losing_trades: losingTradesNet,
+      avg_win: avgWinNet,
+      avg_loss: avgLossNet,
+      profit_factor: profitFactorNet,
+      trade_expectancy: tradeExpectancyNet,
+    };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -381,12 +448,23 @@ export default function Dashboard() {
     );
   }
 
-  // Prepare P&L curve data (original cumulative P&L from trades)
+  // Get adjusted metrics with fees if available
+  const adjustedMetrics = feesConfig && metrics ? calculateAdjustedMetrics(metrics, trades, feesConfig) : metrics;
+  const displayMetrics = showNetProfits ? adjustedMetrics : metrics;
+
+  // Prepare P&L curve data (with optional fees calculation)
   const pnlCurveData = trades
     .filter(trade => trade.status === 'closed' && trade.sell_price && trade.buy_price)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .reduce((acc, trade, index) => {
-      const pnl = (trade.sell_price! - trade.buy_price!) * trade.shares;
+      let pnl: number;
+      
+      if (showNetProfits && feesConfig) {
+        pnl = calculateNetPnL(trade, feesConfig);
+      } else {
+        pnl = (trade.sell_price! - trade.buy_price!) * trade.shares;
+      }
+      
       const prevValue = acc.length > 0 ? acc[acc.length - 1].equity : 0;
       acc.push({
         date: trade.date,
@@ -527,12 +605,16 @@ export default function Dashboard() {
     const stats: PeriodStats[] = [];
     let runningBalance = 0;
 
-    Array.from(periods.entries())
+          Array.from(periods.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .forEach(([periodKey, periodTrades]) => {
-        const pnlValues = periodTrades.map(trade => 
-          ((trade.sell_price ?? 0) - (trade.buy_price ?? 0)) * trade.shares
-        );
+        const pnlValues = periodTrades.map(trade => {
+          if (showNetProfits && feesConfig) {
+            return calculateNetPnL(trade, feesConfig);
+          } else {
+            return ((trade.sell_price ?? 0) - (trade.buy_price ?? 0)) * trade.shares;
+          }
+        });
         
         const totalPnl = pnlValues.reduce((sum, pnl) => sum + pnl, 0);
         const winningTrades = pnlValues.filter(pnl => pnl > 0);
@@ -587,13 +669,13 @@ export default function Dashboard() {
 
   // Prepare win/loss pie chart data
   const pieData = [
-    { name: 'Winning Trades', value: metrics.winning_trades, color: '#10B981' },
-    { name: 'Losing Trades', value: metrics.losing_trades, color: '#EF4444' }
+    { name: 'Winning Trades', value: displayMetrics?.winning_trades || 0, color: '#10B981' },
+    { name: 'Losing Trades', value: displayMetrics?.losing_trades || 0, color: '#EF4444' }
   ];
 
   // Prepare radar chart data for trading score
   const radarData = [
-    { subject: 'Win Rate', A: metrics.win_percentage, fullMark: 100 },
+    { subject: 'Win Rate', A: displayMetrics?.win_percentage || 0, fullMark: 100 },
     { subject: 'Risk Management', A: 75, fullMark: 100 },
     { subject: 'Discipline', A: 80, fullMark: 100 },
     { subject: 'Consistency', A: 70, fullMark: 100 },
@@ -603,11 +685,39 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Trading Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Your trading performance for {formatDateRange(selectedDateRange)}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Trading Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Your trading performance for {formatDateRange(selectedDateRange)}
+          </p>
+        </div>
+        
+        {/* Profit Type Toggle */}
+        {feesConfig && (
+          <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setShowNetProfits(false)}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                !showNetProfits 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Gross P&L
+            </button>
+            <button
+              onClick={() => setShowNetProfits(true)}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                showNetProfits 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Net P&L (After Fees)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Date Range Selector */}
@@ -695,35 +805,57 @@ export default function Dashboard() {
         </div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          title="Net P&L"
-          value={formatCurrency(metrics.net_pnl)}
-          icon={DollarSign}
-          trend={metrics.net_pnl >= 0 ? 'up' : 'down'}
-          trendValue={formatCurrency(Math.abs(metrics.net_pnl))}
-        />
-        <MetricCard
-          title="Win Rate"
-          value={formatPercentage(metrics.win_percentage)}
-          icon={Target}
-          trend={metrics.win_percentage >= 50 ? 'up' : 'down'}
-          trendValue={`${metrics.winning_trades}/${metrics.total_trades}`}
-        />
-        <MetricCard
-          title="Profit Factor"
-          value={metrics.profit_factor.toFixed(2)}
-          icon={TrendingUp}
-          trend={metrics.profit_factor >= 1 ? 'up' : 'down'}
-          trendValue={`${metrics.profit_factor >= 1 ? 'Profitable' : 'Unprofitable'}`}
-        />
-        <MetricCard
-          title="Expectancy"
-          value={formatCurrency(metrics.trade_expectancy)}
-          icon={TrendingUp}
-          trend={metrics.trade_expectancy >= 0 ? 'up' : 'down'}
-          trendValue={`Per Trade`}
-        />
+      <div className="space-y-4">
+        {/* Total Fees Card (only show when displaying net profits) */}
+        {showNetProfits && feesConfig && adjustedMetrics && 'total_fees' in adjustedMetrics && (
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-800">Total Trading Fees Paid</p>
+                <p className="text-2xl font-bold text-orange-900">
+                  {formatCurrency(adjustedMetrics.total_fees as number)}
+                </p>
+              </div>
+              <div className="text-orange-600">
+                <Calculator className="h-8 w-8" />
+              </div>
+            </div>
+            <p className="text-xs text-orange-700 mt-1">
+              Includes brokerage, exchange charges, and platform fees
+            </p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            title={showNetProfits ? "Net P&L (After Fees)" : "Gross P&L"}
+            value={formatCurrency(displayMetrics?.net_pnl || 0)}
+            icon={DollarSign}
+            trend={(displayMetrics?.net_pnl || 0) >= 0 ? 'up' : 'down'}
+            trendValue={formatCurrency(Math.abs(displayMetrics?.net_pnl || 0))}
+          />
+          <MetricCard
+            title="Win Rate"
+            value={formatPercentage(displayMetrics?.win_percentage || 0)}
+            icon={Target}
+            trend={(displayMetrics?.win_percentage || 0) >= 50 ? 'up' : 'down'}
+            trendValue={`${displayMetrics?.winning_trades || 0}/${displayMetrics?.total_trades || 0}`}
+          />
+          <MetricCard
+            title="Profit Factor"
+            value={(displayMetrics?.profit_factor || 0).toFixed(2)}
+            icon={TrendingUp}
+            trend={(displayMetrics?.profit_factor || 0) >= 1 ? 'up' : 'down'}
+            trendValue={`${(displayMetrics?.profit_factor || 0) >= 1 ? 'Profitable' : 'Unprofitable'}`}
+          />
+          <MetricCard
+            title="Expectancy"
+            value={formatCurrency(displayMetrics?.trade_expectancy || 0)}
+            icon={TrendingUp}
+            trend={(displayMetrics?.trade_expectancy || 0) >= 0 ? 'up' : 'down'}
+            trendValue={`Per Trade`}
+          />
+        </div>
       </div>
 
       {/* Charts Grid */}
@@ -735,7 +867,7 @@ export default function Dashboard() {
             {hasPnLChartData && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">
-                  Trading P&L Curve - {formatDateRange(selectedDateRange)}
+                  Trading P&L Curve ({showNetProfits ? 'Net After Fees' : 'Gross'}) - {formatDateRange(selectedDateRange)}
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={pnlCurveData}>
@@ -882,35 +1014,45 @@ export default function Dashboard() {
 
         {/* Recent Performance */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Performance Breakdown - {formatDateRange(selectedDateRange)}</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            Performance Breakdown ({showNetProfits ? 'Net' : 'Gross'}) - {formatDateRange(selectedDateRange)}
+          </h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500">Average Win</span>
               <span className="text-sm font-medium text-green-600">
-                {formatCurrency(metrics.avg_win)}
+                {formatCurrency(displayMetrics?.avg_win || 0)}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500">Average Loss</span>
               <span className="text-sm font-medium text-red-600">
-                -{formatCurrency(metrics.avg_loss)}
+                -{formatCurrency(displayMetrics?.avg_loss || 0)}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500">Total Trades</span>
               <span className="text-sm font-medium text-gray-900">
-                {metrics.total_trades}
+                {displayMetrics?.total_trades || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500">Win/Loss Ratio</span>
               <span className="text-sm font-medium text-gray-900">
-                {metrics.losing_trades > 0 
-                  ? (metrics.winning_trades / metrics.losing_trades).toFixed(2)
+                {(displayMetrics?.losing_trades || 0) > 0 
+                  ? ((displayMetrics?.winning_trades || 0) / (displayMetrics?.losing_trades || 1)).toFixed(2)
                   : 'N/A'
                 }
               </span>
             </div>
+            {showNetProfits && feesConfig && adjustedMetrics && 'total_fees' in adjustedMetrics && (
+              <div className="flex justify-between items-center border-t pt-4">
+                <span className="text-sm text-gray-500">Total Fees Paid</span>
+                <span className="text-sm font-medium text-orange-600">
+                  -{formatCurrency(adjustedMetrics.total_fees as number)}
+                </span>
+              </div>
+            )}
           </div>
           </div>
           </div>

@@ -137,6 +137,19 @@ class ExitTradeRequest(BaseModel):
     def parse_sell_price(cls, v):
         return float(v) if v is not None else 0.0
 
+class UpdateTradeRequest(BaseModel):
+    trade_id: str
+    date: Optional[date] = None
+    ticker: Optional[str] = None
+    buy_price: Optional[float] = None
+    sell_price: Optional[float] = None
+    shares: Optional[float] = None
+    risk: Optional[float] = None
+    risk_dollars: Optional[float] = None
+    account_balance: Optional[float] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None  # "open" or "closed"
+
 class UserProfile(BaseModel):
     user_id: Optional[str] = None
     account_balance: float
@@ -438,6 +451,134 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
         raise
     except Exception as e:
         print(f"❌ Error exiting trade: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/trades/{trade_id}")
+async def update_trade(trade_id: str, update_request: UpdateTradeRequest, current_user: str = Depends(get_current_user)):
+    try:
+        print(f"🔍 Update trade request: trade_id={trade_id}, user={current_user}")
+        print(f"📊 Update data received: {update_request.model_dump()}")
+        
+        if db:
+            # Use Firebase Firestore
+            trades_ref = db.collection('trades')
+            trade_doc_ref = trades_ref.document(trade_id)
+            trade_doc = trade_doc_ref.get()
+            
+            if not trade_doc.exists:
+                print(f"❌ Trade not found: {trade_id}")
+                raise HTTPException(status_code=404, detail="Trade not found")
+            
+            trade_data = trade_doc.to_dict()
+            
+            # Ensure user can only update their own trades
+            if trade_data.get('user_id') != current_user:
+                print(f"❌ Unauthorized access attempt: {current_user} trying to update trade owned by {trade_data.get('user_id')}")
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Prepare update data - only include fields that are provided
+            update_data = {}
+            
+            # Basic trade fields
+            if update_request.date is not None:
+                update_data['date'] = update_request.date.isoformat()
+            if update_request.ticker is not None:
+                update_data['ticker'] = update_request.ticker.upper()
+            if update_request.buy_price is not None:
+                update_data['buy_price'] = update_request.buy_price
+            if update_request.sell_price is not None:
+                update_data['sell_price'] = update_request.sell_price
+            if update_request.shares is not None:
+                update_data['shares'] = update_request.shares
+            if update_request.risk is not None:
+                update_data['risk'] = update_request.risk
+            if update_request.risk_dollars is not None:
+                update_data['risk_dollars'] = update_request.risk_dollars
+            if update_request.account_balance is not None:
+                update_data['account_balance'] = update_request.account_balance
+            if update_request.notes is not None:
+                update_data['notes'] = update_request.notes
+            if update_request.status is not None:
+                update_data['status'] = update_request.status
+            
+            # Validation based on status
+            final_status = update_request.status or trade_data.get('status')
+            final_buy_price = update_request.buy_price if update_request.buy_price is not None else trade_data.get('buy_price')
+            final_sell_price = update_request.sell_price if update_request.sell_price is not None else trade_data.get('sell_price')
+            
+            if final_status == "open" and not final_buy_price:
+                print(f"❌ Validation error: Buy price required for open trade")
+                raise HTTPException(status_code=422, detail="Buy price is required for open trades")
+            elif final_status == "closed" and not final_sell_price:
+                print(f"❌ Validation error: Sell price required for closed trade")
+                raise HTTPException(status_code=422, detail="Sell price is required for closed trades")
+            
+            # Risk validation - ensure at least one risk field exists after update
+            final_risk = update_request.risk if update_request.risk is not None else trade_data.get('risk')
+            final_risk_dollars = update_request.risk_dollars if update_request.risk_dollars is not None else trade_data.get('risk_dollars')
+            
+            if not final_risk and not final_risk_dollars:
+                print(f"❌ Validation error: No risk information provided")
+                raise HTTPException(status_code=422, detail="Either risk percentage or risk in dollars must be provided")
+            
+            # Calculate missing risk field if account balance is available
+            account_balance = update_request.account_balance if update_request.account_balance is not None else trade_data.get('account_balance')
+            if account_balance and account_balance > 0:
+                if final_risk and not final_risk_dollars:
+                    update_data['risk_dollars'] = (final_risk / 100) * account_balance
+                elif final_risk_dollars and not final_risk:
+                    update_data['risk'] = (final_risk_dollars / account_balance) * 100
+            
+            # Always update the timestamp
+            update_data['updated_at'] = datetime.now()
+            
+            # Perform the update
+            trade_doc_ref.update(update_data)
+            
+            print(f"✅ Trade updated successfully: {trade_id}")
+            return {"message": "Trade updated successfully", "trade_id": trade_id}
+        
+        else:
+            # Fallback to mock data
+            trade_found = False
+            for trade in MOCK_TRADES:
+                if trade['id'] == trade_id and trade['user_id'] == current_user:
+                    trade_found = True
+                    
+                    # Update fields that are provided
+                    if update_request.date is not None:
+                        trade['date'] = update_request.date.isoformat()
+                    if update_request.ticker is not None:
+                        trade['ticker'] = update_request.ticker.upper()
+                    if update_request.buy_price is not None:
+                        trade['buy_price'] = update_request.buy_price
+                    if update_request.sell_price is not None:
+                        trade['sell_price'] = update_request.sell_price
+                    if update_request.shares is not None:
+                        trade['shares'] = update_request.shares
+                    if update_request.risk is not None:
+                        trade['risk'] = update_request.risk
+                    if update_request.risk_dollars is not None:
+                        trade['risk_dollars'] = update_request.risk_dollars
+                    if update_request.account_balance is not None:
+                        trade['account_balance'] = update_request.account_balance
+                    if update_request.notes is not None:
+                        trade['notes'] = update_request.notes
+                    if update_request.status is not None:
+                        trade['status'] = update_request.status
+                    
+                    trade['updated_at'] = datetime.now().isoformat()
+                    break
+            
+            if not trade_found:
+                raise HTTPException(status_code=404, detail="Trade not found or access denied")
+            
+            return {"message": "Trade updated successfully (mock)", "trade_id": trade_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating trade: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/trades/{user_id}")

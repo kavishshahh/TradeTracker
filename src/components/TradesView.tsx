@@ -2,12 +2,13 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
-import { getFeesConfig, getTrades } from '@/lib/api';
+import { getFeesConfig, getTrades, updateTrade } from '@/lib/api';
 import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency } from '@/lib/utils';
 import { FeesConfig, Trade } from '@/types/trade';
-import { BarChart3, Calculator, Calendar as CalendarIcon, DollarSign, Download, Filter, Search, Target, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { BarChart3, Calculator, Calendar as CalendarIcon, DollarSign, Download, Edit, Filter, Search, Target, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
+import { toast } from 'react-toastify';
 
 interface MonthShortcut {
   label: string;
@@ -19,6 +20,12 @@ interface TradeDetailModalProps {
   feesConfig: FeesConfig | null;
   showNetProfits: boolean;
   onClose: () => void;
+}
+
+interface EditModalProps {
+  trade: Trade | null;
+  onClose: () => void;
+  onSave: (updatedTrade: Trade) => void;
 }
 
 function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeDetailModalProps) {
@@ -338,6 +345,272 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
   );
 }
 
+function EditModal({ trade, onClose, onSave }: EditModalProps) {
+  const [formData, setFormData] = useState({
+    date: '',
+    ticker: '',
+    buy_price: '',
+    sell_price: '',
+    shares: '',
+    risk: '',
+    risk_dollars: '',
+    notes: '',
+    status: 'open' as 'open' | 'closed'
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (trade) {
+      setFormData({
+        date: trade.date,
+        ticker: trade.ticker,
+        buy_price: trade.buy_price?.toString() || '',
+        sell_price: trade.sell_price?.toString() || '',
+        shares: trade.shares?.toString() || '',
+        risk: trade.risk?.toString() || '',
+        risk_dollars: trade.risk_dollars?.toString() || '',
+        notes: trade.notes || '',
+        status: trade.status as 'open' | 'closed'
+      });
+    }
+  }, [trade]);
+
+  if (!trade) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Prepare update data - only include changed fields
+      const updateData: any = {};
+      
+      if (formData.date !== trade.date) updateData.date = formData.date;
+      if (formData.ticker !== trade.ticker) updateData.ticker = formData.ticker;
+      if (formData.buy_price && parseFloat(formData.buy_price) !== trade.buy_price) {
+        updateData.buy_price = parseFloat(formData.buy_price);
+      }
+      if (formData.sell_price && parseFloat(formData.sell_price) !== trade.sell_price) {
+        updateData.sell_price = parseFloat(formData.sell_price);
+      }
+      if (formData.shares && parseFloat(formData.shares) !== trade.shares) {
+        updateData.shares = parseFloat(formData.shares);
+      }
+      if (formData.risk && parseFloat(formData.risk) !== trade.risk) {
+        updateData.risk = parseFloat(formData.risk);
+      }
+      if (formData.risk_dollars && parseFloat(formData.risk_dollars) !== trade.risk_dollars) {
+        updateData.risk_dollars = parseFloat(formData.risk_dollars);
+      }
+      if (formData.notes !== trade.notes) updateData.notes = formData.notes;
+      if (formData.status !== trade.status) updateData.status = formData.status;
+
+      // Only proceed if there are changes
+      if (Object.keys(updateData).length === 0) {
+        toast.success('No changes to save');
+        onClose();
+        return;
+      }
+
+      await updateTrade(trade.id!, updateData);
+      
+      // Update the local trade object with new data
+      const updatedTrade = { ...trade, ...updateData };
+      onSave(updatedTrade);
+      
+      toast.success('Trade updated successfully!');
+      onClose();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update trade');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-semibold">Edit Trade - {trade.ticker}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Basic Trade Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => handleInputChange('date', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ticker
+              </label>
+              <input
+                type="text"
+                value={formData.ticker}
+                onChange={(e) => handleInputChange('ticker', e.target.value.toUpperCase())}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="AAPL"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Shares
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.shares}
+                onChange={(e) => handleInputChange('shares', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="100"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Status
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => handleInputChange('status', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Price Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Buy Price ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.buy_price}
+                onChange={(e) => handleInputChange('buy_price', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="150.00"
+                required={formData.status === 'open'}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sell Price ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.sell_price}
+                onChange={(e) => handleInputChange('sell_price', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="165.00"
+                required={formData.status === 'closed'}
+              />
+            </div>
+          </div>
+
+          {/* Risk Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Risk (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.risk}
+                onChange={(e) => handleInputChange('risk', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="2.0"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Risk ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.risk_dollars}
+                onChange={(e) => handleInputChange('risk_dollars', e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="200.00"
+              />
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Trade Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => handleInputChange('notes', e.target.value)}
+              rows={6}
+              placeholder="Enter your thoughts about this trade...
+
+• Why did you take this trade?
+• What was your confidence level?
+• What went right or wrong?
+• What lessons did you learn?
+• How can you improve next time?"
+              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function TradesView() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
@@ -352,6 +625,7 @@ export default function TradesView() {
   const [sortField, setSortField] = useState<'date' | 'ticker' | 'pnl'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   const { currentUser } = useAuth();
 
@@ -470,6 +744,22 @@ export default function TradesView() {
   useEffect(() => {
     fetchTrades();
   }, [fetchTrades]);
+
+  // Handle trade editing
+  const handleSaveTrade = async (updatedTrade: Trade) => {
+    // Update local state with the updated trade
+    const updatedTrades = trades.map(trade =>
+      trade.id === updatedTrade.id ? updatedTrade : trade
+    );
+    setTrades(updatedTrades);
+    
+    // Refresh trades from server to ensure consistency
+    try {
+      await fetchTrades();
+    } catch (error) {
+      console.error('Error refreshing trades after update:', error);
+    }
+  };
 
   // Apply filters and search
   useEffect(() => {
@@ -1014,6 +1304,9 @@ export default function TradesView() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Notes
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -1075,6 +1368,18 @@ export default function TradesView() {
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                         {trade.notes || '-'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTrade(trade);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                          title="Edit trade"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -1090,6 +1395,13 @@ export default function TradesView() {
         feesConfig={feesConfig}
         showNetProfits={showNetProfits}
         onClose={() => setSelectedTrade(null)} 
+      />
+
+      {/* Edit Trade Modal */}
+      <EditModal 
+        trade={editingTrade}
+        onClose={() => setEditingTrade(null)}
+        onSave={handleSaveTrade}
       />
     </div>
   );

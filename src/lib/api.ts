@@ -68,6 +68,33 @@ export async function getMetrics(userId: string, fromDate?: string, toDate?: str
   return response.json();
 }
 
+export async function updateTrade(tradeId: string, updateData: {
+  date?: string;
+  ticker?: string;
+  buy_price?: number;
+  sell_price?: number;
+  shares?: number;
+  risk?: number;
+  risk_dollars?: number;
+  account_balance?: number;
+  notes?: string;
+  status?: 'open' | 'closed';
+}): Promise<{ message: string; trade_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/trades/${tradeId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ trade_id: tradeId, ...updateData }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update trade');
+  }
+  
+  return response.json();
+}
+
 export async function exitTrade(userId: string, exitData: {
   ticker: string;
   shares_to_exit: number;

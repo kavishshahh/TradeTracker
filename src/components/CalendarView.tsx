@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { getTrades } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { DailyStats, Trade } from '@/types/trade';
@@ -22,7 +23,13 @@ function CalendarDay({ date, stats, isCurrentMonth, isToday, onClick }: Calendar
 
   return (
     <button
-      onClick={() => onClick(date, stats)}
+      onClick={() => {
+        onClick(date, stats);
+        if (hasData) {
+          trackEvent('calendar_day_click', 'calendar', date.toISOString().split('T')[0], stats?.trade_count);
+          trackUserEngagement('day_interaction', `trades_${stats?.trade_count}`);
+        }
+      }}
       className={`
         h-20 w-full p-1 text-left hover:bg-gray-50 border border-gray-200 transition-colors
         ${!isCurrentMonth ? 'text-gray-300 bg-gray-50' : 'text-gray-900'}
@@ -168,6 +175,9 @@ export default function CalendarView() {
       try {
         const response = await getTrades(currentUser.uid);
         setTrades(response.trades);
+        // Track calendar page view
+        trackPageView('/calendar');
+        trackUserEngagement('calendar_view');
       } catch (error) {
         console.error('Error fetching trades:', error);
       } finally {
@@ -232,10 +242,14 @@ export default function CalendarView() {
 
   const goToPreviousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    trackEvent('calendar_navigation', 'calendar', 'previous_month');
+    trackUserEngagement('month_navigation', 'previous');
   };
 
   const goToNextMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    trackEvent('calendar_navigation', 'calendar', 'next_month');
+    trackUserEngagement('month_navigation', 'next');
   };
 
   const handleDayClick = (date: Date, stats: DailyStats | null) => {

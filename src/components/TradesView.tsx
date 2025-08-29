@@ -2,6 +2,7 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
+import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { getFeesConfig, getTrades, updateTrade } from '@/lib/api';
 import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency } from '@/lib/utils';
 import { FeesConfig, Trade } from '@/types/trade';
@@ -734,6 +735,10 @@ export default function TradesView() {
       
       setTrades(sortedTrades);
       setFeesConfig(feesResponse.fees_config);
+      
+      // Track trades page view
+      trackPageView('/trades');
+      trackUserEngagement('trades_view', `trades_${sortedTrades.length}`);
     } catch (error) {
       console.error('Error fetching trades:', error);
     } finally {
@@ -1164,7 +1169,13 @@ export default function TradesView() {
                 <input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    if (e.target.value.length > 2) {
+                      trackEvent('trades_search', 'trades', e.target.value.length.toString());
+                      trackUserEngagement('search_usage', 'trades');
+                    }
+                  }}
                   placeholder="Search by ticker or notes..."
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -1176,7 +1187,12 @@ export default function TradesView() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'open' | 'closed')}
+                onChange={(e) => {
+                  const newFilter = e.target.value as 'all' | 'open' | 'closed';
+                  setStatusFilter(newFilter);
+                  trackEvent('trades_filter', 'trades', newFilter);
+                  trackUserEngagement('filter_change', `status_${newFilter}`);
+                }}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Trades</option>
@@ -1321,7 +1337,11 @@ export default function TradesView() {
                     <tr 
                       key={trade.id} 
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
-                      onClick={() => setSelectedTrade(trade)}
+                      onClick={() => {
+                        setSelectedTrade(trade);
+                        trackEvent('trade_detail_view', 'trades', trade.ticker);
+                        trackUserEngagement('trade_interaction', trade.status);
+                      }}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {new Date(trade.date).toLocaleDateString()}
@@ -1373,6 +1393,8 @@ export default function TradesView() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingTrade(trade);
+                            trackEvent('trade_edit', 'trades', trade.ticker);
+                            trackUserEngagement('edit_action', trade.status);
                           }}
                           className="text-blue-600 hover:text-blue-800 transition-colors p-1"
                           title="Edit trade"

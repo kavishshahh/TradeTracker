@@ -2,6 +2,7 @@
 
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
+import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { getFeesConfig, getMetrics, getMonthlyReturns, getTrades } from '@/lib/api';
 import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency, formatPercentage } from '@/lib/utils';
 import { FeesConfig, Trade, TradeMetrics } from '@/types/trade';
@@ -9,25 +10,25 @@ import { Calculator, Calendar as CalendarIcon, DollarSign, Target, TrendingDown,
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
+    Area,
+    AreaChart,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Line,
+    LineChart,
+    Pie,
+    PieChart,
+    PolarAngleAxis,
+    PolarGrid,
+    PolarRadiusAxis,
+    Radar,
+    RadarChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
 } from 'recharts';
 
 interface MetricCardProps {
@@ -244,6 +245,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+    // Track dashboard page view
+    trackPageView('/dashboard');
+    trackUserEngagement('dashboard_view');
   }, [fetchData]);
 
   // Close calendar when clicking outside
@@ -272,6 +276,9 @@ export default function Dashboard() {
   const handleApplyFilter = () => {
     setSelectedDateRange(dateRange);
     setIsCalendarOpen(false);
+    // Track date filter usage
+    trackEvent('date_filter_applied', 'dashboard', formatDateRange(dateRange));
+    trackUserEngagement('filter_usage', formatDateRange(dateRange));
   };
 
   // Toggle calendar open/close
@@ -340,12 +347,18 @@ export default function Dashboard() {
   const handleMonthShortcut = (shortcut: MonthShortcut) => {
     setSelectedDateRange(shortcut.range);
     setDateRange(shortcut.range);
+    // Track shortcut usage
+    trackEvent('date_shortcut_used', 'dashboard', shortcut.label);
+    trackUserEngagement('shortcut_usage', shortcut.label);
   };
 
   // Clear date filter
   const clearDateFilter = () => {
     setSelectedDateRange(undefined);
     setDateRange(undefined);
+    // Track filter clearing
+    trackEvent('date_filter_cleared', 'dashboard', 'all_time');
+    trackUserEngagement('filter_clear');
   };
 
   // Helper function to format date range for display
@@ -697,7 +710,11 @@ export default function Dashboard() {
         {feesConfig && (
           <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
             <button
-              onClick={() => setShowNetProfits(false)}
+              onClick={() => {
+                setShowNetProfits(false);
+                trackEvent('profit_toggle', 'dashboard', 'gross_pnl');
+                trackUserEngagement('toggle_profit_view', 'gross');
+              }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 !showNetProfits 
                   ? 'bg-white text-gray-900 shadow-sm' 
@@ -707,7 +724,11 @@ export default function Dashboard() {
               Gross P&L
             </button>
             <button
-              onClick={() => setShowNetProfits(true)}
+              onClick={() => {
+                setShowNetProfits(true);
+                trackEvent('profit_toggle', 'dashboard', 'net_pnl');
+                trackUserEngagement('toggle_profit_view', 'net');
+              }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 showNetProfits 
                   ? 'bg-white text-gray-900 shadow-sm' 

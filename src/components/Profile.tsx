@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { trackEvent, trackFormSubmission, trackPageView } from '@/lib/analytics';
 import { getFeesConfig, getUserProfile, saveFeesConfig, updateUserProfile } from '@/lib/api';
 import { FeesConfig } from '@/types/trade';
 import { Calculator, DollarSign, Save, Settings, User } from 'lucide-react';
@@ -58,6 +59,8 @@ export default function Profile() {
         });
         
         setFeesConfig(feesResponse.fees_config);
+        // Track profile page view
+        trackPageView('/profile');
       } catch (error) {
         console.error('Error fetching profile:', error);
         toast.error('Failed to load profile data');
@@ -95,11 +98,18 @@ export default function Profile() {
       setSubmitSuccess(true);
       toast.success('Profile updated successfully!');
       
+      // Track successful profile update
+      trackFormSubmission('profile_form', true);
+      trackEvent('profile_update', 'profile', 'success');
+      
       // Reset success state after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Failed to update profile. Please try again.');
+      // Track failed profile update
+      trackFormSubmission('profile_form', false);
+      trackEvent('profile_update', 'profile', 'error');
     } finally {
       setIsSubmitting(false);
     }

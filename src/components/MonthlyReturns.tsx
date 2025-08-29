@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { deleteMonthlyReturn, getFeesConfig, getMonthlyReturns, saveMonthlyReturn } from '@/lib/api';
 import { FeesConfig } from '@/types/trade';
 import { Calendar, DollarSign, Edit, Info, Plus, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
@@ -75,6 +76,10 @@ export default function MonthlyReturns() {
         totalDollar,
         totalINR
       });
+      
+      // Track monthly returns page view
+      trackPageView('/monthly-returns');
+      trackUserEngagement('monthly_returns_view', `returns_${returns.length}`);
     } catch (error) {
       console.error('Error fetching monthly returns:', error);
       toast.error('Failed to fetch monthly returns');

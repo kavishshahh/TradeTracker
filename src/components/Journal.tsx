@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { getTrades, updateTrade } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Trade } from '@/types/trade';
@@ -396,6 +397,9 @@ export default function Journal() {
         );
         setTrades(sortedTrades);
         setFilteredTrades(sortedTrades);
+        // Track journal page view
+        trackPageView('/journal');
+        trackUserEngagement('journal_view', `trades_${sortedTrades.length}`);
       } catch (error) {
         console.error('Error fetching trades:', error);
       } finally {
@@ -427,6 +431,8 @@ export default function Journal() {
 
   const handleEditTrade = (trade: Trade) => {
     setEditingTrade(trade);
+    trackEvent('journal_edit', 'journal', trade.ticker);
+    trackUserEngagement('trade_edit', trade.status);
   };
 
   const handleSaveTrade = async (updatedTrade: Trade) => {
@@ -562,7 +568,12 @@ export default function Journal() {
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'open' | 'closed')}
+              onChange={(e) => {
+                const newFilter = e.target.value as 'all' | 'open' | 'closed';
+                setStatusFilter(newFilter);
+                trackEvent('journal_filter', 'journal', newFilter);
+                trackUserEngagement('filter_change', newFilter);
+              }}
               className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Trades</option>

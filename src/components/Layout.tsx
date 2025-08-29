@@ -1,9 +1,10 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { trackNavigation, trackUserEngagement } from '@/lib/analytics';
 import { BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -15,6 +16,7 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
   const { currentUser, logout } = useAuth();
+  const previousPathnameRef = useRef(pathname);
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: BarChart3 },
@@ -24,6 +26,23 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Journal', href: '/journal', icon: BookOpen },
     { name: 'Monthly Returns', href: '/monthly-returns', icon: TrendingUp },
   ];
+
+  // Track navigation changes
+  useEffect(() => {
+    const previousPathname = previousPathnameRef.current;
+    
+    if (previousPathname !== pathname) {
+      // Track navigation from previous to current page
+      trackNavigation(previousPathname, pathname);
+      
+      // Track page engagement
+      const pageName = navigation.find(nav => nav.href === pathname)?.name || pathname;
+      trackUserEngagement('page_navigation', pageName);
+      
+      // Update the ref for next navigation
+      previousPathnameRef.current = pathname;
+    }
+  }, [pathname, navigation]);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -36,7 +55,10 @@ export default function Layout({ children }: LayoutProps) {
               <h1 className="text-xl font-bold text-gray-900">TradeBud</h1>
             )}
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={() => {
+                setSidebarOpen(!sidebarOpen);
+                trackUserEngagement('sidebar_toggle', sidebarOpen ? 'collapse' : 'expand');
+              }}
               className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500"
             >
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -93,7 +115,10 @@ export default function Layout({ children }: LayoutProps) {
               
               {/* Logout */}
               <button
-                onClick={logout}
+                onClick={() => {
+                  trackUserEngagement('logout', 'sidebar');
+                  logout();
+                }}
                 className="w-full flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md transition-colors"
               >
                 <LogOut className="h-5 w-5 text-gray-400 mr-3" />

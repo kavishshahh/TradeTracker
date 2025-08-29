@@ -10,25 +10,21 @@ import { Calculator, Calendar as CalendarIcon, DollarSign, Target, TrendingDown,
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import {
-    Area,
-    AreaChart,
-    Bar,
-    BarChart,
-    CartesianGrid,
-    Cell,
-    Line,
-    LineChart,
-    Pie,
-    PieChart,
-    PolarAngleAxis,
-    PolarGrid,
-    PolarRadiusAxis,
-    Radar,
-    RadarChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
 } from 'recharts';
 
 interface MetricCardProps {
@@ -676,6 +672,37 @@ export default function Dashboard() {
   const latestPeriod = periodStats[periodStats.length - 1];
   const previousPeriod = periodStats[periodStats.length - 2];
 
+  // Calculate Sharpe Ratio
+const calculateSharpeRatio = (riskFreeRate = 0): number => {
+  if (!trades.length || !pnlCurveData.length) return 0;
+
+  const returns = pnlCurveData.map((point, index) => {
+    if (index === 0) return 0;
+    const prevEquity = pnlCurveData[index - 1].equity;
+    return prevEquity !== 0 ? (point.equity - prevEquity) / Math.abs(prevEquity) : 0;
+  }).filter(r => r !== 0);
+
+  if (returns.length <= 1) return 0;
+
+  const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1);
+  const stdDev = Math.sqrt(variance);
+  const dailySharpe = stdDev !== 0 ? (avgReturn - riskFreeRate) / stdDev : 0;
+  // Annualize assuming daily returns
+  return dailySharpe * Math.sqrt(252);
+};
+
+
+  // Get Sharpe Ratio label
+  const getSharpeRatioLabel = (sharpeRatio: number): string => {
+    if (sharpeRatio >= 2.0) return 'Excellent';
+    if (sharpeRatio >= 1.5) return 'Very Good';
+    if (sharpeRatio >= 1.0) return 'Good';
+    if (sharpeRatio >= 0.5) return 'Fair';
+    if (sharpeRatio >= 0) return 'Poor';
+    return 'Very Poor';
+  };
+
   // Check if we have enough data for charts
   const hasPnLChartData = pnlCurveData.length > 0;
   const hasEquityChartData = accountEquityCurveData.length > 0;
@@ -847,7 +874,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
           <MetricCard
             title={showNetProfits ? "Net P&L (After Fees)" : "Gross P&L"}
             value={formatCurrency(displayMetrics?.net_pnl || 0)}
@@ -875,6 +902,13 @@ export default function Dashboard() {
             icon={TrendingUp}
             trend={(displayMetrics?.trade_expectancy || 0) >= 0 ? 'up' : 'down'}
             trendValue={`Per Trade`}
+          />
+          <MetricCard
+            title="Sharpe Ratio"
+            value={calculateSharpeRatio().toFixed(2)}
+            icon={TrendingUp}
+            trend={calculateSharpeRatio() >= 1 ? 'up' : calculateSharpeRatio() >= 0 ? 'neutral' : 'down'}
+            trendValue={getSharpeRatioLabel(calculateSharpeRatio())}
           />
         </div>
       </div>
@@ -1092,238 +1126,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Progress Tracking Section */}
-      <div className="space-y-6">
-        {/* Period Progress Header */}
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Period Performance</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Track your trading performance over time for {formatDateRange(selectedDateRange)}
-          </p>
-        </div>
 
-        {/* Current Period Stats */}
-        {latestPeriod && (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <DollarSign className="h-8 w-8 text-blue-500" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Latest Period P&L
-                    </dt>
-                    <dd className={`text-2xl font-semibold ${
-                      latestPeriod.pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {formatCurrency(latestPeriod.pnl)}
-                    </dd>
-                    {previousPeriod && (
-                      <dd className="text-sm text-gray-500">
-                        vs {formatCurrency(previousPeriod.pnl)} last period
-                      </dd>
-                    )}
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Target className="h-8 w-8 text-green-500" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Win Rate</dt>
-                    <dd className="text-2xl font-semibold text-gray-900">
-                      {formatPercentage(latestPeriod.winRate)}
-                    </dd>
-                    {previousPeriod && (
-                      <dd className="text-sm text-gray-500">
-                        vs {formatPercentage(previousPeriod.winRate)} last period
-                      </dd>
-                    )}
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <TrendingUp className="h-8 w-8 text-purple-500" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Expectancy</dt>
-                    <dd className={`text-2xl font-semibold ${
-                      latestPeriod.expectancy >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {formatCurrency(latestPeriod.expectancy)}
-                    </dd>
-                    {previousPeriod && (
-                      <dd className="text-sm text-gray-500">
-                        vs {formatCurrency(previousPeriod.expectancy)} last period
-                      </dd>
-                    )}
-                  </dl>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <CalendarIcon className="h-8 w-8 text-orange-500" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Trades</dt>
-                    <dd className="text-2xl font-semibold text-gray-900">
-                      {latestPeriod.trades}
-                    </dd>
-                    {previousPeriod && (
-                      <dd className="text-sm text-gray-500">
-                        vs {previousPeriod.trades} last period
-                      </dd>
-                    )}
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Progress Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Account Balance Over Time */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Account Balance Over Time
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={periodStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="period" 
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                <Tooltip 
-                  formatter={(value) => [formatCurrency(value as number), 'Balance']}
-                  labelStyle={{ color: '#374151' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="runningBalance"
-                  stroke="#3B82F6"
-                  fill="#3B82F6"
-                  fillOpacity={0.1}
-                  strokeWidth={2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Period P&L */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Period P&L
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={periodStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="period" 
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis tickFormatter={(value) => `$${value.toLocaleString()}`} />
-                <Tooltip 
-                  formatter={(value) => [formatCurrency(value as number), 'P&L']}
-                  labelStyle={{ color: '#374151' }}
-                />
-                <Bar 
-                  dataKey="pnl" 
-                  fill="#10B981"
-                  radius={[2, 2, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Win Rate Trend */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Win Rate Trend
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={periodStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="period" 
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  domain={[0, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip 
-                  formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Win Rate']}
-                  labelStyle={{ color: '#374151' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="winRate"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Trading Activity */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Trading Activity
-            </h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={periodStats}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="period" 
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value) => [value, 'Trades']}
-                  labelStyle={{ color: '#374151' }}
-                />
-                <Bar 
-                  dataKey="trades" 
-                  fill="#6366F1"
-                  radius={[2, 2, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
 
     </div>
   );

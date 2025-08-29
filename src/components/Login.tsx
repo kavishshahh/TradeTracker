@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { triggerWelcomeEmail } from '@/lib/api';
 import { Eye, EyeOff, Lock, Mail, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -35,6 +36,16 @@ export default function Login() {
           className: '!bg-gradient-to-r !from-green-400 !to-blue-500 !text-white',
           progressClassName: '!bg-white !bg-opacity-50'
         });
+        
+        // Trigger welcome email for new users
+        try {
+          await triggerWelcomeEmail(email, undefined, true);
+          console.log('Welcome email triggered for new user');
+        } catch (error) {
+          console.error('Failed to trigger welcome email:', error);
+          // Don't show error to user - welcome email failure shouldn't block signup
+        }
+        
         router.push('/');
       } else {
         await signIn(email, password);
@@ -42,6 +53,16 @@ export default function Login() {
           className: '!bg-gradient-to-r !from-blue-400 !to-purple-500 !text-white',
           progressClassName: '!bg-white !bg-opacity-50'
         });
+        
+        // Trigger welcome email for existing users (will be skipped if already sent)
+        try {
+          await triggerWelcomeEmail(email, undefined, false);
+          console.log('Welcome email trigger attempted for existing user');
+        } catch (error) {
+          console.error('Failed to trigger welcome email:', error);
+          // Don't show error to user - welcome email failure shouldn't block login
+        }
+        
         router.push('/');
       }
     } catch (error: any) {

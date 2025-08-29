@@ -6,3 +6,4 @@ pydantic>=2.6.0,<3.0.0
 python-multipart==0.0.6
 # Use specific versions that have pre-compiled wheels for Python 3.11
 cryptography>=41.0.7
+sib-api-v3-sdk==7.6.0

@@ -236,3 +236,109 @@ export async function saveFeesConfig(feesConfig: FeesConfig): Promise<{ message:
   
   return response.json();
 }
+
+// Email API functions
+export const sendWelcomeEmail = async (email: string, userName?: string) => {
+  try {
+    const headers = await getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/send-welcome-email`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        user_name: userName,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to send welcome email');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error sending welcome email:', error);
+    throw new Error(`Failed to send welcome email: ${error}`);
+  }
+};
+
+export const triggerWelcomeEmail = async (email: string, userName?: string, isNewUser: boolean = false) => {
+  try {
+    const headers = await getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/trigger-welcome-email`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        user_name: userName,
+        is_new_user: isNewUser,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to trigger welcome email');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error triggering welcome email:', error);
+    // Don't throw error for welcome email failure - it shouldn't block login
+    console.log('Welcome email failed, but continuing with login...');
+    return null;
+  }
+};
+
+export const sendTradeReminder = async (email: string, userName?: string, daysInactive?: number) => {
+  try {
+    const headers = await getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/send-trade-reminder`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        user_name: userName,
+        days_inactive: daysInactive || 7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to send trade reminder');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error sending trade reminder:', error);
+    throw new Error(`Failed to send trade reminder: ${error}`);
+  }
+};
+
+export const sendWeeklySummary = async (email: string, userName?: string, summaryData?: any) => {
+  try {
+    const headers = await getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/send-weekly-summary`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        user_name: userName,
+        summary_data: summaryData,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || 'Failed to send weekly summary');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error sending weekly summary:', error);
+    throw new Error(`Failed to send weekly summary: ${error}`);
+  }
+};

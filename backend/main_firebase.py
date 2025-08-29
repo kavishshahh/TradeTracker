@@ -9,8 +9,11 @@ import os
 import json
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables FIRST
 load_dotenv()
+
+# Now import email service after env vars are loaded
+from email_service import email_service
 
 app = FastAPI(title="TradeTracker API", version="1.0.0")
 
@@ -1262,6 +1265,236 @@ async def save_fees_config(fees_config: FeesConfig, current_user: str = Depends(
     except Exception as e:
         print(f"❌ Error saving fees config: {e}")
         print(f"🔍 Raw data that caused error: {fees_config.model_dump()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Email-related models
+class EmailRequest(BaseModel):
+    email: str
+    user_name: Optional[str] = None
+
+class TriggerWelcomeEmailRequest(BaseModel):
+    email: str
+    user_name: Optional[str] = None
+    is_new_user: Optional[bool] = False
+
+class TradeReminderRequest(BaseModel):
+    email: str
+    user_name: Optional[str] = None
+    days_inactive: Optional[int] = 7
+
+class WeeklySummaryRequest(BaseModel):
+    email: str
+    user_name: Optional[str] = None
+    summary_data: Optional[dict] = None
+
+# Email endpoints
+@app.post("/resubscribe-email")
+async def resubscribe_email(request: EmailRequest, current_user: str = Depends(get_current_user)):
+    """Re-subscribe user email that was previously unsubscribed"""
+    try:
+        print(f"📧 Re-subscribing email: {request.email}")
+        
+        # Verify the user is resubscribing their own email
+        user_record = auth.get_user(current_user)
+        if user_record.email != request.email:
+            raise HTTPException(status_code=403, detail="You can only resubscribe your own email address")
+        
+        success = email_service.resubscribe_email(request.email)
+        
+        if success:
+            print(f"✅ Email resubscribed successfully: {request.email}")
+            return {"message": "Email resubscribed successfully", "email": request.email}
+        else:
+            print(f"❌ Failed to resubscribe email: {request.email}")
+            raise HTTPException(status_code=500, detail="Failed to resubscribe email")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error resubscribing email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/trigger-welcome-email")
+async def trigger_welcome_email(request: TriggerWelcomeEmailRequest, current_user: str = Depends(get_current_user)):
+    """Trigger welcome email on login/signup with user tracking"""
+    try:
+        print(f"📧 Triggering welcome email for: {request.email} (new user: {request.is_new_user})")
+        
+        # Verify the user is triggering email for themselves
+        user_record = auth.get_user(current_user)
+        if user_record.email != request.email:
+            raise HTTPException(status_code=403, detail="You can only trigger emails for your own email address")
+        
+        # Check if user has already received welcome email (for existing users)
+        welcome_email_sent = False
+        if db and not request.is_new_user:
+            try:
+                # Check if user has a "welcome_email_sent" flag in their profile
+                user_doc = db.collection('users').document(current_user).get()
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+                    welcome_email_sent = user_data.get('welcome_email_sent', False)
+                    
+                if welcome_email_sent:
+                    print(f"🔄 Welcome email already sent to {request.email}, skipping...")
+                    return {"message": "Welcome email already sent", "email": request.email, "skipped": True}
+            except Exception as e:
+                print(f"⚠️ Could not check welcome email status: {e}")
+        
+        # Send the welcome email
+        success = email_service.send_welcome_email(request.email, request.user_name)
+        
+        if success:
+            # Mark welcome email as sent in user profile
+            if db:
+                try:
+                    user_ref = db.collection('users').document(current_user)
+                    user_ref.set({
+                        'welcome_email_sent': True,
+                        'welcome_email_sent_at': datetime.now(),
+                        'email': request.email
+                    }, merge=True)
+                    print(f"✅ Marked welcome email as sent for user: {current_user}")
+                except Exception as e:
+                    print(f"⚠️ Could not update user welcome email status: {e}")
+            
+            print(f"✅ Welcome email sent successfully to {request.email}")
+            return {"message": "Welcome email sent successfully", "email": request.email, "triggered": True}
+        else:
+            print(f"❌ Failed to send welcome email to {request.email}")
+            raise HTTPException(status_code=500, detail="Failed to send welcome email")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error triggering welcome email: {e}")
+        # Don't fail the login process if email fails
+        return {"message": "Email service temporarily unavailable", "email": request.email, "error": str(e)}
+
+@app.post("/send-welcome-email")
+async def send_welcome_email(request: EmailRequest, current_user: str = Depends(get_current_user)):
+    """Send welcome email to user"""
+    try:
+        print(f"📧 Sending welcome email to: {request.email}")
+        
+        # Verify the user is sending email to themselves or has permission
+        user_record = auth.get_user(current_user)
+        if user_record.email != request.email:
+            raise HTTPException(status_code=403, detail="You can only send emails to your own email address")
+        
+        success = email_service.send_welcome_email(request.email, request.user_name)
+        
+        if success:
+            print(f"✅ Welcome email sent successfully to {request.email}")
+            return {"message": "Welcome email sent successfully", "email": request.email}
+        else:
+            print(f"❌ Failed to send welcome email to {request.email}")
+            raise HTTPException(status_code=500, detail="Failed to send welcome email")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error sending welcome email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/send-trade-reminder")
+async def send_trade_reminder(request: TradeReminderRequest, current_user: str = Depends(get_current_user)):
+    """Send trade reminder email to user"""
+    try:
+        print(f"📧 Sending trade reminder to: {request.email}")
+        
+        # Verify the user is sending email to themselves
+        user_record = auth.get_user(current_user)
+        if user_record.email != request.email:
+            raise HTTPException(status_code=403, detail="You can only send emails to your own email address")
+        
+        success = email_service.send_trade_reminder(
+            request.email, 
+            request.user_name, 
+            request.days_inactive
+        )
+        
+        if success:
+            print(f"✅ Trade reminder sent successfully to {request.email}")
+            return {"message": "Trade reminder sent successfully", "email": request.email}
+        else:
+            print(f"❌ Failed to send trade reminder to {request.email}")
+            raise HTTPException(status_code=500, detail="Failed to send trade reminder")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error sending trade reminder: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/send-weekly-summary")
+async def send_weekly_summary(request: WeeklySummaryRequest, current_user: str = Depends(get_current_user)):
+    """Send weekly summary email to user"""
+    try:
+        print(f"📧 Sending weekly summary to: {request.email}")
+        
+        # Verify the user is sending email to themselves
+        user_record = auth.get_user(current_user)
+        if user_record.email != request.email:
+            raise HTTPException(status_code=403, detail="You can only send emails to your own email address")
+        
+        # If no summary data provided, fetch user's actual trading data
+        summary_data = request.summary_data
+        if not summary_data and db:
+            try:
+                # Fetch user's trades for the past week
+                from datetime import timedelta
+                week_ago = datetime.now() - timedelta(days=7)
+                
+                trades_ref = db.collection('trades')
+                recent_trades = trades_ref.where('user_id', '==', current_user)\
+                                        .where('date', '>=', week_ago)\
+                                        .stream()
+                
+                trades_list = []
+                for trade in recent_trades:
+                    trade_data = trade.to_dict()
+                    trades_list.append(trade_data)
+                
+                # Calculate summary stats
+                total_trades = len(trades_list)
+                total_pnl = sum(trade.get('realized_pnl', 0) for trade in trades_list)
+                winning_trades = [t for t in trades_list if t.get('realized_pnl', 0) > 0]
+                win_rate = (len(winning_trades) / total_trades * 100) if total_trades > 0 else 0
+                best_trade = max([t.get('realized_pnl', 0) for t in trades_list], default=0)
+                worst_trade = min([t.get('realized_pnl', 0) for t in trades_list], default=0)
+                
+                summary_data = {
+                    'total_trades': total_trades,
+                    'profit_loss': total_pnl,
+                    'win_rate': win_rate,
+                    'best_trade': best_trade,
+                    'worst_trade': worst_trade
+                }
+                
+                print(f"📊 Calculated summary data: {summary_data}")
+                
+            except Exception as e:
+                print(f"⚠️ Could not fetch trading data, using defaults: {e}")
+                summary_data = None
+        
+        success = email_service.send_weekly_summary(
+            request.email, 
+            request.user_name,
+            summary_data
+        )
+        
+        if success:
+            print(f"✅ Weekly summary sent successfully to {request.email}")
+            return {"message": "Weekly summary sent successfully", "email": request.email}
+        else:
+            print(f"❌ Failed to send weekly summary to {request.email}")
+            raise HTTPException(status_code=500, detail="Failed to send weekly summary")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error sending weekly summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")

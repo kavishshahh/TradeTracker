@@ -768,59 +768,23 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
         )}
       </div>
 
-      {/* Date Range Selector */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Select Date Range</h3>
-          <button
-            onClick={toggleCalendar}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-            type="button"
-          >
-            <CalendarIcon className="h-4 w-4 mr-2" />
-            {isCalendarOpen ? 'Close Calendar' : 'Open Calendar'}
-          </button>
-        </div>
-        
-        {isCalendarOpen && (
-          <div ref={calendarRef} className="relative">
-            {/* Close Button */}
-            <button
-              onClick={closeCalendar}
-              className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded-md z-10"
-              aria-label="Close calendar"
-            >
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            
-            <Calendar
-              mode="range"
-              selected={dateRange}
-              onSelect={handleDateRangeSelect}
-              className="rounded-md border shadow-sm"
-              captionLayout="dropdown"
-            />
-            
-            {/* Filter Button */}
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={handleApplyFilter}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                type="button"
-              >
-                Apply Filter
-              </button>
-            </div>
-          </div>
-                  )}
-        </div>
+
 
         {/* Quick Date Filters */}
         <div className="bg-white rounded-lg shadow p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-3">Quick Date Filters</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700">Quick Date Filters</label>
+            <button
+              onClick={toggleCalendar}
+              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              type="button"
+            >
+              <CalendarIcon className="h-3 w-3 mr-1" />
+              Custom Range
+            </button>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 mb-3">
             <button
               onClick={clearDateFilter}
               className={`px-3 py-1 text-sm rounded-md transition-colors ${
@@ -850,6 +814,41 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
               );
             })}
           </div>
+
+          {/* Calendar Section */}
+          {isCalendarOpen && (
+            <div ref={calendarRef} className="relative border-t pt-3">
+              {/* Close Button */}
+              <button
+                onClick={closeCalendar}
+                className="absolute top-4 right-2 p-1 hover:bg-gray-100 rounded-md z-10"
+                aria-label="Close calendar"
+              >
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              
+              <Calendar
+                mode="range"
+                selected={dateRange}
+                onSelect={handleDateRangeSelect}
+                className="rounded-md border shadow-sm"
+                captionLayout="dropdown"
+              />
+              
+              {/* Filter Button */}
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={handleApplyFilter}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  type="button"
+                >
+                  Apply Filter
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       {/* Metrics Cards */}

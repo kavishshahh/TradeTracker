@@ -1,10 +1,10 @@
 'use client';
 
-import { ArrowRight, BarChart3, BookOpen, Calculator, Calendar, CheckCircle, Star, Target, TrendingUp } from "lucide-react";
+import { ArrowRight, BarChart3, BookOpen, Calculator, Calendar, CheckCircle, Target, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
 // Feature highlight component
-function FeatureCard({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
+function FeatureCard({ icon: Icon, title, description }: { icon: React.ComponentType<{ className?: string }>, title: string, description: string }) {
   return (
     <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:border-white/30 transition-all duration-300 hover:transform hover:scale-105 text-center">
       <div className="bg-gradient-to-r from-blue-500 to-cyan-500 w-12 h-12 rounded-lg flex items-center justify-center mb-4 mx-auto">
@@ -17,22 +17,23 @@ function FeatureCard({ icon: Icon, title, description }: { icon: any, title: str
 }
 
 // Testimonial component
-function TestimonialCard({ quote, author, role, rating }: { quote: string, author: string, role: string, rating: number }) {
-  return (
-    <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
-      <div className="flex mb-4">
-        {[...Array(rating)].map((_, i) => (
-          <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-        ))}
-      </div>
-      <p className="text-gray-300 mb-4 italic">"{quote}"</p>
-      <div>
-        <p className="text-white font-semibold">{author}</p>
-        <p className="text-gray-400 text-sm">{role}</p>
-      </div>
-    </div>
-  );
-}
+// Testimonial component - removed since not used
+// function TestimonialCard({ quote, author, role, rating }: { quote: string, author: string, role: string, rating: number }) {
+//   return (
+//     <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+//       <div className="flex mb-4">
+//         {[...Array(rating)].map((_, i) => (
+//           <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
+//         ))}
+//       </div>
+//       <p className="text-gray-300 mb-4 italic">&ldquo;{quote}&rdquo;</p>
+//       <div>
+//         <p className="text-white font-semibold">{author}</p>
+//         <p className="text-gray-400 text-sm">{role}</p>
+//       </div>
+//     </div>
+//   );
+// }
 
 // Benefit item component
 function BenefitItem({ text }: { text: string }) {

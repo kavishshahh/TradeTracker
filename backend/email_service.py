@@ -1,5 +1,5 @@
 """
-Email service for TradeTracker using Brevo (formerly Sendinblue)
+Email service for TradeBud using Brevo (formerly Sendinblue)
 """
 import os
 import sib_api_v3_sdk
@@ -22,7 +22,7 @@ class EmailService:
         
         self.api_key = os.getenv('BREVO_API_KEY')
         self.from_email = os.getenv('FROM_EMAIL', 'noreply@tradebud.xyz')
-        self.from_name = os.getenv('FROM_NAME', 'TradeTracker')
+        self.from_name = os.getenv('FROM_NAME', 'TradeBud')
         
         # Debug output
         if self.api_key:
@@ -99,7 +99,7 @@ class EmailService:
         """Send welcome email to new users"""
         display_name = user_name or user_email.split('@')[0]
         
-        subject = "🎉 Welcome to TradeTracker!"
+        subject = "🎉 Welcome to TradeBud!"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -107,7 +107,7 @@ class EmailService:
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Welcome to TradeTracker</title>
+            <title>Welcome to TradeBud</title>
             <style>
                 body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f8fafc; }}
                 .container {{ max-width: 600px; margin: 0 auto; background-color: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }}
@@ -121,7 +121,7 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1 style="margin: 0; font-size: 28px;">📈 Welcome to TradeTracker!</h1>
+                    <h1 style="margin: 0; font-size: 28px;">📈 Welcome to TradeBud!</h1>
                     <p style="margin: 10px 0 0 0; opacity: 0.9;">Your trading journey starts here</p>
                 </div>
                 
@@ -129,11 +129,11 @@ class EmailService:
                     <h2 style="color: #2d3748; margin-top: 0;">Hey {display_name}! 👋</h2>
                     
                     <p style="color: #4a5568; line-height: 1.6;">
-                        Welcome to TradeTracker - your personal trading companion! We're excited to help you track, analyze, and improve your trading performance.
+                        Welcome to TradeBud - your personal trading companion! We're excited to help you track, analyze, and improve your trading performance.
                     </p>
                     
                     <div class="stats">
-                        <h3 style="color: #2d3748; margin-top: 0;">🚀 What you can do with TradeTracker:</h3>
+                        <h3 style="color: #2d3748; margin-top: 0;">🚀 What you can do with TradeBud:</h3>
                         <ul style="color: #4a5568; line-height: 1.8;">
                             <li>📊 Track all your trades in one place</li>
                             <li>📈 Analyze your performance with detailed charts</li>
@@ -159,7 +159,7 @@ class EmailService:
                 <div class="footer">
                     <p style="color: #718096; font-size: 12px; margin: 0;">
                         Happy Trading! 🎯<br>
-                        The TradeTracker Team
+                        The TradeBud Team
                     </p>
                 </div>
             </div>
@@ -235,7 +235,7 @@ class EmailService:
                 <div class="footer">
                     <p style="color: #718096; font-size: 12px; margin: 0;">
                         Keep trading smart! 💪<br>
-                        The TradeTracker Team
+                        The TradeBud Team
                     </p>
                     <p style="color: #a0aec0; font-size: 10px; margin: 10px 0 0 0;">
                         Don't want these reminders? <a href="#" style="color: #a0aec0;">Unsubscribe here</a>
@@ -336,7 +336,7 @@ class EmailService:
                 <div class="footer">
                     <p style="color: #718096; font-size: 12px; margin: 0;">
                         Happy Trading! 🎯<br>
-                        The TradeTracker Team
+                        The TradeBud Team
                     </p>
                 </div>
             </div>

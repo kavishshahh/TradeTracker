@@ -101,9 +101,9 @@ export default function MonthlyReturns() {
   };
 
   const getReturnColor = (value: number) => {
-    if (value > 0) return 'text-green-600';
-    if (value < 0) return 'text-red-600';
-    return 'text-gray-600';
+    if (value > 0) return 'text-green-600 dark:text-green-400';
+    if (value < 0) return 'text-red-600 dark:text-red-400';
+    return 'text-gray-600 dark:text-gray-400';
   };
 
   const getReturnIcon = (value: number) => {
@@ -176,14 +176,14 @@ export default function MonthlyReturns() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
               <Calendar className="h-6 w-6 mr-2 text-blue-500" />
               Monthly Returns
             </h1>
-            <p className="text-gray-600 mt-1">Track your month-wise portfolio performance</p>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Track your month-wise portfolio performance</p>
           </div>
           <button
             onClick={handleAddReturn}
@@ -197,17 +197,17 @@ export default function MonthlyReturns() {
 
       {/* Fees Information Banner */}
       {feesConfig && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <Info className="h-5 w-5 text-blue-500 mt-0.5" />
+            <Info className="h-5 w-5 text-blue-500 dark:text-blue-400 mt-0.5" />
             <div>
-              <h3 className="text-sm font-medium text-blue-900">Trading Fees Information</h3>
-              <p className="text-sm text-blue-700 mt-1">
+              <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200">Trading Fees Information</h3>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                 Monthly returns should reflect your actual account performance including all trading fees. 
                 Your current fees configuration includes {feesConfig.brokerage_percentage}% brokerage (max ${feesConfig.brokerage_max_usd}), 
                 {feesConfig.exchange_transaction_charges_percentage}% exchange charges, and other applicable fees.
               </p>
-              <p className="text-xs text-blue-600 mt-2">
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
                 💡 Tip: Account for fees when calculating your monthly P&L to get accurate performance metrics.
               </p>
             </div>
@@ -217,43 +217,43 @@ export default function MonthlyReturns() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Return %</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Return %</p>
               <p className={`text-2xl font-bold ${getReturnColor(totalReturn.totalPercentage)}`}>
                 {totalReturn.totalPercentage.toFixed(2)}%
               </p>
             </div>
-            <div className={`p-3 rounded-full ${totalReturn.totalPercentage >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <div className={`p-3 rounded-full ${totalReturn.totalPercentage >= 0 ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}>
               {getReturnIcon(totalReturn.totalPercentage)}
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total USD Return</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total USD Return</p>
               <p className={`text-2xl font-bold ${getReturnColor(totalReturn.totalDollar)}`}>
                 {totalReturn.totalDollar >= 0 ? '+' : '-'}{formatCurrency(totalReturn.totalDollar, 'USD')}
               </p>
             </div>
-            <div className={`p-3 rounded-full ${totalReturn.totalDollar >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <div className={`p-3 rounded-full ${totalReturn.totalDollar >= 0 ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}>
               <DollarSign className="h-4 w-4" />
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total INR Return</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total INR Return</p>
               <p className={`text-2xl font-bold ${getReturnColor(totalReturn.totalINR)}`}>
                 {totalReturn.totalINR >= 0 ? '+' : '-'}{formatCurrency(totalReturn.totalINR, 'INR')}
               </p>
             </div>
-            <div className={`p-3 rounded-full ${totalReturn.totalINR >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+            <div className={`p-3 rounded-full ${totalReturn.totalINR >= 0 ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}>
               <DollarSign className="h-4 w-4" />
             </div>
           </div>
@@ -262,8 +262,8 @@ export default function MonthlyReturns() {
 
       {/* Bar Chart */}
       {chartData.length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Monthly Returns Chart</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Monthly Returns Chart</h2>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
@@ -295,51 +295,51 @@ export default function MonthlyReturns() {
       )}
 
       {/* Monthly Returns Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Monthly Performance</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Monthly Performance</h2>
         </div>
         
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Month
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Start Capital
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Close Capital
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Return %
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   USD Return
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   INR Return
                 </th>
-                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                    Comments
                  </th>
-                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                    Actions
                  </th>
                </tr>
              </thead>
-             <tbody className="bg-white divide-y divide-gray-200">
+             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                {monthlyData.map((row, index) => (
-                 <tr key={row.id || index} className="hover:bg-gray-50">
-                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                 <tr key={row.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                      {row.month}
                    </td>
-                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                      {formatCurrency(row.start_cap, 'USD')}
                    </td>
-                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                      {row.close_cap ? formatCurrency(row.close_cap, 'USD') : '-'}
                    </td>
                    <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -366,9 +366,9 @@ export default function MonthlyReturns() {
                        </span>
                      ) : '-'}
                    </td>
-                   <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">
+                   <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-xs">
                      {row.comments && (
-                       <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                       <span className="bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full text-xs">
                          {row.comments}
                        </span>
                      )}
@@ -377,14 +377,14 @@ export default function MonthlyReturns() {
                      <div className="flex items-center space-x-2">
                        <button
                          onClick={() => handleEditReturn(row)}
-                         className="text-blue-600 hover:text-blue-900 transition-colors"
+                         className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 transition-colors"
                          title="Edit"
                        >
                          <Edit className="h-4 w-4" />
                        </button>
                        <button
                          onClick={() => handleDeleteReturn(row)}
-                         className="text-red-600 hover:text-red-900 transition-colors"
+                         className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 transition-colors"
                          title="Delete"
                        >
                          <Trash2 className="h-4 w-4" />
@@ -464,16 +464,16 @@ function MonthlyReturnForm({ returnData, onSave, onCancel }: MonthlyReturnFormPr
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {returnData ? 'Edit Monthly Return' : 'Add Monthly Return'}
           </h3>
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Month *
             </label>
             <input
@@ -481,13 +481,13 @@ function MonthlyReturnForm({ returnData, onSave, onCancel }: MonthlyReturnFormPr
               value={formData.month}
               onChange={(e) => handleChange('month', e.target.value)}
               placeholder="e.g., December 2024"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               required
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Start Capital (USD) *
             </label>
             <input
@@ -495,13 +495,13 @@ function MonthlyReturnForm({ returnData, onSave, onCancel }: MonthlyReturnFormPr
               step="0.01"
               value={formData.start_cap}
               onChange={(e) => handleChange('start_cap', Number(e.target.value))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               required
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Close Capital (USD)
             </label>
             <input
@@ -509,12 +509,12 @@ function MonthlyReturnForm({ returnData, onSave, onCancel }: MonthlyReturnFormPr
               step="0.01"
               value={formData.close_cap || ''}
               onChange={(e) => handleChange('close_cap', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               INR Return
             </label>
             <input
@@ -522,26 +522,26 @@ function MonthlyReturnForm({ returnData, onSave, onCancel }: MonthlyReturnFormPr
               step="0.01"
               value={formData.inr_return || ''}
               onChange={(e) => handleChange('inr_return', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
             />
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Comments
             </label>
             <textarea
               value={formData.comments}
               onChange={(e) => handleChange('comments', e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               placeholder="Any additional notes..."
             />
           </div>
           
           {/* Show calculated values */}
           {formData.percentage_return !== undefined && (
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
               <p>Calculated Return: {formData.percentage_return.toFixed(2)}%</p>
               <p>Dollar Return: ${formData.dollar_return?.toFixed(2)}</p>
             </div>
@@ -551,7 +551,7 @@ function MonthlyReturnForm({ returnData, onSave, onCancel }: MonthlyReturnFormPr
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
               Cancel
             </button>

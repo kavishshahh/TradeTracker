@@ -27,7 +27,7 @@ function JournalEntry({ trade, onEdit }: JournalEntryProps) {
   const pnlStatus = getPnLStatus();
 
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200 p-6 hover:shadow-md transition-shadow">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${
@@ -35,8 +35,8 @@ function JournalEntry({ trade, onEdit }: JournalEntryProps) {
             pnlStatus === 'loss' ? 'bg-red-500' : 'bg-blue-500'
           }`} />
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">{trade.ticker}</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{trade.ticker}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               {new Date(trade.date).toLocaleDateString('en-US', { 
                 weekday: 'long', 
                 year: 'numeric', 
@@ -49,14 +49,14 @@ function JournalEntry({ trade, onEdit }: JournalEntryProps) {
         <div className="flex items-center space-x-2">
           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
             trade.status === 'closed' 
-              ? 'bg-gray-100 text-gray-800' 
-              : 'bg-blue-100 text-blue-800'
+              ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200' 
+              : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
           }`}>
             {trade.status}
           </span>
           <button
             onClick={() => onEdit(trade)}
-            className="p-1 text-gray-400 hover:text-gray-600"
+            className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <Edit className="h-4 w-4" />
           </button>
@@ -65,23 +65,23 @@ function JournalEntry({ trade, onEdit }: JournalEntryProps) {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
         <div>
-          <span className="text-gray-500">Buy Price:</span>
-          <div className="font-medium">${trade.buy_price}</div>
+          <span className="text-gray-500 dark:text-gray-400">Buy Price:</span>
+          <div className="font-medium text-gray-900 dark:text-white">${trade.buy_price}</div>
         </div>
         {trade.sell_price && (
           <div>
-            <span className="text-gray-500">Sell Price:</span>
-            <div className="font-medium">${trade.sell_price}</div>
+            <span className="text-gray-500 dark:text-gray-400">Sell Price:</span>
+            <div className="font-medium text-gray-900 dark:text-white">${trade.sell_price}</div>
           </div>
         )}
         <div>
-          <span className="text-gray-500">Shares:</span>
-          <div className="font-medium">{trade.shares}</div>
+          <span className="text-gray-500 dark:text-gray-400">Shares:</span>
+          <div className="font-medium text-gray-900 dark:text-white">{trade.shares}</div>
         </div>
         {trade.status === 'closed' && (
           <div>
-            <span className="text-gray-500">P&L:</span>
-            <div className={`font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <span className="text-gray-500 dark:text-gray-400">P&L:</span>
+            <div className={`font-medium ${pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
               {formatCurrency(pnl)}
             </div>
           </div>
@@ -89,15 +89,15 @@ function JournalEntry({ trade, onEdit }: JournalEntryProps) {
       </div>
 
       {trade.notes && (
-        <div className="border-t border-gray-200 pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Notes</h4>
-          <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <h4 className="text-sm font-medium text-gray-700  dark:text-gray-300 mb-2">Notes</h4>
+          <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap">
             {trade.notes}
           </div>
         </div>
       )}
 
-      <div className="mt-4 text-xs text-gray-400">
+      <div className="mt-4 text-xs text-gray-400 dark:text-gray-500">
         Risk: {trade.risk}% | 
         Created: {new Date(trade.created_at || trade.date).toLocaleDateString()}
       </div>
@@ -199,12 +199,12 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-semibold">Edit Trade - {trade.ticker}</h3>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Edit Trade - {trade.ticker}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xl"
           >
             ✕
           </button>
@@ -214,34 +214,34 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
           {/* Basic Trade Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700  dark:text-gray-300 mb-2">
                 Date
               </label>
               <input
                 type="date"
                 value={formData.date}
                 onChange={(e) => handleInputChange('date', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300  dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Ticker
               </label>
               <input
                 type="text"
                 value={formData.ticker}
                 onChange={(e) => handleInputChange('ticker', e.target.value.toUpperCase())}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="AAPL"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Shares
               </label>
               <input
@@ -249,20 +249,20 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.shares}
                 onChange={(e) => handleInputChange('shares', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Status
               </label>
               <select
                 value={formData.status}
                 onChange={(e) => handleInputChange('status', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="open">Open</option>
                 <option value="closed">Closed</option>
@@ -273,7 +273,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
           {/* Price Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Buy Price ($)
               </label>
               <input
@@ -281,14 +281,14 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.buy_price}
                 onChange={(e) => handleInputChange('buy_price', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="150.00"
                 required={formData.status === 'open'}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Sell Price ($)
               </label>
               <input
@@ -296,7 +296,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.sell_price}
                 onChange={(e) => handleInputChange('sell_price', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="165.00"
                 required={formData.status === 'closed'}
               />
@@ -306,7 +306,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
           {/* Risk Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Risk (%)
               </label>
               <input
@@ -314,13 +314,13 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.risk}
                 onChange={(e) => handleInputChange('risk', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="2.0"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Risk ($)
               </label>
               <input
@@ -328,7 +328,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.risk_dollars}
                 onChange={(e) => handleInputChange('risk_dollars', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="200.00"
               />
             </div>
@@ -336,7 +336,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Trade Notes
             </label>
             <textarea
@@ -350,16 +350,16 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
 • What went right or wrong?
 • What lessons did you learn?
 • How can you improve next time?"
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
@@ -473,7 +473,7 @@ export default function Journal() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Trading Journal</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Journal</h1>
         <p className="mt-1 text-sm text-gray-500">
           Review and analyze your trading decisions
         </p>
@@ -481,32 +481,32 @@ export default function Journal() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Calendar className="h-6 w-6 text-gray-400" />
+                <Calendar className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Trades</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.total}</dd>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Trades</dt>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-white">{stats.total}</dd>
                 </dl>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Edit className="h-6 w-6 text-blue-400" />
+                <Edit className="h-6 w-6 text-blue-400 dark:text-blue-500" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">With Notes</dt>
-                  <dd className="text-lg font-medium text-gray-900">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">With Notes</dt>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-white">
                     {stats.withNotes} ({((stats.withNotes / stats.total) * 100).toFixed(0)}%)
                   </dd>
                 </dl>
@@ -515,32 +515,32 @@ export default function Journal() {
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Eye className="h-6 w-6 text-green-400" />
+                <Eye className="h-6 w-6 text-green-400 dark:text-green-500" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Closed</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.closed}</dd>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Closed</dt>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-white">{stats.closed}</dd>
                 </dl>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="h-6 w-6 rounded-full bg-blue-500" />
+                <div className="h-6 w-6 rounded-full bg-blue-500 dark:bg-blue-400" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Open</dt>
-                  <dd className="text-lg font-medium text-gray-900">{stats.open}</dd>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Open</dt>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-white">{stats.open}</dd>
                 </dl>
               </div>
             </div>
@@ -548,38 +548,55 @@ export default function Journal() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 sm:space-x-4">
+      {/* Search and Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 sm:space-x-4">
           <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700  dark:text-gray-300 mb-2">
+              Search Trades
+            </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
-                placeholder="Search by ticker or notes..."
+                placeholder="Search by ticker, notes, or date..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  trackEvent('journal_search', 'journal', e.target.value);
+                }}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300  dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
           </div>
           
-          <div className="flex items-center space-x-2">
-            <Filter className="h-4 w-4 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                const newFilter = e.target.value as 'all' | 'open' | 'closed';
-                setStatusFilter(newFilter);
-                trackEvent('journal_filter', 'journal', newFilter);
-                trackUserEngagement('filter_change', newFilter);
-              }}
-              className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Trades</option>
-              <option value="open">Open Positions</option>
-              <option value="closed">Closed Positions</option>
-            </select>
+          <div className="flex items-center space-x-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700  dark:text-gray-300 mb-2">
+                Filter by Status
+              </label>
+              <div className="flex items-center space-x-2">
+                <Filter className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    const newFilter = e.target.value as 'all' | 'open' | 'closed';
+                    setStatusFilter(newFilter);
+                    trackEvent('journal_filter', 'journal', newFilter);
+                    trackUserEngagement('filter_change', newFilter);
+                  }}
+                  className="border border-gray-300  dark:border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="all">All Trades</option>
+                  <option value="open">Open Positions</option>
+                  <option value="closed">Closed Positions</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Showing {filteredTrades.length} of {trades.length} trades
+            </div>
           </div>
         </div>
       </div>
@@ -588,7 +605,24 @@ export default function Journal() {
       <div className="space-y-4">
         {filteredTrades.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500">No trades found matching your criteria.</p>
+            <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+              <Search className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No trades found</h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'No trades match your current search criteria.' 
+                : 'You haven\'t added any trades yet.'
+              }
+            </p>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           filteredTrades.map((trade) => (

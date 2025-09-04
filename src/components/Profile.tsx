@@ -1,10 +1,11 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { trackEvent, trackFormSubmission, trackPageView } from '@/lib/analytics';
 import { getFeesConfig, getUserProfile, saveFeesConfig, updateUserProfile } from '@/lib/api';
 import { FeesConfig } from '@/types/trade';
-import { Calculator, DollarSign, Save, Settings, User } from 'lucide-react';
+import { Calculator, DollarSign, Moon, Save, Settings, Sun, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -24,6 +25,7 @@ export default function Profile() {
   const [isFeesSubmitting, setIsFeesSubmitting] = useState(false);
   const [feesSubmitSuccess, setFeesSubmitSuccess] = useState(false);
   const { currentUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const {
     register,
@@ -164,26 +166,26 @@ export default function Profile() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center">
           <User className="h-6 w-6 mr-2 text-blue-500" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>
-            <p className="text-gray-600 mt-1">Manage your account settings and trading preferences</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">Manage your account settings and trading preferences</p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="border-b border-gray-200 dark:border-gray-700">
           <nav className="-mb-px flex">
             <button
               onClick={() => setActiveTab('profile')}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'profile'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <User className="h-4 w-4 mr-2 inline" />
@@ -193,8 +195,8 @@ export default function Profile() {
               onClick={() => setActiveTab('fees')}
               className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'fees'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <Calculator className="h-4 w-4 mr-2 inline" />
@@ -215,6 +217,8 @@ export default function Profile() {
               accountBalance={accountBalance}
               riskTolerance={riskTolerance}
               calculatePositionSize={calculatePositionSize}
+              theme={theme}
+              toggleTheme={toggleTheme}
             />
           ) : (
             <FeesTabContent 
@@ -230,21 +234,21 @@ export default function Profile() {
       </div>
 
       {/* User Info */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Information</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Account Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <p className="text-sm text-gray-600">Email Address</p>
-            <p className="text-gray-900 font-medium">{currentUser?.email}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Email Address</p>
+            <p className="text-gray-900 dark:text-white font-medium">{currentUser?.email}</p>
           </div>
           <div>
-            <p className="text-sm text-gray-600">User ID</p>
-            <p className="text-gray-900 font-medium font-mono text-sm">{currentUser?.uid}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">User ID</p>
+            <p className="text-gray-900 dark:text-white font-medium font-mono text-sm">{currentUser?.uid}</p>
           </div>
         </div>
         
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-          <p className="text-sm text-blue-800">
+        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p className="text-sm text-blue-800 dark:text-blue-200">
             💡 <strong>Tip:</strong> For monthly performance tracking, use the <strong>Monthly Returns</strong> tab to add your month-wise portfolio data including start/end capital, returns, and notes.
           </p>
         </div>
@@ -264,6 +268,8 @@ interface ProfileTabContentProps {
   accountBalance: number;
   riskTolerance: number;
   calculatePositionSize: () => number;
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
 }
 
 function ProfileTabContent({ 
@@ -275,21 +281,23 @@ function ProfileTabContent({
   submitSuccess, 
   accountBalance, 
   riskTolerance, 
-  calculatePositionSize 
+  calculatePositionSize,
+  theme,
+  toggleTheme
 }: ProfileTabContentProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Account Settings Form */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Account Settings</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Account Settings</h2>
         
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label htmlFor="account_balance" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="account_balance" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Account Balance (USD) *
             </label>
             <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
               <input
                 id="account_balance"
                 type="number"
@@ -298,23 +306,23 @@ function ProfileTabContent({
                   required: 'Account balance is required',
                   min: { value: 0.01, message: 'Account balance must be greater than 0' }
                 })}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 placeholder="Enter your account balance"
               />
             </div>
             {errors.account_balance && (
-              <p className="mt-1 text-sm text-red-600">{errors.account_balance.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.account_balance.message}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="currency" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Currency
             </label>
             <select
               id="currency"
               {...register('currency')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
             >
               <option value="USD">USD - US Dollar</option>
               <option value="EUR">EUR - Euro</option>
@@ -324,7 +332,7 @@ function ProfileTabContent({
           </div>
 
           <div>
-            <label htmlFor="risk_tolerance" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="risk_tolerance" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Risk Tolerance (% per trade) *
             </label>
             <input
@@ -338,15 +346,47 @@ function ProfileTabContent({
                 min: { value: 0.1, message: 'Risk tolerance must be at least 0.1%' },
                 max: { value: 10, message: 'Risk tolerance cannot exceed 10%' }
               })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
               placeholder="2.0"
             />
             {errors.risk_tolerance && (
-              <p className="mt-1 text-sm text-red-600">{errors.risk_tolerance.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.risk_tolerance.message}</p>
             )}
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Recommended: 1-3% per trade for conservative approach
             </p>
+          </div>
+
+          {/* Theme Toggle */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Theme Preference
+            </label>
+            <div className="flex items-center space-x-4">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleTheme();
+                  trackEvent('theme_toggle', 'profile', theme === 'light' ? 'dark' : 'light');
+                }}
+                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                {theme === 'light' ? (
+                  <>
+                    <Moon className="h-4 w-4" />
+                    <span>Switch to Dark Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun className="h-4 w-4" />
+                    <span>Switch to Light Mode</span>
+                  </>
+                )}
+              </button>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Current: {theme === 'light' ? 'Light' : 'Dark'} Mode
+              </span>
+            </div>
           </div>
 
           <button
@@ -382,36 +422,36 @@ function ProfileTabContent({
 
       {/* Risk Calculator */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Risk Calculator</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Risk Calculator</h2>
         
         <div className="space-y-4">
-          <div className="bg-blue-50 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-blue-900 mb-2">Position Size per Trade</h3>
-            <p className="text-2xl font-bold text-blue-600">
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">Position Size per Trade</h3>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               ${calculatePositionSize().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-sm text-blue-700 mt-1">
+            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
               Based on {riskTolerance}% risk tolerance
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 uppercase tracking-wide">Account Balance</p>
-              <p className="text-lg font-semibold text-gray-900">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+              <p className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wide">Account Balance</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
                 ${accountBalance?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
               </p>
             </div>
             
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-600 uppercase tracking-wide">Risk per Trade</p>
-              <p className="text-lg font-semibold text-gray-900">{riskTolerance}%</p>
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+              <p className="text-xs text-gray-600 dark:text-gray-400 uppercase tracking-wide">Risk per Trade</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">{riskTolerance}%</p>
             </div>
           </div>
 
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">Risk Management Tips</h4>
-            <ul className="text-sm text-gray-600 space-y-1">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Risk Management Tips</h4>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
               <li>• Never risk more than 1-3% of your account per trade</li>
               <li>• Use stop-losses to limit downside risk</li>
               <li>• Diversify across different stocks/sectors</li>
@@ -446,7 +486,7 @@ function FeesTabContent({
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-        <p className="mt-2 text-gray-500">Loading fees configuration...</p>
+        <p className="mt-2 text-gray-500 dark:text-gray-400">Loading fees configuration...</p>
       </div>
     );
   }
@@ -454,8 +494,8 @@ function FeesTabContent({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">Trading Fees Configuration</h2>
-        <p className="text-sm text-gray-600">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Trading Fees Configuration</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           Configure your broker's fee structure to get accurate P&L calculations. Default values are based on typical US stock trading fees.
         </p>
       </div>
@@ -464,10 +504,10 @@ function FeesTabContent({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Brokerage Fees */}
           <div className="space-y-4">
-            <h3 className="text-md font-medium text-gray-900 border-b pb-2">Brokerage Fees</h3>
+            <h3 className="text-md font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">Brokerage Fees</h3>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Brokerage (% per transaction)
               </label>
               <input
@@ -477,14 +517,14 @@ function FeesTabContent({
                 max="5"
                 value={feesConfig.brokerage_percentage}
                 onChange={(e) => handleFeesChange('brokerage_percentage', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0.25"
               />
-              <p className="mt-1 text-xs text-gray-500">Percentage charged per transaction</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Percentage charged per transaction</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Maximum Brokerage (USD)
               </label>
               <input
@@ -493,19 +533,19 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.brokerage_max_usd}
                 onChange={(e) => handleFeesChange('brokerage_max_usd', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="25"
               />
-              <p className="mt-1 text-xs text-gray-500">Maximum brokerage fee cap</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Maximum brokerage fee cap</p>
             </div>
           </div>
 
           {/* Exchange & Regulatory Fees */}
           <div className="space-y-4">
-            <h3 className="text-md font-medium text-gray-900 border-b pb-2">Exchange & Regulatory Fees</h3>
+            <h3 className="text-md font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">Exchange & Regulatory Fees</h3>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Exchange Transaction Charges (%)
               </label>
               <input
@@ -514,14 +554,14 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.exchange_transaction_charges_percentage}
                 onChange={(e) => handleFeesChange('exchange_transaction_charges_percentage', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0.12"
               />
-              <p className="mt-1 text-xs text-gray-500">Exchange charges per transaction</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Exchange charges per transaction</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 IFSCA Turnover Fees (%)
               </label>
               <input
@@ -530,19 +570,19 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.ifsca_turnover_fees_percentage}
                 onChange={(e) => handleFeesChange('ifsca_turnover_fees_percentage', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0.0001"
               />
-              <p className="mt-1 text-xs text-gray-500">IFSCA regulatory fees</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">IFSCA regulatory fees</p>
             </div>
           </div>
 
           {/* Platform & Other Fees */}
           <div className="space-y-4">
-            <h3 className="text-md font-medium text-gray-900 border-b pb-2">Platform Fees</h3>
+            <h3 className="text-md font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">Platform Fees</h3>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Platform Fee per Transaction (USD)
               </label>
               <input
@@ -551,14 +591,14 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.platform_fee_usd}
                 onChange={(e) => handleFeesChange('platform_fee_usd', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0"
               />
-              <p className="mt-1 text-xs text-gray-500">Fixed fee per trade</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Fixed fee per trade</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Withdrawal Fee (USD)
               </label>
               <input
@@ -567,19 +607,19 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.withdrawal_fee_usd}
                 onChange={(e) => handleFeesChange('withdrawal_fee_usd', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0"
               />
-              <p className="mt-1 text-xs text-gray-500">Fee for withdrawing funds</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Fee for withdrawing funds</p>
             </div>
           </div>
 
           {/* Annual & Setup Fees */}
           <div className="space-y-4">
-            <h3 className="text-md font-medium text-gray-900 border-b pb-2">Annual & Setup Fees</h3>
+            <h3 className="text-md font-medium text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">Annual & Setup Fees</h3>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Account Maintenance (USD/year)
               </label>
               <input
@@ -588,14 +628,14 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.amc_yearly_usd}
                 onChange={(e) => handleFeesChange('amc_yearly_usd', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0"
               />
-              <p className="mt-1 text-xs text-gray-500">Annual maintenance charges</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Annual maintenance charges</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Account Opening Fee (USD)
               </label>
               <input
@@ -604,18 +644,18 @@ function FeesTabContent({
                 min="0"
                 value={feesConfig.account_opening_fee_usd}
                 onChange={(e) => handleFeesChange('account_opening_fee_usd', Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 placeholder="0"
               />
-              <p className="mt-1 text-xs text-gray-500">One-time account setup fee</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">One-time account setup fee</p>
             </div>
           </div>
         </div>
 
         {/* Fees Preview */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Fee Calculation Preview</h4>
-          <div className="text-sm text-gray-600 space-y-1">
+        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Fee Calculation Preview</h4>
+          <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
             <p>For a $1,000 trade:</p>
             <ul className="list-disc ml-5 space-y-1">
               <li>Brokerage: ${Math.min(1000 * feesConfig.brokerage_percentage / 100, feesConfig.brokerage_max_usd).toFixed(2)}</li>
@@ -642,7 +682,7 @@ function FeesTabContent({
                 handleFeesChange(key as keyof FeesConfig, defaultConfig[key as keyof FeesConfig]);
               });
             }}
-            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <Settings className="h-4 w-4 mr-2 inline" />
             Reset to Defaults

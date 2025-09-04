@@ -63,16 +63,16 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">{trade.ticker}</h2>
-            <p className="text-sm text-gray-500">Trade Details</p>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{trade.ticker}</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Trade Details</p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
           >
             <X className="h-6 w-6" />
           </button>
@@ -84,12 +84,12 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
           <div className="flex justify-between items-center">
             <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
               trade.status === 'closed' 
-                ? 'bg-gray-100 text-gray-800' 
-                : 'bg-blue-100 text-blue-800'
+                ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200' 
+                : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
             }`}>
               {trade.status.charAt(0).toUpperCase() + trade.status.slice(1)}
             </span>
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
               {new Date(trade.date).toLocaleDateString('en-GB', { 
                 weekday: 'long', 
                 year: 'numeric', 
@@ -101,28 +101,28 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
 
           {/* Key Metrics */}
           <div className={`grid gap-4 ${fees && trade.status === 'closed' ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
-            <div className="bg-blue-50 rounded-lg p-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
               <div className="flex items-center">
-                <DollarSign className="h-5 w-5 text-blue-500 mr-2" />
+                <DollarSign className="h-5 w-5 text-blue-500 dark:text-blue-400 mr-2" />
                 <div>
-                  <p className="text-xs font-medium text-blue-600">Position Value</p>
-                  <p className="text-lg font-semibold text-blue-900">{formatCurrency(dollarValue)}</p>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Position Value</p>
+                  <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">{formatCurrency(dollarValue)}</p>
                 </div>
               </div>
             </div>
 
-            <div className={`rounded-lg p-4 ${pnl >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+            <div className={`rounded-lg p-4 ${pnl >= 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
               <div className="flex items-center">
                 {pnl >= 0 ? (
-                  <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+                  <TrendingUp className="h-5 w-5 text-green-500 dark:text-green-400 mr-2" />
                 ) : (
-                  <TrendingDown className="h-5 w-5 text-red-500 mr-2" />
+                  <TrendingDown className="h-5 w-5 text-red-500 dark:text-red-400 mr-2" />
                 )}
                 <div>
-                  <p className={`text-xs font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <p className={`text-xs font-medium ${pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     P&L ({showNetProfits ? 'Net' : 'Gross'})
                   </p>
-                  <p className={`text-lg font-semibold ${pnl >= 0 ? 'text-green-900' : 'text-red-900'}`}>
+                  <p className={`text-lg font-semibold ${pnl >= 0 ? 'text-green-900 dark:text-green-100' : 'text-red-900 dark:text-red-100'}`}>
                     {trade.status === 'closed' ? formatCurrency(pnl) : 'Open'}
                   </p>
                 </div>
@@ -131,12 +131,12 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
 
             {/* Fees Card */}
             {fees && trade.status === 'closed' && (
-              <div className="bg-orange-50 rounded-lg p-4">
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4">
                 <div className="flex items-center">
-                  <Calculator className="h-5 w-5 text-orange-500 mr-2" />
+                  <Calculator className="h-5 w-5 text-orange-500 dark:text-orange-400 mr-2" />
                   <div>
-                    <p className="text-xs font-medium text-orange-600">Trading Fees</p>
-                    <p className="text-lg font-semibold text-orange-900">
+                    <p className="text-xs font-medium text-orange-600 dark:text-orange-400">Trading Fees</p>
+                    <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
                       {formatCurrency(fees.totalFees)}
                     </p>
                   </div>
@@ -144,24 +144,24 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
               </div>
             )}
 
-            <div className="bg-yellow-50 rounded-lg p-4">
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
               <div className="flex items-center">
-                <Target className="h-5 w-5 text-yellow-600 mr-2" />
+                <Target className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2" />
                 <div>
-                  <p className="text-xs font-medium text-yellow-700">Risk Amount</p>
-                  <p className="text-lg font-semibold text-yellow-900">
+                  <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400">Risk Amount</p>
+                  <p className="text-lg font-semibold text-yellow-900 dark:text-yellow-100">
                     {riskAmount > 0 ? formatCurrency(riskAmount) : 'Not set'}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-purple-50 rounded-lg p-4">
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
               <div className="flex items-center">
-                <BarChart3 className="h-5 w-5 text-purple-500 mr-2" />
+                <BarChart3 className="h-5 w-5 text-purple-500 dark:text-purple-400 mr-2" />
                 <div>
-                  <p className="text-xs font-medium text-purple-600">R:R Ratio</p>
-                  <p className="text-lg font-semibold text-purple-900">
+                  <p className="text-xs font-medium text-purple-600 dark:text-purple-400">R:R Ratio</p>
+                  <p className="text-lg font-semibold text-purple-900 dark:text-purple-100">
                     {trade.status === 'closed' 
                       ? `1:${rrRatio.toFixed(2)} ${pnl >= 0 ? '(Win)' : '(Loss)'}`
                       : 'Open'
@@ -176,27 +176,27 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Entry Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Entry Information</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Entry Information</h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Entry Date:</span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Entry Date:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {new Date(trade.date).toLocaleDateString('en-GB')}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Entry Price:</span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Entry Price:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {trade.buy_price ? `$${trade.buy_price.toFixed(2)}` : 'N/A'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Shares:</span>
-                  <span className="text-sm font-medium text-gray-900">{trade.shares}</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Shares:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{trade.shares}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Risk:</span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Risk:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {trade.risk ? `${trade.risk}%` : 'N/A'} ({formatCurrency(riskAmount)})
                   </span>
                 </div>
@@ -205,20 +205,20 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
 
             {/* Exit Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Exit Information</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Exit Information</h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Exit Price:</span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Exit Price:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {trade.sell_price ? `$${trade.sell_price.toFixed(2)}` : 'Not closed'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Return %:</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Return %:</span>
                   <span className={`text-sm font-medium ${
                     trade.status === 'closed' 
-                      ? returnPercentage >= 0 ? 'text-green-600' : 'text-red-600'
-                      : 'text-gray-900'
+                      ? returnPercentage >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      : 'text-gray-900 dark:text-white'
                   }`}>
                     {trade.status === 'closed' 
                       ? `${returnPercentage >= 0 ? '+' : ''}${returnPercentage.toFixed(2)}%` 
@@ -227,14 +227,14 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Days Held:</span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Days Held:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {Math.ceil((new Date().getTime() - new Date(trade.date).getTime()) / (1000 * 60 * 60 * 24))} days
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Status:</span>
-                  <span className="text-sm font-medium text-gray-900 capitalize">{trade.status}</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Status:</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">{trade.status}</span>
                 </div>
               </div>
             </div>
@@ -243,37 +243,37 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
           {/* Notes Section */}
           {trade.notes && (
             <div className="space-y-2">
-              <h3 className="text-lg font-medium text-gray-900">Notes</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{trade.notes}</p>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Notes</h3>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{trade.notes}</p>
               </div>
             </div>
           )}
 
           {/* Performance Summary */}
           {trade.status === 'closed' && (
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <h3 className="text-lg font-medium text-gray-900">Performance Summary</h3>
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Performance Summary</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-500">Investment:</span>
-                  <p className="font-medium">{formatCurrency(dollarValue)}</p>
+                  <span className="text-gray-500 dark:text-gray-400">Investment:</span>
+                  <p className="font-medium text-gray-900 dark:text-white">{formatCurrency(dollarValue)}</p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Risk Taken:</span>
-                  <p className="font-medium">
+                  <span className="text-gray-500 dark:text-gray-400">Risk Taken:</span>
+                  <p className="font-medium text-gray-900 dark:text-white">
                     {formatCurrency(riskAmount)} {trade.risk ? `(${trade.risk}%)` : ''}
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500">{showNetProfits ? 'Net' : 'Gross'} P&L:</span>
-                  <p className={`font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className="text-gray-500 dark:text-gray-400">{showNetProfits ? 'Net' : 'Gross'} P&L:</span>
+                  <p className={`font-medium ${pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {formatCurrency(pnl)}
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500">Risk/Reward:</span>
-                  <p className={`font-medium ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className="text-gray-500 dark:text-gray-400">Risk/Reward:</span>
+                  <p className={`font-medium ${pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     1:{rrRatio.toFixed(2)} {pnl >= 0 ? '(Win)' : '(Loss)'}
                   </p>
                 </div>
@@ -281,52 +281,52 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
               
               {/* Fees Breakdown */}
               {fees && feesConfig && (
-                <div className="border-t border-gray-200 pt-3">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Fees Breakdown</h4>
+                <div className="border-t border-gray-200 dark:border-gray-600 pt-3">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Fees Breakdown</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
                     <div>
-                      <span className="text-gray-500">Brokerage:</span>
-                      <p className="font-medium text-orange-600">
+                      <span className="text-gray-500 dark:text-gray-400">Brokerage:</span>
+                      <p className="font-medium text-orange-600 dark:text-orange-400">
                         -{formatCurrency(fees.breakdown.buyBrokerage + fees.breakdown.sellBrokerage)}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Exchange Charges:</span>
-                      <p className="font-medium text-orange-600">
+                      <span className="text-gray-500 dark:text-gray-400">Exchange Charges:</span>
+                      <p className="font-medium text-orange-600 dark:text-orange-400">
                         -{formatCurrency(fees.breakdown.buyExchangeCharges + fees.breakdown.sellExchangeCharges)}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">IFSCA Fees:</span>
-                      <p className="font-medium text-orange-600">
+                      <span className="text-gray-500 dark:text-gray-400">IFSCA Fees:</span>
+                      <p className="font-medium text-orange-600 dark:text-orange-400">
                         -{formatCurrency(fees.breakdown.buyIfscaFees + fees.breakdown.sellIfscaFees)}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Platform Fees:</span>
-                      <p className="font-medium text-orange-600">
+                      <span className="text-gray-500 dark:text-gray-400">Platform Fees:</span>
+                      <p className="font-medium text-orange-600 dark:text-orange-400">
                         -{formatCurrency(fees.breakdown.platformFees)}
                       </p>
                     </div>
                   </div>
                   
                   {showNetProfits && grossPnl !== netPnl && (
-                    <div className="mt-3 pt-2 border-t border-gray-200">
+                    <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-600">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Gross P&L:</span>
-                        <span className={`font-medium ${grossPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <span className="text-gray-500 dark:text-gray-400">Gross P&L:</span>
+                        <span className={`font-medium ${grossPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {formatCurrency(grossPnl)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Total Fees:</span>
-                        <span className="font-medium text-orange-600">
+                        <span className="text-gray-500 dark:text-gray-400">Total Fees:</span>
+                        <span className="font-medium text-orange-600 dark:text-orange-400">
                           -{formatCurrency(fees.totalFees)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm border-t border-gray-200 pt-1 mt-1">
-                        <span className="text-gray-900 font-medium">Net P&L:</span>
-                        <span className={`font-semibold ${netPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div className="flex justify-between text-sm border-t border-gray-200 dark:border-gray-600 pt-1 mt-1">
+                        <span className="text-gray-900 dark:text-white font-medium">Net P&L:</span>
+                        <span className={`font-semibold ${netPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {formatCurrency(netPnl)}
                         </span>
                       </div>
@@ -339,10 +339,10 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-6 border-t border-gray-200">
+        <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             Close
           </button>
@@ -440,12 +440,12 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-semibold">Edit Trade - {trade.ticker}</h3>
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Edit Trade - {trade.ticker}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-xl"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-xl"
           >
             ✕
           </button>
@@ -455,34 +455,34 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
           {/* Basic Trade Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Date
               </label>
               <input
                 type="date"
                 value={formData.date}
                 onChange={(e) => handleInputChange('date', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Ticker
               </label>
               <input
                 type="text"
                 value={formData.ticker}
                 onChange={(e) => handleInputChange('ticker', e.target.value.toUpperCase())}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="AAPL"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Shares
               </label>
               <input
@@ -490,20 +490,20 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.shares}
                 onChange={(e) => handleInputChange('shares', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Status
               </label>
               <select
                 value={formData.status}
                 onChange={(e) => handleInputChange('status', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="open">Open</option>
                 <option value="closed">Closed</option>
@@ -514,7 +514,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
           {/* Price Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Buy Price ($)
               </label>
               <input
@@ -522,14 +522,14 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.buy_price}
                 onChange={(e) => handleInputChange('buy_price', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="150.00"
                 required={formData.status === 'open'}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Sell Price ($)
               </label>
               <input
@@ -537,7 +537,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.sell_price}
                 onChange={(e) => handleInputChange('sell_price', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="165.00"
                 required={formData.status === 'closed'}
               />
@@ -547,7 +547,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
           {/* Risk Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Risk (%)
               </label>
               <input
@@ -555,13 +555,13 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.risk}
                 onChange={(e) => handleInputChange('risk', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="2.0"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Risk ($)
               </label>
               <input
@@ -569,7 +569,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
                 step="0.01"
                 value={formData.risk_dollars}
                 onChange={(e) => handleInputChange('risk_dollars', e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="200.00"
               />
             </div>
@@ -577,7 +577,7 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Trade Notes
             </label>
             <textarea
@@ -591,16 +591,16 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
 • What went right or wrong?
 • What lessons did you learn?
 • How can you improve next time?"
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
@@ -628,26 +628,26 @@ function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-red-600">Delete Trade</h3>
+          <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Delete Trade</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Trade Info */}
-        <div className="mb-4 p-3 bg-red-50 rounded-lg text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm">
           <div className="grid grid-cols-2 gap-2">
-            <div>Ticker: <span className="font-medium">{trade.ticker}</span></div>
-            <div>Shares: <span className="font-medium">{trade.shares}</span></div>
-            <div>Entry: <span className="font-medium">${trade.buy_price}</span></div>
-            <div>Date: <span className="font-medium">{new Date(trade.date).toLocaleDateString()}</span></div>
-            <div>Status: <span className="font-medium capitalize">{trade.status}</span></div>
-            <div>P&L: <span className="font-medium">
+            <div className="text-gray-700 dark:text-gray-300">Ticker: <span className="font-medium text-gray-900 dark:text-white">{trade.ticker}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Shares: <span className="font-medium text-gray-900 dark:text-white">{trade.shares}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Entry: <span className="font-medium text-gray-900 dark:text-white">${trade.buy_price}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Date: <span className="font-medium text-gray-900 dark:text-white">{new Date(trade.date).toLocaleDateString()}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Status: <span className="font-medium text-gray-900 dark:text-white capitalize">{trade.status}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">P&L: <span className="font-medium text-gray-900 dark:text-white">
               {trade.status === 'closed' && trade.sell_price && trade.buy_price 
                 ? `${((trade.sell_price - trade.buy_price) * trade.shares) >= 0 ? '+' : ''}$${((trade.sell_price - trade.buy_price) * trade.shares).toFixed(2)}`
                 : 'Open'
@@ -657,10 +657,10 @@ function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
         </div>
 
         <div className="mb-6">
-          <p className="text-gray-700 mb-2">
+          <p className="text-gray-700 dark:text-gray-300 mb-2">
             Are you sure you want to delete this trade? This action cannot be undone.
           </p>
-          <p className="text-sm text-red-600 font-medium">
+          <p className="text-sm text-red-600 dark:text-red-400 font-medium">
             ⚠️ This will permanently remove the trade from your records.
           </p>
         </div>
@@ -669,7 +669,7 @@ function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
         <div className="flex space-x-3 pt-4">
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
           >
             Cancel
           </button>
@@ -1164,13 +1164,13 @@ export default function TradesView() {
         
         {/* Profit Type Toggle */}
         {feesConfig && (
-          <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
+          <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => setShowNetProfits(false)}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 !showNetProfits 
-                  ? 'bg-white text-gray-900 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               Gross P&L
@@ -1179,8 +1179,8 @@ export default function TradesView() {
               onClick={() => setShowNetProfits(true)}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 showNetProfits 
-                  ? 'bg-white text-gray-900 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               Net P&L (After Fees)
@@ -1191,45 +1191,45 @@ export default function TradesView() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Total Trades</div>
-          <div className="text-2xl font-semibold text-gray-900">{stats.totalTrades}</div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Trades</div>
+          <div className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.totalTrades}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Open Trades</div>
-          <div className="text-2xl font-semibold text-blue-600">{stats.openTrades}</div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Open Trades</div>
+          <div className="text-2xl font-semibold text-blue-600 dark:text-blue-400">{stats.openTrades}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Closed Trades</div>
-          <div className="text-2xl font-semibold text-gray-600">{stats.closedTrades}</div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Closed Trades</div>
+          <div className="text-2xl font-semibold text-gray-600 dark:text-gray-400">{stats.closedTrades}</div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
             Total P&L {showNetProfits ? '(Net)' : '(Gross)'}
           </div>
-          <div className={`text-2xl font-semibold ${stats.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <div className={`text-2xl font-semibold ${stats.totalPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
             {formatCurrency(stats.totalPnL)}
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="text-sm font-medium text-gray-500">Win Rate</div>
-          <div className="text-2xl font-semibold text-gray-900">{stats.winRate.toFixed(1)}%</div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Win Rate</div>
+          <div className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.winRate.toFixed(1)}%</div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         <div className="space-y-4">
           {/* Month Shortcuts */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Quick Date Filters</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Quick Date Filters</label>
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={clearDateFilter}
                 className={`px-3 py-1 text-sm rounded-md transition-colors ${
                   !selectedDateRange
-                    ? 'bg-blue-100 text-blue-800 border-blue-200'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 } border`}
               >
                 All Time
@@ -1244,8 +1244,8 @@ export default function TradesView() {
                     onClick={() => handleMonthShortcut(shortcut)}
                     className={`px-3 py-1 text-sm rounded-md transition-colors ${
                       isSelected
-                        ? 'bg-blue-100 text-blue-800 border-blue-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     } border`}
                   >
                     {shortcut.label}
@@ -1258,10 +1258,10 @@ export default function TradesView() {
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search */}
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+                  <Search className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                 </div>
                 <input
                   type="text"
@@ -1274,14 +1274,14 @@ export default function TradesView() {
                     }
                   }}
                   placeholder="Search by ticker or notes..."
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
               </div>
             </div>
 
             {/* Status Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) => {
@@ -1290,7 +1290,7 @@ export default function TradesView() {
                   trackEvent('trades_filter', 'trades', newFilter);
                   trackUserEngagement('filter_change', `status_${newFilter}`);
                 }}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="all">All Trades</option>
                 <option value="open">Open Only</option>
@@ -1300,10 +1300,10 @@ export default function TradesView() {
 
             {/* Custom Date Range */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Custom Range</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Custom Range</label>
               <button
                 onClick={() => setIsCalendarOpen(!isCalendarOpen)}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 <CalendarIcon className="h-4 w-4 mr-2" />
                 Custom
@@ -1314,7 +1314,7 @@ export default function TradesView() {
           {/* Calendar Popup */}
           {isCalendarOpen && (
             <div ref={calendarRef} className="relative mt-4">
-              <div className="absolute top-0 left-0 z-10 bg-white border border-gray-200 rounded-md shadow-lg p-4">
+              <div className="absolute top-0 left-0 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg p-4">
                 <Calendar
                   mode="range"
                   selected={dateRange}
@@ -1325,7 +1325,7 @@ export default function TradesView() {
                 <div className="mt-4 flex justify-end space-x-2">
                   <button
                     onClick={() => setIsCalendarOpen(false)}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
                   >
                     Cancel
                   </button>
@@ -1343,20 +1343,20 @@ export default function TradesView() {
       </div>
 
       {/* Trades Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                 Trades ({filteredTrades.length})
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Click on any trade row to view detailed information
               </p>
             </div>
             <button 
               onClick={exportToCSV}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <Download className="h-4 w-4 mr-2" />
               Export CSV
@@ -1379,10 +1379,10 @@ export default function TradesView() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
                     onClick={() => handleSort('date')}
                   >
                     Date {sortField === 'date' && (sortDirection === 'asc' ? '↑' : '↓')}
@@ -1422,7 +1422,7 @@ export default function TradesView() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredTrades.map((trade) => {
                   const grossPnl = trade.sell_price && trade.buy_price
                     ? (trade.sell_price - trade.buy_price) * trade.shares 
@@ -1433,47 +1433,47 @@ export default function TradesView() {
                   return (
                     <tr 
                       key={trade.id} 
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                       onClick={() => {
                         setSelectedTrade(trade);
                         trackEvent('trade_detail_view', 'trades', trade.ticker);
                         trackUserEngagement('trade_interaction', trade.status);
                       }}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {new Date(trade.date).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                         {trade.ticker}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           trade.status === 'closed' 
-                            ? 'bg-gray-100 text-gray-800' 
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200' 
+                            : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
                         }`}>
                           {trade.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {trade.shares}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {trade.buy_price ? `$${trade.buy_price.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {trade.sell_price ? `$${trade.sell_price.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {trade.status === 'closed' && trade.sell_price && trade.buy_price ? (
-                          <span className={pnl >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                          <span className={pnl >= 0 ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-600 dark:text-red-400 font-medium'}>
                             {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
                           </span>
                         ) : (
-                          <span className="text-gray-500">-</span>
+                          <span className="text-gray-500 dark:text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {(() => {
                           const riskDollars = trade.risk_dollars || (trade.risk && trade.buy_price ? (trade.risk / 100) * trade.buy_price * trade.shares : 0);
                           const riskPercent = trade.risk ? trade.risk.toFixed(2) : '0.00';
@@ -1482,10 +1482,10 @@ export default function TradesView() {
                             : 'N/A';
                         })()}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                      <td className="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-xs truncate">
                         {trade.notes || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         <div className="flex space-x-2">
                           <button
                             onClick={(e) => {

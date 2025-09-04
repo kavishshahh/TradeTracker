@@ -31,27 +31,27 @@ function CalendarDay({ date, stats, isCurrentMonth, isToday, onClick }: Calendar
         }
       }}
       className={`
-        h-20 w-full p-1 text-left hover:bg-gray-50 border border-gray-200 transition-colors
-        ${!isCurrentMonth ? 'text-gray-300 bg-gray-50' : 'text-gray-900'}
-        ${isToday ? 'ring-2 ring-blue-500' : ''}
+        h-20 w-full p-1 text-left hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 transition-colors
+        ${!isCurrentMonth ? 'text-gray-400 dark:text-gray-600 bg-gray-50 dark:bg-gray-800' : 'text-gray-900 dark:text-white bg-white dark:bg-gray-800'}
+        ${isToday ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}
         ${hasData ? 'cursor-pointer' : ''}
       `}
     >
       <div className="flex flex-col h-full">
-        <span className={`text-sm font-medium ${isToday ? 'text-blue-600' : ''}`}>
+        <span className={`text-sm font-medium ${isToday ? 'text-blue-600 dark:text-blue-400' : ''}`}>
           {date.getDate()}
         </span>
         
         {hasData && (
           <div className="flex-1 flex flex-col justify-end">
             <div className={`text-xs px-1 py-0.5 rounded text-center ${
-              isProfit ? 'bg-green-100 text-green-800' : 
-              isLoss ? 'bg-red-100 text-red-800' : 
-              'bg-gray-100 text-gray-800'
+              isProfit ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300' : 
+              isLoss ? 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300' : 
+              'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
             }`}>
               {formatCurrency(stats.pnl)}
             </div>
-            <div className="text-xs text-gray-500 text-center mt-1">
+            <div className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
               {stats.trade_count} trade{stats.trade_count !== 1 ? 's' : ''}
             </div>
           </div>
@@ -72,9 +72,9 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-auto">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             {date.toLocaleDateString('en-US', { 
               weekday: 'long', 
               year: 'numeric', 
@@ -84,29 +84,29 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           >
             ✕
           </button>
         </div>
 
-        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Daily P&L:</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Daily P&L:</span>
             <span className={`font-semibold ${
-              stats.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+              stats.pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
             }`}>
               {stats.pnl >= 0 ? '+' : ''}{formatCurrency(stats.pnl)}
             </span>
           </div>
           <div className="flex justify-between items-center mt-1">
-            <span className="text-sm text-gray-600">Total Trades:</span>
-            <span className="font-semibold">{stats.trade_count}</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Total Trades:</span>
+            <span className="font-semibold text-gray-900 dark:text-white">{stats.trade_count}</span>
           </div>
         </div>
 
         <div className="space-y-3">
-          <h4 className="font-medium text-gray-900">Trades</h4>
+          <h4 className="font-medium text-gray-900 dark:text-white">Trades</h4>
           {stats.trades.map((trade) => {
             const pnl = trade.sell_price && trade.buy_price
               ? (trade.sell_price - trade.buy_price) * trade.shares 
@@ -114,11 +114,11 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
             const canCalculatePnL = trade.buy_price && trade.sell_price;
             
             return (
-              <div key={trade.id} className="border border-gray-200 rounded-lg p-3">
+              <div key={trade.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="font-medium">{trade.ticker}</div>
-                    <div className="text-sm text-gray-600">
+                    <div className="font-medium text-gray-900 dark:text-white">{trade.ticker}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
                       {trade.shares} shares
                       {trade.buy_price && ` @ $${trade.buy_price}`}
                       {trade.sell_price && ` → $${trade.sell_price}`}
@@ -126,8 +126,8 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
                     </div>
                     <div className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full mt-1 ${
                       trade.status === 'closed' 
-                        ? 'bg-gray-100 text-gray-800' 
-                        : 'bg-blue-100 text-blue-800'
+                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200' 
+                        : 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300'
                     }`}>
                       {trade.status}
                     </div>
@@ -135,20 +135,20 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
                   <div className="text-right">
                     {trade.status === 'closed' && canCalculatePnL && (
                       <div className={`font-semibold ${
-                        pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                        pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                       }`}>
                         {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)}
                       </div>
                     )}
                     {trade.status === 'closed' && !canCalculatePnL && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         Exit recorded
                       </div>
                     )}
                   </div>
                 </div>
                 {trade.notes && (
-                  <div className="mt-2 text-sm text-gray-600 italic">
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-400 italic">
                     "{trade.notes}"
                   </div>
                 )}
@@ -286,25 +286,25 @@ export default function CalendarView() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Trading Calendar</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Calendar</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           View your trading activity by day
         </p>
       </div>
 
       {/* Month Stats */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <TrendingUp className="h-6 w-6 text-gray-400" />
+                <TrendingUp className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Month P&L</dt>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Month P&L</dt>
                   <dd className={`text-lg font-medium ${
-                    monthStats.totalPnl >= 0 ? 'text-green-600' : 'text-red-600'
+                    monthStats.totalPnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                   }`}>
                     {formatCurrency(monthStats.totalPnl)}
                   </dd>
@@ -314,32 +314,32 @@ export default function CalendarView() {
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <BarChart className="h-6 w-6 text-gray-400" />
+                <BarChart className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Trades</dt>
-                  <dd className="text-lg font-medium text-gray-900">{monthStats.totalTrades}</dd>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Trades</dt>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-white">{monthStats.totalTrades}</dd>
                 </dl>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Calendar className="h-6 w-6 text-gray-400" />
+                <Calendar className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Trading Days</dt>
-                  <dd className="text-lg font-medium text-gray-900">{monthStats.tradingDays}</dd>
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Trading Days</dt>
+                  <dd className="text-lg font-medium text-gray-900 dark:text-white">{monthStats.tradingDays}</dd>
                 </dl>
               </div>
             </div>
@@ -348,23 +348,23 @@ export default function CalendarView() {
       </div>
 
       {/* Calendar */}
-      <div className="bg-white shadow rounded-lg">
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
         {/* Calendar Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={goToPreviousMonth}
-            className="p-2 rounded-md hover:bg-gray-100"
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
           
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
           </h2>
           
           <button
             onClick={goToNextMonth}
-            className="p-2 rounded-md hover:bg-gray-100"
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -376,7 +376,7 @@ export default function CalendarView() {
           <div className="grid grid-cols-7 gap-0 mb-1">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} className="h-8 flex items-center justify-center">
-                <span className="text-sm font-medium text-gray-500">{day}</span>
+                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{day}</span>
               </div>
             ))}
           </div>

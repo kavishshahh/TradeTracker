@@ -124,12 +124,12 @@ export default function TradeForm() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             {tradeType === 'entry' ? 'Add New Trade' : 'Exit Trade'}
           </h2>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             {tradeType === 'entry' 
               ? 'Enter the details of your trade to track performance'
               : 'Record your trade exit to close the position'
@@ -139,7 +139,7 @@ export default function TradeForm() {
 
         {/* Trade Type Toggle */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Trade Type</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trade Type</label>
           <div className="flex rounded-md shadow-sm">
             <button
               type="button"
@@ -154,8 +154,8 @@ export default function TradeForm() {
               }}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
                 tradeType === 'entry'
-                  ? 'bg-blue-50 border-blue-500 text-blue-700'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               New Entry
@@ -173,8 +173,8 @@ export default function TradeForm() {
               }}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
                 tradeType === 'exit'
-                  ? 'bg-blue-50 border-blue-500 text-blue-700'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
+                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               Exit Trade
@@ -183,8 +183,8 @@ export default function TradeForm() {
         </div>
 
         {submitSuccess && (
-          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-green-800">Trade added successfully!</p>
+          <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+            <p className="text-green-800 dark:text-green-200">Trade added successfully!</p>
           </div>
         )}
 
@@ -192,25 +192,25 @@ export default function TradeForm() {
           {/* Date and Ticker */}
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div>
-              <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Trade Date
               </label>
                              <div className="mt-1 relative">
                  <input
                    type="date"
                    {...register('date', { required: 'Date is required' })}
-                   className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                   className="appearance-none block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                    style={{ colorScheme: 'light' }}
                  />
-                 <CalendarIcon className="absolute right-3 top-2.5 h-5 w-5 text-gray-700 pointer-events-none" />
+                 <CalendarIcon className="absolute right-3 top-2.5 h-5 w-5 text-gray-700 dark:text-gray-400 pointer-events-none" />
                </div>
               {errors.date && (
-                <p className="mt-1 text-sm text-red-600">{errors.date.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.date.message}</p>
               )}
             </div>
 
             <div>
-              <label htmlFor="ticker" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="ticker" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Ticker Symbol
               </label>
               <div className="mt-1">
@@ -224,18 +224,18 @@ export default function TradeForm() {
                      }
                    })}
                    placeholder="AAPL"
-                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 uppercase text-gray-900 bg-white"
+                   className="appearance-none block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 uppercase text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                  />
               </div>
               {errors.ticker && (
-                <p className="mt-1 text-sm text-red-600">{errors.ticker.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.ticker.message}</p>
               )}
             </div>
           </div>
 
           {/* Status Toggle */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Trade Status</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Trade Status</label>
             <div className="mt-1 flex rounded-md shadow-sm">
               <button
                 type="button"
@@ -245,8 +245,8 @@ export default function TradeForm() {
                 }}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
                   status === 'open'
-                    ? 'bg-blue-50 border-blue-500 text-blue-700'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Open Position
@@ -259,8 +259,8 @@ export default function TradeForm() {
                 }}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
                   status === 'closed'
-                    ? 'bg-blue-50 border-blue-500 text-blue-700'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                 }`}
               >
                 Closed Position
@@ -272,12 +272,12 @@ export default function TradeForm() {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             {tradeType === 'entry' && (
               <div>
-                <label htmlFor="buy_price" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="buy_price" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Buy Price *
                 </label>
                 <div className="mt-1 relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <DollarSign className="h-5 w-5 text-gray-600" />
+                    <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <input
                     type="number"
@@ -287,23 +287,23 @@ export default function TradeForm() {
                       min: { value: 0.0001, message: 'Price must be greater than 0' }
                     })}
                     placeholder="150.00"
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                   />
                 </div>
                 {errors.buy_price && (
-                  <p className="mt-1 text-sm text-red-600">{errors.buy_price.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.buy_price.message}</p>
                 )}
               </div>
             )}
 
             {(status === 'closed' || tradeType === 'exit') && (
               <div>
-                <label htmlFor="sell_price" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="sell_price" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {tradeType === 'exit' ? 'Exit Price *' : 'Sell Price *'}
                 </label>
                 <div className="mt-1 relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <DollarSign className="h-5 w-5 text-gray-600" />
+                    <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <input
                     type="number"
@@ -313,17 +313,17 @@ export default function TradeForm() {
                       min: { value: 0.0001, message: 'Price must be greater than 0' }
                     })}
                     placeholder="165.00"
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                   />
                 </div>
                 {errors.sell_price && (
-                  <p className="mt-1 text-sm text-red-600">{errors.sell_price.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.sell_price.message}</p>
                 )}
               </div>
             )}
 
             <div>
-              <label htmlFor="shares" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="shares" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Shares
               </label>
               <div className="mt-1">
@@ -335,11 +335,11 @@ export default function TradeForm() {
                     min: { value: 0.0001, message: 'Must have at least 0.0001 shares' }
                   })}
                   placeholder="100"
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                 />
               </div>
               {errors.shares && (
-                <p className="mt-1 text-sm text-red-600">{errors.shares.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.shares.message}</p>
               )}
             </div>
           </div>
@@ -350,7 +350,7 @@ export default function TradeForm() {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {/* Risk Percentage */}
             <div>
-              <label htmlFor="risk" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="risk" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Risk Percentage (%)
               </label>
               <div className="mt-1">
@@ -362,22 +362,22 @@ export default function TradeForm() {
                     max: { value: 100, message: 'Risk cannot exceed 100%' }
                   })}
                   placeholder="2.0"
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                 />
               </div>
               {errors.risk && (
-                <p className="mt-1 text-sm text-red-600">{errors.risk.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.risk.message}</p>
               )}
             </div>
 
             {/* Risk in Dollars */}
             <div>
-              <label htmlFor="risk_dollars" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="risk_dollars" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Risk in Dollars ($)
               </label>
               <div className="mt-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <DollarSign className="h-5 w-5 text-gray-600" />
+                  <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                 </div>
                 <input
                   type="number"
@@ -386,22 +386,22 @@ export default function TradeForm() {
                     min: { value: 0.01, message: 'Risk amount must be greater than 0' }
                   })}
                   placeholder="200.00"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
                 />
               </div>
               {errors.risk_dollars && (
-                <p className="mt-1 text-sm text-red-600">{errors.risk_dollars.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.risk_dollars.message}</p>
               )}
             </div>
           </div>
 
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
             <p>💡 <strong>Risk Fields:</strong> Provide either risk percentage OR risk in dollars. The other field will be calculated automatically based on your profile's account balance.</p>
           </div>
 
           {/* Notes */}
           <div>
-            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Trade Notes
             </label>
             <div className="mt-1">
@@ -409,21 +409,21 @@ export default function TradeForm() {
                 {...register('notes')}
                 rows={3}
                 placeholder="Reason for trade, confidence level, strategy used..."
-                                   className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                                   className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
               />
             </div>
           </div>
 
           {/* P&L Preview for closed trades */}
           {status === 'closed' && buyPrice && sellPrice && shares && (
-            <div className="bg-gray-50 rounded-md p-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Estimated P&L:</span>
-                <span className={`text-lg font-bold ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated P&L:</span>
+                <span className={`text-lg font-bold ${pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                 </span>
               </div>
-              <div className="mt-1 text-xs text-gray-500">
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 ({sellPrice} - {buyPrice}) × {shares} shares
               </div>
             </div>

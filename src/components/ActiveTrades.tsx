@@ -69,36 +69,36 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Exit Trade - {trade.ticker}</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Exit Trade - {trade.ticker}</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Trade Info */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-lg text-sm">
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm">
           <div className="grid grid-cols-2 gap-2">
-            <div>Position: {trade.shares} shares</div>
-            <div>Entry: ${trade.buy_price}</div>
-            <div>Date: {new Date(trade.date).toLocaleDateString()}</div>
-            <div>Risk: {trade.risk}%</div>
+            <div className="text-gray-700 dark:text-gray-300">Position: <span className="font-medium text-gray-900 dark:text-white">{trade.shares} shares</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Entry: <span className="font-medium text-gray-900 dark:text-white">${trade.buy_price}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Date: <span className="font-medium text-gray-900 dark:text-white">{new Date(trade.date).toLocaleDateString()}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Risk: <span className="font-medium text-gray-900 dark:text-white">{trade.risk}%</span></div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Exit Price */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Exit Price *
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <DollarSign className="h-5 w-5 text-gray-600" />
+                <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               </div>
               <input
                 type="number"
@@ -108,17 +108,17 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
                   min: { value: 0.01, message: 'Price must be greater than 0' }
                 })}
                 placeholder="165.00"
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
               />
             </div>
             {errors.sell_price && (
-              <p className="mt-1 text-sm text-red-600">{errors.sell_price.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.sell_price.message}</p>
             )}
           </div>
 
           {/* Shares to Exit */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Shares to Exit *
             </label>
             <input
@@ -129,37 +129,37 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
                 min: { value: 0.01, message: 'Must exit at least 0.01 share' },
                 max: { value: trade.shares, message: `Cannot exit more than ${trade.shares} shares` }
               })}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
             />
             {errors.shares_to_exit && (
-              <p className="mt-1 text-sm text-red-600">{errors.shares_to_exit.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.shares_to_exit.message}</p>
             )}
           </div>
 
           {/* Quick Exit Shortcuts */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Quick Exit
             </label>
             <div className="flex space-x-2">
               <button
                 type="button"
                 onClick={() => setPartialExit(1/3)}
-                className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 1/3 ({Math.round((trade.shares / 3) * 100) / 100})
               </button>
               <button
                 type="button"
                 onClick={() => setPartialExit(1/2)}
-                className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 1/2 ({Math.round((trade.shares / 2) * 100) / 100})
               </button>
               <button
                 type="button"
                 onClick={() => setValue('shares_to_exit', trade.shares)}
-                className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                className="flex-1 py-2 px-3 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 All ({trade.shares})
               </button>
@@ -168,27 +168,27 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
 
           {/* Exit Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Exit Notes (Optional)
             </label>
             <textarea
               {...register('notes')}
               rows={2}
               placeholder="Reason for exit, profit taking, stop loss..."
-              className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
             />
           </div>
 
           {/* P&L Preview */}
           {watchedPrice && watchedShares && (
-            <div className="bg-gray-50 rounded-md p-3">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">Estimated P&L:</span>
-                <span className={`text-lg font-bold ${estimatedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated P&L:</span>
+                <span className={`text-lg font-bold ${estimatedPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                   {estimatedPnL >= 0 ? '+' : ''}{formatCurrency(estimatedPnL)}
                 </span>
               </div>
-              <div className="mt-1 text-xs text-gray-500">
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 ({watchedPrice} - {trade.buy_price}) × {watchedShares} shares
               </div>
             </div>
@@ -199,7 +199,7 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
@@ -226,32 +226,32 @@ function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-red-600">Delete Trade</h3>
+          <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Delete Trade</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Trade Info */}
-        <div className="mb-4 p-3 bg-red-50 rounded-lg text-sm">
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm">
           <div className="grid grid-cols-2 gap-2">
-            <div>Ticker: <span className="font-medium">{trade.ticker}</span></div>
-            <div>Shares: <span className="font-medium">{trade.shares}</span></div>
-            <div>Entry: <span className="font-medium">${trade.buy_price}</span></div>
-            <div>Date: <span className="font-medium">{new Date(trade.date).toLocaleDateString()}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Ticker: <span className="font-medium text-gray-900 dark:text-white">{trade.ticker}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Shares: <span className="font-medium text-gray-900 dark:text-white">{trade.shares}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Entry: <span className="font-medium text-gray-900 dark:text-white">${trade.buy_price}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Date: <span className="font-medium text-gray-900 dark:text-white">{new Date(trade.date).toLocaleDateString()}</span></div>
           </div>
         </div>
 
         <div className="mb-6">
-          <p className="text-gray-700 mb-2">
+          <p className="text-gray-700 dark:text-gray-300 mb-2">
             Are you sure you want to delete this trade? This action cannot be undone.
           </p>
-          <p className="text-sm text-red-600 font-medium">
+          <p className="text-sm text-red-600 dark:text-red-400 font-medium">
             ⚠️ This will permanently remove the trade from your records.
           </p>
         </div>
@@ -260,7 +260,7 @@ function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
         <div className="flex space-x-3 pt-4">
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600"
           >
             Cancel
           </button>
@@ -376,17 +376,17 @@ export default function ActiveTrades() {
 
   if (trades.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Active Trades</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Active Trades</h3>
         <div className="text-center py-12">
-          <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <TrendingDown className="h-8 w-8 text-gray-400" />
+          <div className="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+            <TrendingDown className="h-8 w-8 text-gray-400 dark:text-gray-500" />
           </div>
-          <h4 className="text-lg font-medium text-gray-900 mb-2">No Active Trades</h4>
-          <p className="text-gray-500 mb-4">
+          <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Active Trades</h4>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
             You don't have any open positions at the moment.
           </p>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-400 dark:text-gray-500">
             Add a new trade to start tracking your positions.
           </p>
         </div>
@@ -395,25 +395,25 @@ export default function ActiveTrades() {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-medium text-gray-900">Active Trades ({trades.length})</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Active Trades ({trades.length})</h3>
       </div>
       
-      <div className="divide-y divide-gray-200">
+      <div className="divide-y divide-gray-200 dark:divide-gray-700">
         {trades.map((trade) => {
           const currentValue = (trade.buy_price ?? 0) * trade.shares; // Placeholder for current market value
           const unrealizedPnL = 0; // Would calculate with real-time prices
           
           return (
-            <div key={trade.id} className="p-4 hover:bg-gray-50">
+            <div key={trade.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                     <div>
-                      <h4 className="text-sm font-medium text-gray-900">{trade.ticker}</h4>
-                      <p className="text-xs text-gray-500">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">{trade.ticker}</h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
                         {trade.shares} shares @ ${trade.buy_price}
                       </p>
                     </div>
@@ -421,10 +421,10 @@ export default function ActiveTrades() {
                 </div>
                 
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {formatCurrency(currentValue)}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Risk: {trade.risk}%
                   </p>
                 </div>
@@ -432,19 +432,19 @@ export default function ActiveTrades() {
                 <div className="ml-4 relative">
                   <button
                     onClick={() => setOpenMenuId(openMenuId === trade.id ? null : (trade.id ?? null))}
-                    className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                    className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
                   
                   {openMenuId === trade.id && (
-                    <div className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                    <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
                       <button
                         onClick={() => {
                           setExitingTrade(trade);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-3 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center"
+                        className="w-full px-3 py-2 text-left text-sm text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center"
                       >
                         <TrendingDown className="h-4 w-4 mr-2" />
                         Exit Trade
@@ -454,7 +454,7 @@ export default function ActiveTrades() {
                           setDeletingTrade(trade);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                        className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Delete Trade
@@ -465,7 +465,7 @@ export default function ActiveTrades() {
               </div>
               
               {trade.notes && (
-                <div className="mt-2 text-xs text-gray-600">
+                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
                   "{trade.notes}"
                 </div>
               )}

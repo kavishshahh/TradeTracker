@@ -584,6 +584,44 @@ async def update_trade(trade_id: str, update_request: UpdateTradeRequest, curren
         print(f"❌ Error updating trade: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/trades/{trade_id}")
+async def delete_trade(trade_id: str, current_user: str = Depends(get_current_user)):
+    try:
+        print(f"🔍 Delete trade request: trade_id={trade_id}, user={current_user}")
+        
+        if db:
+            # Use Firebase Firestore
+            trades_ref = db.collection('trades')
+            trade_doc_ref = trades_ref.document(trade_id)
+            trade_doc = trade_doc_ref.get()
+            
+            if not trade_doc.exists:
+                print(f"❌ Trade not found: {trade_id}")
+                raise HTTPException(status_code=404, detail="Trade not found")
+            
+            trade_data = trade_doc.to_dict()
+            
+            # Ensure user can only delete their own trades
+            if trade_data.get('user_id') != current_user:
+                print(f"❌ Unauthorized access attempt: {current_user} trying to delete trade owned by {trade_data.get('user_id')}")
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Delete the trade document
+            trade_doc_ref.delete()
+            print(f"✅ Trade deleted successfully: {trade_id}")
+            
+            return {"message": "Trade deleted successfully", "trade_id": trade_id}
+        else:
+            # Mock data - simulate deletion
+            print(f"✅ Trade deleted successfully (mock): {trade_id}")
+            return {"message": "Trade deleted successfully (mock)", "trade_id": trade_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting trade: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/trades/{user_id}")
 async def get_trades(user_id: str, from_date: Optional[str] = None, to_date: Optional[str] = None, current_user: str = Depends(get_current_user)):
     try:

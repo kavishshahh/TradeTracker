@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { trackNavigation, trackUserEngagement } from '@/lib/analytics';
-import { BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
@@ -21,6 +21,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigation = [
     { name: 'Dashboard', href: '/', icon: BarChart3 },
     { name: 'Add Trade', href: '/add-trade', icon: Plus },
+    { name: 'Active Trades', href: '/active-trades', icon: Activity },
     { name: 'Trades', href: '/trades', icon: List },
     { name: 'Calendar', href: '/calendar', icon: Calendar },
     { name: 'Journal', href: '/journal', icon: BookOpen },

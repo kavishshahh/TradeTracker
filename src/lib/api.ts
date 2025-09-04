@@ -95,6 +95,21 @@ export async function updateTrade(tradeId: string, updateData: {
   return response.json();
 }
 
+export async function deleteTrade(tradeId: string): Promise<{ message: string; trade_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/trades/${tradeId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to delete trade');
+  }
+  
+  return response.json();
+}
+
 export async function exitTrade(userId: string, exitData: {
   ticker: string;
   shares_to_exit: number;

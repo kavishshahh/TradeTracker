@@ -1,10 +1,10 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { exitTrade, getTrades } from '@/lib/api';
+import { deleteTrade, exitTrade, getTrades } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Trade } from '@/types/trade';
-import { DollarSign, MoreVertical, TrendingDown, X } from 'lucide-react';
+import { DollarSign, MoreVertical, Trash2, TrendingDown, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -19,6 +19,12 @@ interface ExitTradeModalProps {
   trade: Trade | null;
   onClose: () => void;
   onExit: (tradeId: string, exitData: ExitTradeFormData) => void;
+}
+
+interface DeleteTradeModalProps {
+  trade: Trade | null;
+  onClose: () => void;
+  onDelete: (tradeId: string) => void;
 }
 
 function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
@@ -210,10 +216,71 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
   );
 }
 
+function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
+  if (!trade) return null;
+
+  const handleDelete = () => {
+    onDelete(trade.id!);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-red-600">Delete Trade</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Trade Info */}
+        <div className="mb-4 p-3 bg-red-50 rounded-lg text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div>Ticker: <span className="font-medium">{trade.ticker}</span></div>
+            <div>Shares: <span className="font-medium">{trade.shares}</span></div>
+            <div>Entry: <span className="font-medium">${trade.buy_price}</span></div>
+            <div>Date: <span className="font-medium">{new Date(trade.date).toLocaleDateString()}</span></div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-gray-700 mb-2">
+            Are you sure you want to delete this trade? This action cannot be undone.
+          </p>
+          <p className="text-sm text-red-600 font-medium">
+            ⚠️ This will permanently remove the trade from your records.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex space-x-3 pt-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            className="flex-1 py-2 px-4 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+          >
+            Delete Trade
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ActiveTrades() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [exitingTrade, setExitingTrade] = useState<Trade | null>(null);
+  const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const { currentUser } = useAuth();
 
@@ -277,6 +344,28 @@ export default function ActiveTrades() {
     }
   };
 
+  const handleDeleteTrade = async (tradeId: string) => {
+    try {
+      await deleteTrade(tradeId);
+      
+      // Remove the trade from local state
+      setTrades(prevTrades => prevTrades.filter(trade => trade.id !== tradeId));
+      
+      // Show success toast
+      toast.success('🗑️ Trade deleted successfully', {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50',
+        autoClose: 3000
+      });
+    } catch (error) {
+      console.error('Error deleting trade:', error);
+      toast.error(`❌ Failed to delete trade: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -289,7 +378,18 @@ export default function ActiveTrades() {
     return (
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-2">Active Trades</h3>
-        <p className="text-gray-500 text-center py-8">No active trades</p>
+        <div className="text-center py-12">
+          <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <TrendingDown className="h-8 w-8 text-gray-400" />
+          </div>
+          <h4 className="text-lg font-medium text-gray-900 mb-2">No Active Trades</h4>
+          <p className="text-gray-500 mb-4">
+            You don't have any open positions at the moment.
+          </p>
+          <p className="text-sm text-gray-400">
+            Add a new trade to start tracking your positions.
+          </p>
+        </div>
       </div>
     );
   }
@@ -338,16 +438,26 @@ export default function ActiveTrades() {
                   </button>
                   
                   {openMenuId === trade.id && (
-                    <div className="absolute right-0 mt-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-10">
+                    <div className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-10">
                       <button
                         onClick={() => {
                           setExitingTrade(trade);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                        className="w-full px-3 py-2 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center"
                       >
                         <TrendingDown className="h-4 w-4 mr-2" />
                         Exit Trade
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeletingTrade(trade);
+                          setOpenMenuId(null);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Trade
                       </button>
                     </div>
                   )}
@@ -368,6 +478,12 @@ export default function ActiveTrades() {
         trade={exitingTrade}
         onClose={() => setExitingTrade(null)}
         onExit={handleExitTrade}
+      />
+
+      <DeleteTradeModal
+        trade={deletingTrade}
+        onClose={() => setDeletingTrade(null)}
+        onDelete={handleDeleteTrade}
       />
     </div>
   );

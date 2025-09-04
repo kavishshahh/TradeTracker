@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowRight, BarChart3, BookOpen, Calculator, Calendar, CheckCircle, Target, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 
 // Feature highlight component
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ComponentType<{ className?: string }>, title: string, description: string }) {
@@ -37,9 +37,10 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.Component
 
 // Benefit item component
 function BenefitItem({ text }: { text: string }) {
+  const CheckIcon = CheckCircle as React.ComponentType<{ className?: string }>;
   return (
     <div className="flex items-center space-x-3">
-      <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
+      <CheckIcon className="h-5 w-5 text-green-400 flex-shrink-0" />
       <span className="text-gray-300">{text}</span>
     </div>
   );

@@ -3,10 +3,10 @@
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
-import { getFeesConfig, getTrades, updateTrade } from '@/lib/api';
+import { deleteTrade, getFeesConfig, getTrades, updateTrade } from '@/lib/api';
 import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency } from '@/lib/utils';
 import { FeesConfig, Trade } from '@/types/trade';
-import { BarChart3, Calculator, Calendar as CalendarIcon, DollarSign, Download, Edit, Filter, Search, Target, TrendingDown, TrendingUp, X } from 'lucide-react';
+import { BarChart3, Calculator, Calendar as CalendarIcon, DollarSign, Download, Edit, Filter, Search, Target, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import { toast } from 'react-toastify';
@@ -27,6 +27,12 @@ interface EditModalProps {
   trade: Trade | null;
   onClose: () => void;
   onSave: (updatedTrade: Trade) => void;
+}
+
+interface DeleteTradeModalProps {
+  trade: Trade | null;
+  onClose: () => void;
+  onDelete: (tradeId: string) => void;
 }
 
 function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeDetailModalProps) {
@@ -612,6 +618,73 @@ function EditModal({ trade, onClose, onSave }: EditModalProps) {
   );
 }
 
+function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
+  if (!trade) return null;
+
+  const handleDelete = () => {
+    onDelete(trade.id!);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-red-600">Delete Trade</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Trade Info */}
+        <div className="mb-4 p-3 bg-red-50 rounded-lg text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div>Ticker: <span className="font-medium">{trade.ticker}</span></div>
+            <div>Shares: <span className="font-medium">{trade.shares}</span></div>
+            <div>Entry: <span className="font-medium">${trade.buy_price}</span></div>
+            <div>Date: <span className="font-medium">{new Date(trade.date).toLocaleDateString()}</span></div>
+            <div>Status: <span className="font-medium capitalize">{trade.status}</span></div>
+            <div>P&L: <span className="font-medium">
+              {trade.status === 'closed' && trade.sell_price && trade.buy_price 
+                ? `${((trade.sell_price - trade.buy_price) * trade.shares) >= 0 ? '+' : ''}$${((trade.sell_price - trade.buy_price) * trade.shares).toFixed(2)}`
+                : 'Open'
+              }
+            </span></div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <p className="text-gray-700 mb-2">
+            Are you sure you want to delete this trade? This action cannot be undone.
+          </p>
+          <p className="text-sm text-red-600 font-medium">
+            ⚠️ This will permanently remove the trade from your records.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex space-x-3 pt-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDelete}
+            className="flex-1 py-2 px-4 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+          >
+            Delete Trade
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TradesView() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [filteredTrades, setFilteredTrades] = useState<Trade[]>([]);
@@ -627,6 +700,7 @@ export default function TradesView() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedTrade, setSelectedTrade] = useState<Trade | null>(null);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [deletingTrade, setDeletingTrade] = useState<Trade | null>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   const { currentUser } = useAuth();
 
@@ -763,6 +837,29 @@ export default function TradesView() {
       await fetchTrades();
     } catch (error) {
       console.error('Error refreshing trades after update:', error);
+    }
+  };
+
+  // Handle trade deletion
+  const handleDeleteTrade = async (tradeId: string) => {
+    try {
+      await deleteTrade(tradeId);
+      
+      // Remove the trade from local state
+      setTrades(prevTrades => prevTrades.filter(trade => trade.id !== tradeId));
+      
+      // Show success toast
+      toast.success('🗑️ Trade deleted successfully', {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50',
+        autoClose: 3000
+      });
+    } catch (error) {
+      console.error('Error deleting trade:', error);
+      toast.error(`❌ Failed to delete trade: ${error instanceof Error ? error.message : 'Unknown error'}`, {
+        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+        progressClassName: '!bg-white !bg-opacity-50'
+      });
     }
   };
 
@@ -1389,18 +1486,32 @@ export default function TradesView() {
                         {trade.notes || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingTrade(trade);
-                            trackEvent('trade_edit', 'trades', trade.ticker);
-                            trackUserEngagement('edit_action', trade.status);
-                          }}
-                          className="text-blue-600 hover:text-blue-800 transition-colors p-1"
-                          title="Edit trade"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTrade(trade);
+                              trackEvent('trade_edit', 'trades', trade.ticker);
+                              trackUserEngagement('edit_action', trade.status);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 transition-colors p-1"
+                            title="Edit trade"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingTrade(trade);
+                              trackEvent('trade_delete_click', 'trades', trade.ticker);
+                              trackUserEngagement('delete_action', trade.status);
+                            }}
+                            className="text-red-600 hover:text-red-800 transition-colors p-1"
+                            title="Delete trade"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1424,6 +1535,13 @@ export default function TradesView() {
         trade={editingTrade}
         onClose={() => setEditingTrade(null)}
         onSave={handleSaveTrade}
+      />
+
+      {/* Delete Trade Modal */}
+      <DeleteTradeModal 
+        trade={deletingTrade}
+        onClose={() => setDeletingTrade(null)}
+        onDelete={handleDeleteTrade}
       />
     </div>
   );

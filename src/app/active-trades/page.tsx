@@ -19,7 +19,7 @@ export default function ActiveTradesPage() {
       <Layout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Active Trades</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Active Trades</h1>
             <p className="mt-1 text-sm text-gray-500">
               Manage your current open positions and track live market performance
             </p>

@@ -1156,7 +1156,7 @@ export default function TradesView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">All Trades</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">All Trades</h1>
           <p className="mt-1 text-sm text-gray-500">
             View and filter all your trades for {formatDateRange(selectedDateRange)}
           </p>

@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { deleteTrade, exitTrade, getTrades } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatShares, normalizeShares } from '@/lib/utils';
 import { Trade } from '@/types/trade';
 import { DollarSign, MoreVertical, Trash2, TrendingDown, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -59,8 +59,9 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
   };
 
   const setPartialExit = (fraction: number) => {
-    const sharesToExit = Math.round((trade.shares * fraction) * 100) / 100; // Round to 2 decimal places
-    setValue('shares_to_exit', sharesToExit);
+    // Use proper decimal arithmetic to avoid floating-point precision issues
+    const sharesToExit = Math.round((trade.shares * fraction) * 10000) / 10000; // Round to 4 decimal places
+    setValue('shares_to_exit', parseFloat(sharesToExit.toFixed(4)));
   };
 
   const estimatedPnL = watchedPrice && watchedShares && trade.buy_price
@@ -83,7 +84,7 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
         {/* Trade Info */}
         <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm">
           <div className="grid grid-cols-2 gap-2">
-            <div className="text-gray-700 dark:text-gray-300">Position: <span className="font-medium text-gray-900 dark:text-white">{trade.shares} shares</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Position: <span className="font-medium text-gray-900 dark:text-white">{formatShares(trade.shares)} shares</span></div>
             <div className="text-gray-700 dark:text-gray-300">Entry: <span className="font-medium text-gray-900 dark:text-white">${trade.buy_price}</span></div>
             <div className="text-gray-700 dark:text-gray-300">Date: <span className="font-medium text-gray-900 dark:text-white">{new Date(trade.date).toLocaleDateString()}</span></div>
             <div className="text-gray-700 dark:text-gray-300">Risk: <span className="font-medium text-gray-900 dark:text-white">{trade.risk}%</span></div>
@@ -123,11 +124,11 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
             </label>
             <input
               type="number"
-              step="0.01"
+              step="0.0001"
               {...register('shares_to_exit', { 
                 required: 'Number of shares is required',
-                min: { value: 0.01, message: 'Must exit at least 0.01 share' },
-                max: { value: trade.shares, message: `Cannot exit more than ${trade.shares} shares` }
+                min: { value: 0.0001, message: 'Must exit at least 0.0001 share' },
+                max: { value: trade.shares, message: `Cannot exit more than ${formatShares(trade.shares)} shares` }
               })}
               className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
             />
@@ -241,7 +242,7 @@ function DeleteTradeModal({ trade, onClose, onDelete }: DeleteTradeModalProps) {
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm">
           <div className="grid grid-cols-2 gap-2">
             <div className="text-gray-700 dark:text-gray-300">Ticker: <span className="font-medium text-gray-900 dark:text-white">{trade.ticker}</span></div>
-            <div className="text-gray-700 dark:text-gray-300">Shares: <span className="font-medium text-gray-900 dark:text-white">{trade.shares}</span></div>
+            <div className="text-gray-700 dark:text-gray-300">Shares: <span className="font-medium text-gray-900 dark:text-white">{formatShares(trade.shares)}</span></div>
             <div className="text-gray-700 dark:text-gray-300">Entry: <span className="font-medium text-gray-900 dark:text-white">${trade.buy_price}</span></div>
             <div className="text-gray-700 dark:text-gray-300">Date: <span className="font-medium text-gray-900 dark:text-white">{new Date(trade.date).toLocaleDateString()}</span></div>
           </div>
@@ -312,14 +313,14 @@ export default function ActiveTrades() {
       // Call the proper exit trade API
       const result = await exitTrade(currentUser!.uid, {
         ticker: trade.ticker,
-        shares_to_exit: exitData.shares_to_exit,
+        shares_to_exit: normalizeShares(exitData.shares_to_exit), // Normalize to avoid floating-point precision issues
         sell_price: exitData.sell_price,
         notes: exitData.notes || ''
       });
       
       // Calculate P&L
       const pnl = trade.buy_price 
-        ? (exitData.sell_price - trade.buy_price) * exitData.shares_to_exit 
+        ? (exitData.sell_price - trade.buy_price) * normalizeShares(exitData.shares_to_exit)
         : 0;
       
       // Refresh the trades list to reflect the changes
@@ -414,7 +415,7 @@ export default function ActiveTrades() {
                     <div>
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white">{trade.ticker}</h4>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {trade.shares} shares @ ${trade.buy_price}
+                        {formatShares(trade.shares)} shares @ ${trade.buy_price}
                       </p>
                     </div>
                   </div>

@@ -19,6 +19,19 @@ export function formatPercentage(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
+// Format share quantities to avoid floating-point precision issues
+export function formatShares(shares: number): string {
+  // Round to 4 decimal places to handle precision issues
+  const rounded = Math.round(shares * 10000) / 10000;
+  return rounded.toFixed(4).replace(/\.?0+$/, '');
+}
+
+// Normalize share quantities to avoid floating-point precision issues
+export function normalizeShares(shares: number): number {
+  // Round to 4 decimal places to handle precision issues
+  return Math.round(shares * 10000) / 10000;
+}
+
 // Calculate fees for a single trade
 export function calculateTradeFees(trade: Trade, feesConfig: FeesConfig): {
   totalFees: number;

@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { getTrades } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatShares } from '@/lib/utils';
 import { DailyStats, Trade } from '@/types/trade';
 import { BarChart, Calendar, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -119,7 +119,7 @@ function DayDetailModal({ date, stats, onClose }: DayDetailModalProps) {
                   <div>
                     <div className="font-medium text-gray-900 dark:text-white">{trade.ticker}</div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {trade.shares} shares
+                      {formatShares(trade.shares)} shares
                       {trade.buy_price && ` @ $${trade.buy_price}`}
                       {trade.sell_price && ` → $${trade.sell_price}`}
                       {!trade.buy_price && trade.sell_price && ` @ $${trade.sell_price} (exit only)`}

@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent, trackFormSubmission, trackPageView, trackTradeEvent } from '@/lib/analytics';
 import { addTrade } from '@/lib/api';
+import { normalizeShares } from '@/lib/utils';
 import { CalendarIcon, DollarSign } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -58,7 +59,7 @@ export default function TradeForm() {
         user_id: currentUser!.uid, // Use authenticated user's ID
         date: data.date,
         ticker: data.ticker.toUpperCase(),
-        shares: data.shares,
+        shares: normalizeShares(data.shares), // Normalize to avoid floating-point precision issues
         notes: data.notes || '',
         status: tradeType === 'exit' ? 'closed' : data.status,
       };
@@ -332,7 +333,16 @@ export default function TradeForm() {
                   step="0.0001"
                   {...register('shares', { 
                     required: 'Number of shares is required',
-                    min: { value: 0.0001, message: 'Must have at least 0.0001 shares' }
+                    min: { value: 0.0001, message: 'Must have at least 0.0001 shares' },
+                    validate: (value) => {
+                      // Check if the value is a valid number and within reasonable bounds
+                      if (isNaN(value) || value <= 0) {
+                        return 'Please enter a valid number of shares';
+                      }
+                      // Check if the value has too many decimal places (more than 4)
+                      const decimalPlaces = (value.toString().split('.')[1] || '').length;
+                      return decimalPlaces <= 4 || 'Please enter a number with at most 4 decimal places';
+                    }
                   })}
                   placeholder="100"
                   className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"

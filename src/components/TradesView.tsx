@@ -4,7 +4,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { deleteTrade, getFeesConfig, getTrades, updateTrade } from '@/lib/api';
-import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency } from '@/lib/utils';
+import { calculateCompleteTradeFees, calculateNetPnL, formatCurrency, formatShares } from '@/lib/utils';
 import { FeesConfig, Trade } from '@/types/trade';
 import { BarChart3, Calculator, Calendar as CalendarIcon, DollarSign, Download, Edit, Filter, Search, Target, Trash2, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -192,7 +192,7 @@ function TradeDetailModal({ trade, feesConfig, showNetProfits, onClose }: TradeD
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-500 dark:text-gray-400">Shares:</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{trade.shares}</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{formatShares(trade.shares)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-500 dark:text-gray-400">Risk:</span>
@@ -1456,7 +1456,7 @@ export default function TradesView() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {trade.shares}
+                        {formatShares(trade.shares)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         {trade.buy_price ? `$${trade.buy_price.toFixed(2)}` : '-'}

@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { trackEvent, trackPageView, trackUserEngagement } from '@/lib/analytics';
 import { getTrades, updateTrade } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatShares } from '@/lib/utils';
 import { Trade } from '@/types/trade';
 import { Calendar, Edit, Eye, Filter, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -76,7 +76,7 @@ function JournalEntry({ trade, onEdit }: JournalEntryProps) {
         )}
         <div>
           <span className="text-gray-500 dark:text-gray-400">Shares:</span>
-          <div className="font-medium text-gray-900 dark:text-white">{trade.shares}</div>
+          <div className="font-medium text-gray-900 dark:text-white">{formatShares(trade.shares)}</div>
         </div>
         {trade.status === 'closed' && (
           <div>

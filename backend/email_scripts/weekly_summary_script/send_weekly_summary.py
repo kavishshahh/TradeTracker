@@ -88,11 +88,12 @@ class WeeklySummaryEmailer:
             return []
         
         week_ago = datetime.now() - timedelta(days=7)
+        week_ago_str = week_ago.strftime('%Y-%m-%d')  # Convert to string format for Firestore comparison
         
         try:
             trades_ref = self.db.collection('trades')
             recent_trades = trades_ref.where('user_id', '==', user_id)\
-                                    .where('date', '>=', week_ago)\
+                                    .where('date', '>=', week_ago_str)\
                                     .order_by('date', direction=firestore.Query.DESCENDING)\
                                     .stream()
             
@@ -115,19 +116,38 @@ class WeeklySummaryEmailer:
         if not trades:
             return None
         
+        # Debug: Print trade details for first user
+        if user_email == "kavishshah30@gmail.com":
+            print(f"🔍 Debug: Found {len(trades)} trades for {user_email}")
+            for i, trade in enumerate(trades[:3]):  # Show first 3 trades
+                print(f"  Trade {i+1}: status={trade.get('status')}, buy_price={trade.get('buy_price')}, sell_price={trade.get('sell_price')}, shares={trade.get('shares')}")
+        
         # Calculate basic stats
         total_trades = len(trades)
-        total_pnl = sum(trade.get('realized_pnl', 0) for trade in trades if trade.get('realized_pnl') is not None)
+        
+        # Calculate P&L for each trade (only for closed trades with both buy and sell prices)
+        trade_pnls = []
+        for trade in trades:
+            if (trade.get('status') == 'closed' and 
+                trade.get('buy_price') is not None and 
+                trade.get('sell_price') is not None and
+                trade.get('shares') is not None):
+                pnl = (trade['sell_price'] - trade['buy_price']) * trade['shares']
+                trade_pnls.append(pnl)
+            else:
+                trade_pnls.append(0)
+        
+        total_pnl = sum(trade_pnls)
         
         # Separate winning and losing trades
-        winning_trades = [t for t in trades if t.get('realized_pnl', 0) > 0]
-        losing_trades = [t for t in trades if t.get('realized_pnl', 0) < 0]
+        winning_trades = [t for t, pnl in zip(trades, trade_pnls) if pnl > 0]
+        losing_trades = [t for t, pnl in zip(trades, trade_pnls) if pnl < 0]
         
         win_rate = (len(winning_trades) / total_trades * 100) if total_trades > 0 else 0
         
         # Best and worst trades
-        best_trade = max([t.get('realized_pnl', 0) for t in trades], default=0)
-        worst_trade = min([t.get('realized_pnl', 0) for t in trades], default=0)
+        best_trade = max(trade_pnls, default=0)
+        worst_trade = min(trade_pnls, default=0)
         
         # Average trade size
         avg_trade_size = total_pnl / total_trades if total_trades > 0 else 0
@@ -135,7 +155,7 @@ class WeeklySummaryEmailer:
         # Most traded symbols
         symbols = {}
         for trade in trades:
-            symbol = trade.get('symbol', 'Unknown')
+            symbol = trade.get('ticker', 'Unknown')
             symbols[symbol] = symbols.get(symbol, 0) + 1
         
         most_traded = sorted(symbols.items(), key=lambda x: x[1], reverse=True)[:3]
@@ -159,8 +179,10 @@ class WeeklySummaryEmailer:
         
         # Risk metrics
         if len(winning_trades) > 0 and len(losing_trades) > 0:
-            avg_win = sum(t.get('realized_pnl', 0) for t in winning_trades) / len(winning_trades)
-            avg_loss = abs(sum(t.get('realized_pnl', 0) for t in losing_trades) / len(losing_trades))
+            winning_pnls = [pnl for t, pnl in zip(trades, trade_pnls) if pnl > 0]
+            losing_pnls = [pnl for t, pnl in zip(trades, trade_pnls) if pnl < 0]
+            avg_win = sum(winning_pnls) / len(winning_pnls)
+            avg_loss = abs(sum(losing_pnls) / len(losing_pnls))
             risk_reward_ratio = avg_win / avg_loss if avg_loss > 0 else 0
         else:
             risk_reward_ratio = 0

@@ -3,10 +3,13 @@
 import { auth } from '@/lib/firebase';
 import {
     createUserWithEmailAndPassword,
+    EmailAuthProvider,
     User as FirebaseUser,
     onAuthStateChanged,
+    reauthenticateWithCredential,
     signInWithEmailAndPassword,
-    signOut
+    signOut,
+    updatePassword
 } from 'firebase/auth';
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
@@ -16,6 +19,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
   logout: () => Promise<any>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,6 +52,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return signOut(auth);
   }
 
+  async function changePassword(currentPassword: string, newPassword: string) {
+    if (!auth.currentUser) {
+      throw new Error('No user is currently signed in');
+    }
+
+    // Re-authenticate the user with their current password
+    const credential = EmailAuthProvider.credential(
+      auth.currentUser.email!,
+      currentPassword
+    );
+    
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    
+    // Update the password
+    return updatePassword(auth.currentUser, newPassword);
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -62,7 +83,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     signUp,
     signIn,
-    logout
+    logout,
+    changePassword
   };
 
   return (

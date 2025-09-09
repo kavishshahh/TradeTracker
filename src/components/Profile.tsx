@@ -5,7 +5,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { trackEvent, trackFormSubmission, trackPageView } from '@/lib/analytics';
 import { getFeesConfig, getUserProfile, saveFeesConfig, updateUserProfile } from '@/lib/api';
 import { FeesConfig } from '@/types/trade';
-import { Calculator, DollarSign, Moon, Save, Settings, Sun, User } from 'lucide-react';
+import { Calculator, DollarSign, Lock, Moon, Save, Settings, Sun, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
@@ -16,15 +16,28 @@ interface ProfileFormData {
   risk_tolerance: number;
 }
 
+interface PasswordFormData {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
 export default function Profile() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'fees'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'fees' | 'security'>('profile');
   const [feesConfig, setFeesConfig] = useState<FeesConfig | null>(null);
   const [isFeesSubmitting, setIsFeesSubmitting] = useState(false);
   const [feesSubmitSuccess, setFeesSubmitSuccess] = useState(false);
-  const { currentUser } = useAuth();
+  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+  const [passwordSubmitSuccess, setPasswordSubmitSuccess] = useState(false);
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
+  const { currentUser, changePassword: changePasswordAuth } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const {
@@ -41,8 +54,24 @@ export default function Profile() {
     }
   });
 
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    reset: resetPassword,
+    watch: watchPassword,
+    formState: { errors: passwordErrors }
+  } = useForm<PasswordFormData>({
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    }
+  });
+
   const accountBalance = watch('account_balance');
   const riskTolerance = watch('risk_tolerance');
+  const newPassword = watchPassword('newPassword');
+  const confirmPassword = watchPassword('confirmPassword');
 
   useEffect(() => {
     if (!currentUser) return;
@@ -153,6 +182,67 @@ export default function Profile() {
     setFeesConfig({ ...feesConfig, [field]: value });
   };
 
+  // Handle password change
+  const onPasswordSubmit = async (data: PasswordFormData) => {
+    if (!currentUser) return;
+
+    try {
+      setIsPasswordSubmitting(true);
+      setPasswordSubmitSuccess(false);
+      
+      await changePasswordAuth(data.currentPassword, data.newPassword);
+      
+      setPasswordSubmitSuccess(true);
+      toast.success('Password changed successfully!');
+      
+      // Track successful password change
+      trackEvent('password_change', 'security', 'success');
+      
+      // Reset form and success state
+      resetPassword();
+      setTimeout(() => setPasswordSubmitSuccess(false), 3000);
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      let errorMessage = 'Failed to change password. Please try again.';
+      
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Current password is incorrect.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'New password is too weak. Please choose a stronger password.';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log back in before changing your password.';
+      }
+      
+      if (error.message === 'INVALID_LOGIN_CREDENTIALS') {
+        errorMessage = 'Invalid credential. Please try again.';
+      }
+      
+      toast.error(errorMessage);
+      trackEvent('password_change', 'security', 'error');
+    } finally {
+      setIsPasswordSubmitting(false);
+    }
+  };
+
+  // Password strength validation
+  const getPasswordStrength = (password: string) => {
+    if (!password) return { score: 0, label: '', color: '' };
+    
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    
+    if (score <= 2) return { score, label: 'Weak', color: 'text-red-500' };
+    if (score <= 4) return { score, label: 'Medium', color: 'text-yellow-500' };
+    return { score, label: 'Strong', color: 'text-green-500' };
+  };
+
+  const passwordStrength = getPasswordStrength(newPassword || '');
+
 
 
   if (loading) {
@@ -202,6 +292,17 @@ export default function Profile() {
               <Calculator className="h-4 w-4 mr-2 inline" />
               Fees Configuration
             </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'security'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+              }`}
+            >
+              <Lock className="h-4 w-4 mr-2 inline" />
+              Security
+            </button>
           </nav>
         </div>
 
@@ -220,7 +321,7 @@ export default function Profile() {
               theme={theme}
               toggleTheme={toggleTheme}
             />
-          ) : (
+          ) : activeTab === 'fees' ? (
             <FeesTabContent 
               feesConfig={feesConfig}
               handleFeesSubmit={handleFeesSubmit}
@@ -228,6 +329,20 @@ export default function Profile() {
               isFeesSubmitting={isFeesSubmitting}
               feesSubmitSuccess={feesSubmitSuccess}
               getDefaultFeesConfig={getDefaultFeesConfig}
+            />
+          ) : (
+            <SecurityTabContent 
+              registerPassword={registerPassword}
+              handlePasswordSubmit={handlePasswordSubmit}
+              onPasswordSubmit={onPasswordSubmit}
+              passwordErrors={passwordErrors}
+              isPasswordSubmitting={isPasswordSubmitting} 
+              passwordSubmitSuccess={passwordSubmitSuccess}
+              showPasswords={showPasswords}
+              setShowPasswords={setShowPasswords}
+              passwordStrength={passwordStrength}
+              newPassword={newPassword}
+              confirmPassword={confirmPassword}
             />
           )}
         </div>
@@ -717,6 +832,230 @@ function FeesTabContent({
             )}
           </button>
         </div>
+      </form>
+    </div>
+  );
+}
+
+// Security Tab Component
+interface SecurityTabContentProps {
+  registerPassword: any;
+  handlePasswordSubmit: any;
+  onPasswordSubmit: any;
+  passwordErrors: any;
+  isPasswordSubmitting: boolean;
+  passwordSubmitSuccess: boolean;
+  showPasswords: {
+    current: boolean;
+    new: boolean;
+    confirm: boolean;
+  };
+  setShowPasswords: (passwords: { current: boolean; new: boolean; confirm: boolean }) => void;
+  passwordStrength: {
+    score: number;
+    label: string;
+    color: string;
+  };
+  newPassword: string;
+  confirmPassword: string;
+}
+
+function SecurityTabContent({ 
+  registerPassword, 
+  handlePasswordSubmit, 
+  onPasswordSubmit, 
+  passwordErrors, 
+  isPasswordSubmitting, 
+  passwordSubmitSuccess,
+  showPasswords,
+  setShowPasswords,
+  passwordStrength,
+  newPassword,
+  confirmPassword
+}: SecurityTabContentProps) {
+  return (
+    <div className="max-w-md mx-auto">
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Change Password</h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Update your password to keep your account secure. Make sure to use a strong password.
+        </p>
+      </div>
+
+      <form onSubmit={handlePasswordSubmit(onPasswordSubmit)} className="space-y-4">
+        {/* Current Password */}
+        <div>
+          <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Current Password *
+          </label>
+          <div className="relative">
+            <input
+              id="currentPassword"
+              type={showPasswords.current ? 'text' : 'password'}
+              {...registerPassword('currentPassword', {
+                required: 'Current password is required'
+              })}
+              className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+              placeholder="Enter your current password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              {showPasswords.current ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
+          {passwordErrors.currentPassword && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{passwordErrors.currentPassword.message}</p>
+          )}
+        </div>
+
+        {/* New Password */}
+        <div>
+          <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            New Password *
+          </label>
+          <div className="relative">
+            <input
+              id="newPassword"
+              type={showPasswords.new ? 'text' : 'password'}
+              {...registerPassword('newPassword', {
+                required: 'New password is required',
+                minLength: { value: 8, message: 'Password must be at least 8 characters long' }
+              })}
+              className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+              placeholder="Enter your new password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              {showPasswords.new ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
+          {passwordErrors.newPassword && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{passwordErrors.newPassword.message}</p>
+          )}
+          
+          {/* Password Strength Indicator */}
+          {newPassword && (
+            <div className="mt-2">
+              <div className="flex items-center space-x-2">
+                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      passwordStrength.score <= 2 ? 'bg-red-500' : 
+                      passwordStrength.score <= 4 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
+                  />
+                </div>
+                <span className={`text-sm font-medium ${passwordStrength.color}`}>
+                  {passwordStrength.label}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Confirm Password */}
+        <div>
+          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Confirm New Password *
+          </label>
+          <div className="relative">
+            <input
+              id="confirmPassword"
+              type={showPasswords.confirm ? 'text' : 'password'}
+              {...registerPassword('confirmPassword', {
+                required: 'Please confirm your new password',
+                validate: (value: string) => value === newPassword || 'Passwords do not match'
+              })}
+              className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+              placeholder="Confirm your new password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              {showPasswords.confirm ? (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
+          {passwordErrors.confirmPassword && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{passwordErrors.confirmPassword.message}</p>
+          )}
+        </div>
+
+        {/* Password Requirements */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+          <h4 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">Password Requirements</h4>
+          <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
+            <li>• At least 8 characters long</li>
+            <li>• Mix of uppercase and lowercase letters</li>
+            <li>• Include numbers and special characters</li>
+            <li>• Avoid common words or personal information</li>
+          </ul>
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isPasswordSubmitting}
+          className={`w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-colors ${
+            isPasswordSubmitting
+              ? 'bg-gray-400 cursor-not-allowed'
+              : passwordSubmitSuccess
+              ? 'bg-green-600 hover:bg-green-700'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          {isPasswordSubmitting ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Updating Password...
+            </>
+          ) : passwordSubmitSuccess ? (
+            <>
+              <Lock className="h-4 w-4 mr-2" />
+              Password Updated!
+            </>
+          ) : (
+            <>
+              <Lock className="h-4 w-4 mr-2" />
+              Update Password
+            </>
+          )}
+        </button>
       </form>
     </div>
   );

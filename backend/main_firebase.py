@@ -363,6 +363,7 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
                 update_data = {
                     'sell_price': exit_request.sell_price,
                     'status': 'closed',
+                    'exit_date': datetime.now().strftime('%Y-%m-%d'),  # Store exit date
                     'updated_at': datetime.now(),
                     'shares': exit_request.shares_to_exit  # Set shares to exited amount
                 }
@@ -378,6 +379,7 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
                 exit_trade_data = {
                     'user_id': user_id,
                     'date': trade_data['date'],
+                    'exit_date': datetime.now().strftime('%Y-%m-%d'),  # Store exit date
                     'ticker': exit_request.ticker,
                     'buy_price': trade_data['buy_price'],
                     'sell_price': exit_request.sell_price,
@@ -422,6 +424,7 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
                 # Full exit
                 trade['sell_price'] = exit_request.sell_price
                 trade['status'] = 'closed'
+                trade['exit_date'] = datetime.now().strftime('%Y-%m-%d')  # Store exit date
                 trade['updated_at'] = datetime.now().isoformat()
                 if exit_request.notes:
                     trade['notes'] = f"{trade.get('notes', '')} | Exit: {exit_request.notes}".strip(' |')
@@ -431,6 +434,7 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
                     "id": str(len(MOCK_TRADES) + 1),
                     "user_id": user_id,
                     "date": trade['date'],
+                    "exit_date": datetime.now().strftime('%Y-%m-%d'),  # Store exit date
                     "ticker": exit_request.ticker,
                     "buy_price": trade['buy_price'],
                     "sell_price": exit_request.sell_price,
@@ -635,17 +639,11 @@ async def get_trades(user_id: str, from_date: Optional[str] = None, to_date: Opt
         if db:
             # Use Firebase Firestore
             trades_ref = db.collection('trades')
-            # Use the correct filter syntax for firebase-admin
+            # Get all trades for the user first (no date filtering at DB level)
             query = trades_ref.where("user_id", "==", user_id)
             
-            # Add date filtering if provided
-            if from_date:
-                query = query.where("date", ">=", from_date)
-            if to_date:
-                query = query.where("date", "<=", to_date)
-            
             docs = query.get()
-            trades = []
+            all_trades = []
             for doc in docs:
                 trade_data = doc.to_dict()
                 trade_data['id'] = doc.id
@@ -653,19 +651,44 @@ async def get_trades(user_id: str, from_date: Optional[str] = None, to_date: Opt
                 # Ensure date is a string
                 if trade_data.get('date'):
                     if isinstance(trade_data['date'], datetime):
-                        trade_data['date'] = trade_data['date'].date().isoformat()
+                        trade_data['date'] = trade_data['date'].isoformat()
                     elif hasattr(trade_data['date'], 'strftime'):
                         trade_data['date'] = trade_data['date'].strftime('%Y-%m-%d')
                     # If it's already a string, keep it as is
+                
+                # Ensure exit_date is a string if it exists
+                if trade_data.get('exit_date'):
+                    if isinstance(trade_data['exit_date'], datetime):
+                        trade_data['exit_date'] = trade_data['exit_date'].isoformat()
+                    elif hasattr(trade_data['exit_date'], 'strftime'):
+                        trade_data['exit_date'] = trade_data['exit_date'].strftime('%Y-%m-%d')
                 
                 # Convert datetime objects to strings
                 for field in ['created_at', 'updated_at']:
                     if isinstance(trade_data.get(field), datetime):
                         trade_data[field] = trade_data[field].isoformat()
                 
-                trades.append(trade_data)
+                all_trades.append(trade_data)
             
-            print(f"✅ Found {len(trades)} trades for user {user_id}")
+            # Apply date filtering in Python to consider exit_date for closed trades
+            trades = all_trades
+            if from_date or to_date:
+                trades = []
+                for trade in all_trades:
+                    # For closed trades, use exit_date if available, otherwise use entry date
+                    trade_date = trade.get('exit_date') if trade.get('status') == 'closed' and trade.get('exit_date') else trade.get('date')
+                    
+                    # Check if trade falls within date range
+                    include_trade = True
+                    if from_date and trade_date < from_date:
+                        include_trade = False
+                    if to_date and trade_date > to_date:
+                        include_trade = False
+                    
+                    if include_trade:
+                        trades.append(trade)
+            
+            print(f"✅ Found {len(trades)} trades for user {user_id} (filtered from {len(all_trades)} total)")
             return {"trades": trades}
         else:
             # Fallback to mock data
@@ -717,20 +740,28 @@ async def get_metrics(user_id: str, from_date: Optional[str] = None, to_date: Op
             all_trades = [doc.to_dict() for doc in total_docs]
             print(f"📊 Total trades without date filtering: {len(all_trades)}")
             
-            # Now apply date filtering
-            query = trades_ref.where("user_id", "==", user_id)
-            
-            # Add date filtering if provided
-            if from_date:
-                print(f"📅 Adding from_date filter: {from_date}")
-                query = query.where("date", ">=", from_date)
-            if to_date:
-                print(f"📅 Adding to_date filter: {to_date}")
-                query = query.where("date", "<=", to_date)
-            
-            docs = query.get()
-            trades = [doc.to_dict() for doc in docs]
-            print(f"📊 Found {len(trades)} trades after Firebase date filtering")
+            # Apply date filtering in Python to consider exit_date for closed trades
+            trades = all_trades
+            if from_date or to_date:
+                filtered_trades = []
+                for trade in all_trades:
+                    # For closed trades, use exit_date if available, otherwise use entry date
+                    trade_date = trade.get('exit_date') if trade.get('status') == 'closed' and trade.get('exit_date') else trade.get('date')
+                    
+                    # Check if trade falls within date range
+                    include_trade = True
+                    if from_date and trade_date < from_date:
+                        include_trade = False
+                    if to_date and trade_date > to_date:
+                        include_trade = False
+                    
+                    if include_trade:
+                        filtered_trades.append(trade)
+                
+                trades = filtered_trades
+                print(f"📊 Found {len(trades)} trades after Python date filtering (from {len(all_trades)} total)")
+            else:
+                print(f"📊 Using all {len(trades)} trades (no date filtering)")
             
             # Debug: Show first few trade dates
             if trades:

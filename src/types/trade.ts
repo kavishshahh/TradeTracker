@@ -2,6 +2,7 @@ export interface Trade {
   id?: string;
   user_id: string;
   date: string;
+  exit_date?: string; // Date when trade was closed/exited
   ticker: string;
   buy_price?: number;
   sell_price?: number;

@@ -528,7 +528,9 @@ export default function Dashboard() {
     if (currentMonthBalance) {
       // Calculate current month's trading P&L
       const currentMonthTrades = trades.filter(trade => {
-        return trade.date.startsWith(currentMonth) && 
+        // For closed trades, use exit_date if available, otherwise fall back to date
+        const tradeMonth = trade.exit_date || trade.date;
+        return tradeMonth.startsWith(currentMonth) && 
                trade.status === 'closed' && 
                trade.sell_price && 
                trade.buy_price;
@@ -562,13 +564,19 @@ export default function Dashboard() {
       // If no date range is set (All Time), include all trades
       if (!startDate || !endDate) return true;
       
-      const tradeDate = trade.date;
+      // For closed trades, use exit_date if available, otherwise use entry date
+      const tradeDate = trade.status === 'closed' && trade.exit_date ? trade.exit_date : trade.date;
       return tradeDate >= startDate && tradeDate <= endDate;
     });
 
     const closedTrades = filteredTrades
       .filter(trade => trade.status === 'closed' && trade.sell_price)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => {
+        // For closed trades, use exit_date if available, otherwise use entry date
+        const dateA = a.exit_date || a.date;
+        const dateB = b.exit_date || b.date;
+        return new Date(dateA).getTime() - new Date(dateB).getTime();
+      });
 
     if (closedTrades.length === 0) return [];
 
@@ -592,7 +600,9 @@ export default function Dashboard() {
     const periods = new Map<string, Trade[]>();
     
     closedTrades.forEach(trade => {
-      const date = new Date(trade.date);
+      // For closed trades, use exit_date if available, otherwise use entry date
+      const tradeDate = trade.exit_date || trade.date;
+      const date = new Date(tradeDate);
       let periodKey: string;
       
       if (useWeekly) {

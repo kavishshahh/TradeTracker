@@ -216,7 +216,8 @@ export default function CalendarView() {
     const grouped: Record<string, DailyStats> = {};
     
     trades.forEach(trade => {
-      const dateKey = trade.date;
+      // For closed trades, use exit_date if available, otherwise use entry date
+      const dateKey = trade.status === 'closed' && trade.exit_date ? trade.exit_date : trade.date;
       
       if (!grouped[dateKey]) {
         grouped[dateKey] = {

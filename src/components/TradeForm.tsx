@@ -73,9 +73,10 @@ export default function TradeForm() {
         tradeData.buy_price = data.buy_price;
       }
 
-      // Include sell_price for closed trades or exits
+      // Include sell_price and exit_date for closed trades or exits
       if ((data.status === 'closed' || tradeType === 'exit') && data.sell_price) {
         tradeData.sell_price = data.sell_price;
+        tradeData.exit_date = data.date; // For closed trades, use the same date as exit date
       }
 
       await addTrade(tradeData);

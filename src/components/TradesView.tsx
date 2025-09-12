@@ -803,9 +803,12 @@ export default function TradesView() {
         getFeesConfig(currentUser.uid).catch(() => ({ fees_config: getDefaultFeesConfig() }))
       ]);
       
-      const sortedTrades = tradesResponse.trades.sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+      const sortedTrades = tradesResponse.trades.sort((a, b) => {
+        // For closed trades, use exit_date if available, otherwise use entry date
+        const dateA = a.status === 'closed' && a.exit_date ? a.exit_date : a.date;
+        const dateB = b.status === 'closed' && b.exit_date ? b.exit_date : b.date;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
       
       setTrades(sortedTrades);
       setFeesConfig(feesResponse.fees_config);
@@ -1441,7 +1444,9 @@ export default function TradesView() {
                       }}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {new Date(trade.date).toLocaleDateString()}
+                        {trade.status === 'closed' && trade.exit_date 
+                          ? new Date(trade.exit_date).toLocaleDateString()
+                          : new Date(trade.date).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                         {trade.ticker}

@@ -7,18 +7,21 @@ A script to send personalized weekly trading performance summaries to your users
 ### Windows Users:
 ```cmd
 cd backend
+.\venv\scripts\activate
 weekly_summary.bat dry
 ```
 
 ### Mac/Linux Users:
 ```bash
 cd backend
+.\venv\scripts\activate
 ./weekly_summary.sh dry
 ```
 
 ### Direct Python:
 ```bash
 cd backend
+.\venv\scripts\activate
 python send_weekly_summary.py --dry-run
 ```
 
@@ -208,6 +211,7 @@ python send_weekly_summary.py --test-email=me@example.com --live
 ```bash
 # Every Sunday evening or Monday morning:
 cd backend
+.\venv\scripts\activate
 python send_weekly_summary.py --live --active-only
 ```
 
@@ -359,5 +363,6 @@ Ready to engage your users with personalized trading insights! 📊✨
 **Quick Start:**
 ```bash
 cd backend
+.\venv\scripts\activate
 python send_weekly_summary.py --test-email=your-email@example.com --live
 ```

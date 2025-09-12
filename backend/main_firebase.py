@@ -358,6 +358,10 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
             # Calculate remaining shares
             remaining_shares = current_shares - exit_request.shares_to_exit
             
+            # Handle floating-point precision issues - consider very small numbers as zero
+            if abs(remaining_shares) < 1e-10:
+                remaining_shares = 0
+                
             if remaining_shares == 0:
                 # Full exit - update the trade as closed
                 update_data = {

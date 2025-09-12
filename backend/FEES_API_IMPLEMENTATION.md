@@ -94,6 +94,7 @@ The frontend components now include:
 Use the provided test script:
 ```bash
 cd backend
+.\venv\scripts\activate
 python test_fees_api.py
 ```
 

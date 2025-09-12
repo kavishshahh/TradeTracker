@@ -28,6 +28,10 @@ export function formatShares(shares: number): string {
 
 // Normalize share quantities to avoid floating-point precision issues
 export function normalizeShares(shares: number): number {
+  // Handle very small numbers that are effectively zero
+  if (Math.abs(shares) < 1e-10) {
+    return 0;
+  }
   // Round to 4 decimal places to handle precision issues
   return Math.round(shares * 10000) / 10000;
 }

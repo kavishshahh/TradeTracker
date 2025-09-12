@@ -42,9 +42,11 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
 
   useEffect(() => {
     if (trade) {
-      setValue('shares_to_exit', trade.shares);
+      // Handle floating-point precision issues - normalize very small numbers to 0
+      const normalizedShares = Math.abs(trade.shares) < 1e-10 ? 0 : trade.shares;
+      setValue('shares_to_exit', normalizedShares);
       reset({
-        shares_to_exit: trade.shares,
+        shares_to_exit: normalizedShares,
         sell_price: 0,
         notes: ''
       });
@@ -60,7 +62,8 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
 
   const setPartialExit = (fraction: number) => {
     // Use proper decimal arithmetic to avoid floating-point precision issues
-    const sharesToExit = Math.round((trade.shares * fraction) * 10000) / 10000; // Round to 4 decimal places
+    const normalizedShares = Math.abs(trade.shares) < 1e-10 ? 0 : trade.shares;
+    const sharesToExit = Math.round((normalizedShares * fraction) * 10000) / 10000; // Round to 4 decimal places
     setValue('shares_to_exit', parseFloat(sharesToExit.toFixed(4)));
   };
 
@@ -128,7 +131,7 @@ function ExitTradeModal({ trade, onClose, onExit }: ExitTradeModalProps) {
               {...register('shares_to_exit', { 
                 required: 'Number of shares is required',
                 min: { value: 0.0001, message: 'Must exit at least 0.0001 share' },
-                max: { value: trade.shares, message: `Cannot exit more than ${formatShares(trade.shares)} shares` }
+                max: { value: Math.abs(trade.shares) < 1e-10 ? 0 : trade.shares, message: `Cannot exit more than ${formatShares(trade.shares)} shares` }
               })}
               className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-white bg-white dark:bg-gray-700"
             />
@@ -291,7 +294,9 @@ export default function ActiveTrades() {
     const fetchTrades = async () => {
       try {
         const response = await getTrades(currentUser.uid);
-        const activeTrades = response.trades.filter(trade => trade.status === 'open');
+        const activeTrades = response.trades.filter(trade => 
+          trade.status === 'open' && Math.abs(trade.shares) >= 1e-10 // Filter out trades with effectively 0 shares
+        );
         setTrades(activeTrades);
       } catch (error) {
         console.error('Error fetching trades:', error);
@@ -310,6 +315,16 @@ export default function ActiveTrades() {
         throw new Error('Trade not found');
       }
 
+      // Check if trade effectively has 0 shares
+      const normalizedShares = Math.abs(trade.shares) < 1e-10 ? 0 : trade.shares;
+      if (normalizedShares === 0) {
+        toast.error('❌ Cannot exit trade with 0 shares', {
+          className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
+          progressClassName: '!bg-white !bg-opacity-50'
+        });
+        return;
+      }
+
       // Call the proper exit trade API
       const result = await exitTrade(currentUser!.uid, {
         ticker: trade.ticker,
@@ -325,7 +340,9 @@ export default function ActiveTrades() {
       
       // Refresh the trades list to reflect the changes
       const response = await getTrades(currentUser!.uid);
-      const activeTrades = response.trades.filter(trade => trade.status === 'open');
+      const activeTrades = response.trades.filter(trade => 
+        trade.status === 'open' && Math.abs(trade.shares) >= 1e-10 // Filter out trades with effectively 0 shares
+      );
       setTrades(activeTrades);
       
       // Show success toast

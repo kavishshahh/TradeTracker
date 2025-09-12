@@ -13,12 +13,14 @@ send_reminders.bat dry
 ### Mac/Linux Users:
 ```bash
 cd backend
+.\venv\scripts\activate
 ./send_reminders.sh dry
 ```
 
 ### Direct Python:
 ```bash
 cd backend
+.\venv\scripts\activate
 python send_reminder_emails.py --dry-run
 ```
 
@@ -194,6 +196,7 @@ python send_reminder_emails.py --live --days=30
 ```bash
 # Every Monday morning:
 cd backend
+.\venv\scripts\activate
 python send_reminder_emails.py --dry-run --days=7    # Check who's inactive
 python send_reminder_emails.py --live --days=7       # Send reminders
 ```

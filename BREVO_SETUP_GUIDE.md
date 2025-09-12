@@ -39,6 +39,7 @@ FROM_NAME=TradeTracker
 #### Install Dependencies:
 ```bash
 cd backend
+.\venv\scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -47,6 +48,7 @@ pip install -r requirements.txt
 1. Start your backend server:
    ```bash
    cd backend
+   .\venv\scripts\activate
    python main_firebase.py
    ```
 

@@ -1,13 +1,13 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { trackEvent, trackFormSubmission, trackPageView, trackTradeEvent } from '@/lib/analytics';
+import { trackEvent, trackFormSubmission, trackPageView, trackTradeEvent } from '@/lib/analyticsOptimized';
 import { addTrade } from '@/lib/api';
+import { useToast } from '@/lib/useToast';
 import { normalizeShares } from '@/lib/utils';
 import { CalendarIcon, DollarSign } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-toastify';
 
 interface TradeFormData {
   date: string;
@@ -26,6 +26,7 @@ export default function TradeForm() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [tradeType, setTradeType] = useState<'entry' | 'exit'>('entry');
   const { currentUser } = useAuth();
+  const { showToast } = useToast();
   
   const {
     register,
@@ -37,7 +38,9 @@ export default function TradeForm() {
     defaultValues: {
       status: 'closed',
       date: new Date().toISOString().split('T')[0],
-    }
+    },
+    mode: 'onBlur', // Only validate on blur instead of onChange
+    reValidateMode: 'onBlur'
   });
 
   const status = watch('status');
@@ -45,9 +48,12 @@ export default function TradeForm() {
   const sellPrice = watch('sell_price');
   const shares = watch('shares');
 
-  // Track page view when component mounts
+  // Track page view when component mounts (debounced)
   useEffect(() => {
-    trackPageView('/add-trade');
+    const timer = setTimeout(() => {
+      trackPageView('/add-trade');
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const onSubmit = async (data: TradeFormData) => {
@@ -91,10 +97,7 @@ export default function TradeForm() {
       reset();
       
       // Show success toast
-      toast.success('🚀 Trade added successfully!', {
-        className: '!bg-gradient-to-r !from-green-400 !to-green-600 !text-white',
-        progressClassName: '!bg-white !bg-opacity-50'
-      });
+      showToast('🚀 Trade added successfully!', 'success');
       
       // Auto-hide success message after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
@@ -105,24 +108,19 @@ export default function TradeForm() {
       trackFormSubmission('trade_form', false);
       trackEvent('trade_submission_error', 'trading', 'form_error');
       
-      toast.error('❌ Failed to add trade. Please try again!', {
-        className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
-        progressClassName: '!bg-white !bg-opacity-50'
-      });
+      showToast('❌ Failed to add trade. Please try again!', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Calculate potential P&L
-  const calculatePnL = () => {
+  // Calculate potential P&L (memoized)
+  const pnl = useMemo(() => {
     if (buyPrice && sellPrice && shares) {
       return (sellPrice - buyPrice) * shares;
     }
     return 0;
-  };
-
-  const pnl = calculatePnL();
+  }, [buyPrice, sellPrice, shares]);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -145,15 +143,15 @@ export default function TradeForm() {
           <div className="flex rounded-md shadow-sm">
             <button
               type="button"
-              onClick={() => {
+              onClick={useCallback(() => {
                 setTradeType('entry');
                 reset({ 
                   status: 'closed',
                   date: new Date().toISOString().split('T')[0],
                 });
-                // Track trade type toggle
-                trackEvent('trade_type_toggle', 'trading', 'entry');
-              }}
+                // Track trade type toggle (debounced)
+                setTimeout(() => trackEvent('trade_type_toggle', 'trading', 'entry'), 50);
+              }, [reset])}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
                 tradeType === 'entry'
                   ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
@@ -164,15 +162,15 @@ export default function TradeForm() {
             </button>
             <button
               type="button"
-              onClick={() => {
+              onClick={useCallback(() => {
                 setTradeType('exit');
                 reset({ 
                   status: 'closed',
                   date: new Date().toISOString().split('T')[0],
                 });
-                // Track trade type toggle
-                trackEvent('trade_type_toggle', 'trading', 'exit');
-              }}
+                // Track trade type toggle (debounced)
+                setTimeout(() => trackEvent('trade_type_toggle', 'trading', 'exit'), 50);
+              }, [reset])}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
                 tradeType === 'exit'
                   ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
@@ -241,10 +239,10 @@ export default function TradeForm() {
             <div className="mt-1 flex rounded-md shadow-sm">
               <button
                 type="button"
-                onClick={() => {
+                onClick={useCallback(() => {
                   reset({ ...watch(), status: 'open' });
-                  trackEvent('trade_status_toggle', 'trading', 'open');
-                }}
+                  setTimeout(() => trackEvent('trade_status_toggle', 'trading', 'open'), 50);
+                }, [reset, watch])}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
                   status === 'open'
                     ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'
@@ -255,10 +253,10 @@ export default function TradeForm() {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={useCallback(() => {
                   reset({ ...watch(), status: 'closed' });
-                  trackEvent('trade_status_toggle', 'trading', 'closed');
-                }}
+                  setTimeout(() => trackEvent('trade_status_toggle', 'trading', 'closed'), 50);
+                }, [reset, watch])}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
                   status === 'closed'
                     ? 'bg-blue-50 dark:bg-blue-900/50 border-blue-500 dark:border-blue-400 text-blue-700 dark:text-blue-300'

@@ -1,17 +1,17 @@
-
-
-'use client';
-
 import Layout from '@/components/Layout';
-import LoadingSkeleton from '@/components/LoadingSkeleton';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import dynamic from 'next/dynamic';
+import TradeForm from '@/components/TradeForm';
+import type { Metadata } from 'next';
 
-// Lazy load TradeForm to reduce initial bundle size
-const TradeForm = dynamic(() => import('@/components/TradeForm'), {
-  loading: () => <LoadingSkeleton />,
-  ssr: false
-});
+export const metadata: Metadata = {
+  title: 'Add New Trade',
+  description: 'Record new trades and manage active positions. Input trade details, set stop losses, take profits, and track your current market positions.',
+  openGraph: {
+    title: 'Add New Trade - TradeBud',
+    description: 'Record new trades and manage active positions in your trading journal.',
+    url: '/add-trade',
+  },
+};
 
 export default function AddTradePage() {
   return (

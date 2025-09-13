@@ -1,10 +1,12 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { trackNavigation, trackUserEngagement } from '@/lib/analyticsOptimized';
+import { trackNavigation, trackUserEngagement } from '@/lib/analytics';
 import { Activity, BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -135,6 +137,21 @@ export default function Layout({ children }: LayoutProps) {
         </main>
       </div>
 
+      {/* Toast Container */}
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        toastClassName="relative flex p-1 min-h-10 rounded-md justify-between overflow-hidden cursor-pointer bg-white shadow-lg border border-gray-200"
+        progressClassName="!bg-gradient-to-r !from-blue-500 !to-purple-500"
+      />
     </div>
   );
 }

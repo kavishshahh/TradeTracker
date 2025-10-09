@@ -1,4 +1,4 @@
-import { FeesConfig, Trade, TradeMetrics } from '@/types/trade';
+import { FeesConfig, Trade, TradeMetrics, StockCategory, StockChart } from '@/types/trade';
 import { auth } from './firebase';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
@@ -357,3 +357,123 @@ export const sendWeeklySummary = async (email: string, userName?: string, summar
     throw new Error(`Failed to send weekly summary: ${error}`);
   }
 };
+
+// Stock Categories API functions
+export async function createStockCategory(category: Omit<StockCategory, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<{ message: string; category_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-categories`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(category),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to create stock category');
+  }
+  
+  return response.json();
+}
+
+export async function getStockCategories(userId: string): Promise<{ categories: StockCategory[] }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-categories/${userId}`, { headers });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to fetch stock categories');
+  }
+  
+  return response.json();
+}
+
+export async function updateStockCategory(categoryId: string, category: Partial<StockCategory>): Promise<{ message: string; category_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-categories/${categoryId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(category),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update stock category');
+  }
+  
+  return response.json();
+}
+
+export async function deleteStockCategory(categoryId: string): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-categories/${categoryId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to delete stock category');
+  }
+  
+  return response.json();
+}
+
+// Stock Charts API functions
+export async function createStockChart(chart: Omit<StockChart, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<{ message: string; chart_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-charts`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(chart),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to create stock chart');
+  }
+  
+  return response.json();
+}
+
+export async function getStockChartsByCategory(categoryId: string): Promise<{ charts: StockChart[] }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-charts/category/${categoryId}`, { headers });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to fetch stock charts');
+  }
+  
+  return response.json();
+}
+
+export async function updateStockChart(chartId: string, chart: Partial<StockChart>): Promise<{ message: string; chart_id: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-charts/${chartId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(chart),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update stock chart');
+  }
+  
+  return response.json();
+}
+
+export async function deleteStockChart(chartId: string): Promise<{ message: string }> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/stock-charts/${chartId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to delete stock chart');
+  }
+  
+  return response.json();
+}

@@ -47,3 +47,25 @@ export interface DailyStats {
   trade_count: number;
   trades: Trade[];
 }
+
+export interface StockCategory {
+  id?: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface StockChart {
+  id?: string;
+  user_id: string;
+  category_id: string;
+  stock_symbol: string;
+  stock_name?: string;
+  before_tradingview_url?: string;
+  after_tradingview_url?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}

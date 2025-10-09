@@ -190,6 +190,26 @@ class FeesConfig(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
+class StockCategory(BaseModel):
+    id: Optional[str] = None
+    user_id: str
+    name: str
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class StockChart(BaseModel):
+    id: Optional[str] = None
+    user_id: str
+    category_id: str
+    stock_symbol: str
+    stock_name: Optional[str] = None
+    before_tradingview_url: Optional[str] = None
+    after_tradingview_url: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
 
 # Mock data fallback (same as main_simple.py)
 MOCK_TRADES = [
@@ -1568,6 +1588,288 @@ async def send_weekly_summary(request: WeeklySummaryRequest, current_user: str =
         raise
     except Exception as e:
         print(f"❌ Error sending weekly summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Stock Categories Endpoints
+@app.post("/stock-categories")
+async def create_stock_category(category: StockCategory, current_user: str = Depends(get_current_user)):
+    """Create a new stock category"""
+    try:
+        # Set user_id from authenticated user
+        category.user_id = current_user
+        category.created_at = datetime.now()
+        category.updated_at = datetime.now()
+        
+        if db:
+            # Use Firebase Firestore
+            categories_ref = db.collection('stock_categories')
+            category_data = category.model_dump(exclude={'id'})
+            doc_ref = categories_ref.add(category_data)
+            category_id = doc_ref[1].id
+            
+            return {"message": "Stock category created successfully", "category_id": category_id}
+        else:
+            # Mock data fallback
+            return {"message": "Stock category created successfully (mock)", "category_id": "mock_id"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating stock category: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/stock-categories/{user_id}")
+async def get_stock_categories(user_id: str, current_user: str = Depends(get_current_user)):
+    """Get all stock categories for a user"""
+    try:
+        # Ensure user can only access their own data
+        if user_id != current_user:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if db:
+            # Use Firebase Firestore
+            categories_ref = db.collection('stock_categories')
+            query = categories_ref.where("user_id", "==", user_id)
+            docs = query.get()
+            
+            categories = []
+            for doc in docs:
+                category_data = doc.to_dict()
+                category_data['id'] = doc.id
+                categories.append(category_data)
+            
+            return {"categories": categories}
+        else:
+            # Mock data fallback
+            return {"categories": []}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting stock categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/stock-categories/{category_id}")
+async def update_stock_category(category_id: str, category: StockCategory, current_user: str = Depends(get_current_user)):
+    """Update a stock category"""
+    try:
+        # Set user_id from authenticated user
+        category.user_id = current_user
+        category.updated_at = datetime.now()
+        
+        if db:
+            # Use Firebase Firestore
+            categories_ref = db.collection('stock_categories')
+            doc_ref = categories_ref.document(category_id)
+            
+            # Check if category exists and belongs to user
+            doc = doc_ref.get()
+            if not doc.exists:
+                raise HTTPException(status_code=404, detail="Category not found")
+            
+            category_data = doc.to_dict()
+            if category_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Update category
+            update_data = category.model_dump(exclude={'id', 'created_at'})
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+            doc_ref.update(update_data)
+            
+            return {"message": "Stock category updated successfully", "category_id": category_id}
+        else:
+            # Mock data fallback
+            return {"message": "Stock category updated successfully (mock)", "category_id": category_id}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating stock category: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/stock-categories/{category_id}")
+async def delete_stock_category(category_id: str, current_user: str = Depends(get_current_user)):
+    """Delete a stock category"""
+    try:
+        if db:
+            # Use Firebase Firestore
+            categories_ref = db.collection('stock_categories')
+            doc_ref = categories_ref.document(category_id)
+            
+            # Check if category exists and belongs to user
+            doc = doc_ref.get()
+            if not doc.exists:
+                raise HTTPException(status_code=404, detail="Category not found")
+            
+            category_data = doc.to_dict()
+            if category_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Also delete all charts in this category
+            charts_ref = db.collection('stock_charts')
+            charts_query = charts_ref.where("category_id", "==", category_id)
+            charts_docs = charts_query.get()
+            
+            for chart_doc in charts_docs:
+                chart_doc.reference.delete()
+            
+            # Delete category
+            doc_ref.delete()
+            
+            return {"message": "Stock category and associated charts deleted successfully"}
+        else:
+            # Mock data fallback
+            return {"message": "Stock category deleted successfully (mock)"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting stock category: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Stock Charts Endpoints
+@app.post("/stock-charts")
+async def create_stock_chart(chart: StockChart, current_user: str = Depends(get_current_user)):
+    """Create a new stock chart"""
+    try:
+        # Set user_id from authenticated user
+        chart.user_id = current_user
+        chart.created_at = datetime.now()
+        chart.updated_at = datetime.now()
+        
+        if db:
+            # Verify category exists and belongs to user
+            categories_ref = db.collection('stock_categories')
+            category_doc = categories_ref.document(chart.category_id).get()
+            if not category_doc.exists:
+                raise HTTPException(status_code=404, detail="Category not found")
+            
+            category_data = category_doc.to_dict()
+            if category_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied to category")
+            
+            # Use Firebase Firestore
+            charts_ref = db.collection('stock_charts')
+            chart_data = chart.model_dump(exclude={'id'})
+            doc_ref = charts_ref.add(chart_data)
+            chart_id = doc_ref[1].id
+            
+            return {"message": "Stock chart created successfully", "chart_id": chart_id}
+        else:
+            # Mock data fallback
+            return {"message": "Stock chart created successfully (mock)", "chart_id": "mock_id"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error creating stock chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/stock-charts/category/{category_id}")
+async def get_stock_charts_by_category(category_id: str, current_user: str = Depends(get_current_user)):
+    """Get all stock charts for a category"""
+    try:
+        if db:
+            # Verify category exists and belongs to user
+            categories_ref = db.collection('stock_categories')
+            category_doc = categories_ref.document(category_id).get()
+            if not category_doc.exists:
+                raise HTTPException(status_code=404, detail="Category not found")
+            
+            category_data = category_doc.to_dict()
+            if category_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied to category")
+            
+            # Use Firebase Firestore
+            charts_ref = db.collection('stock_charts')
+            query = charts_ref.where("category_id", "==", category_id)
+            docs = query.get()
+            
+            charts = []
+            for doc in docs:
+                chart_data = doc.to_dict()
+                chart_data['id'] = doc.id
+                charts.append(chart_data)
+            
+            return {"charts": charts}
+        else:
+            # Mock data fallback
+            return {"charts": []}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting stock charts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/stock-charts/{chart_id}")
+async def update_stock_chart(chart_id: str, chart: StockChart, current_user: str = Depends(get_current_user)):
+    """Update a stock chart"""
+    try:
+        # Set user_id from authenticated user
+        chart.user_id = current_user
+        chart.updated_at = datetime.now()
+        
+        if db:
+            # Use Firebase Firestore
+            charts_ref = db.collection('stock_charts')
+            doc_ref = charts_ref.document(chart_id)
+            
+            # Check if chart exists and belongs to user
+            doc = doc_ref.get()
+            if not doc.exists:
+                raise HTTPException(status_code=404, detail="Chart not found")
+            
+            chart_data = doc.to_dict()
+            if chart_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Update chart
+            update_data = chart.model_dump(exclude={'id', 'created_at'})
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+            doc_ref.update(update_data)
+            
+            return {"message": "Stock chart updated successfully", "chart_id": chart_id}
+        else:
+            # Mock data fallback
+            return {"message": "Stock chart updated successfully (mock)", "chart_id": chart_id}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating stock chart: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/stock-charts/{chart_id}")
+async def delete_stock_chart(chart_id: str, current_user: str = Depends(get_current_user)):
+    """Delete a stock chart"""
+    try:
+        if db:
+            # Use Firebase Firestore
+            charts_ref = db.collection('stock_charts')
+            doc_ref = charts_ref.document(chart_id)
+            
+            # Check if chart exists and belongs to user
+            doc = doc_ref.get()
+            if not doc.exists:
+                raise HTTPException(status_code=404, detail="Chart not found")
+            
+            chart_data = doc.to_dict()
+            if chart_data.get('user_id') != current_user:
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Delete chart
+            doc_ref.delete()
+            
+            return {"message": "Stock chart deleted successfully"}
+        else:
+            # Mock data fallback
+            return {"message": "Stock chart deleted successfully (mock)"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error deleting stock chart: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")

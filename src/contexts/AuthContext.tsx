@@ -4,10 +4,12 @@ import { auth } from '@/lib/firebase';
 import {
     createUserWithEmailAndPassword,
     EmailAuthProvider,
+    GoogleAuthProvider,
     User as FirebaseUser,
     onAuthStateChanged,
     reauthenticateWithCredential,
     signInWithEmailAndPassword,
+    signInWithPopup,
     signOut,
     updatePassword
 } from 'firebase/auth';
@@ -18,6 +20,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string) => Promise<any>;
   signIn: (email: string, password: string) => Promise<any>;
+  signInWithGoogle: () => Promise<any>;
   logout: () => Promise<any>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<any>;
 }
@@ -46,6 +49,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   function signIn(email: string, password: string) {
     return signInWithEmailAndPassword(auth, email, password);
+  }
+
+  function signInWithGoogle() {
+    const provider = new GoogleAuthProvider();
+    return signInWithPopup(auth, provider);
   }
 
   function logout() {
@@ -83,6 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     logout,
     changePassword
   };

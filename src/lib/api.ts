@@ -357,3 +357,133 @@ export const sendWeeklySummary = async (email: string, userName?: string, summar
     throw new Error(`Failed to send weekly summary: ${error}`);
   }
 };
+
+interface UsdtRatesResponse {
+  tether: {
+    usd: number;
+    inr: number;
+    eur: number;
+    sgd: number;
+  };
+}
+
+export interface UsdtFxRates {
+  usd: number;
+  inr: number;
+  eur: number;
+  sgd: number;
+}
+
+const USDT_FX_CACHE_TTL_MS = 5 * 60 * 1000;
+const USDT_FX_STORAGE_KEY = 'tradebud_usdt_fx_rates_cache_v1';
+let usdtFxRatesCache: { data: UsdtFxRates; fetchedAt: number } | null = null;
+let usdtFxRatesRequestInFlight: Promise<UsdtFxRates> | null = null;
+
+function getUsdtFxRatesFromStorage(): { data: UsdtFxRates; fetchedAt: number } | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(USDT_FX_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as { data?: UsdtFxRates; fetchedAt?: number };
+    if (!parsed?.data || !parsed?.fetchedAt) {
+      return null;
+    }
+
+    const { data, fetchedAt } = parsed;
+    if (!data.usd || !data.inr || !data.eur || !data.sgd) {
+      return null;
+    }
+
+    return {
+      data,
+      fetchedAt,
+    };
+  } catch (error) {
+    console.warn('Failed to read USDT FX cache from localStorage:', error);
+    return null;
+  }
+}
+
+function setUsdtFxRatesToStorage(cacheEntry: { data: UsdtFxRates; fetchedAt: number }) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(USDT_FX_STORAGE_KEY, JSON.stringify(cacheEntry));
+  } catch (error) {
+    console.warn('Failed to write USDT FX cache to localStorage:', error);
+  }
+}
+
+export async function getUsdtFxRates(options?: { forceRefresh?: boolean }): Promise<UsdtFxRates> {
+  const forceRefresh = options?.forceRefresh ?? false;
+  const now = Date.now();
+
+  if (!forceRefresh && !usdtFxRatesCache) {
+    const storageCache = getUsdtFxRatesFromStorage();
+    if (storageCache) {
+      usdtFxRatesCache = storageCache;
+    }
+  }
+
+  if (!forceRefresh && usdtFxRatesCache && now - usdtFxRatesCache.fetchedAt < USDT_FX_CACHE_TTL_MS) {
+    return usdtFxRatesCache.data;
+  }
+
+  if (!forceRefresh && usdtFxRatesRequestInFlight) {
+    return usdtFxRatesRequestInFlight;
+  }
+
+  usdtFxRatesRequestInFlight = (async () => {
+  const response = await fetch(
+    'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd,inr,eur,sgd',
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch USDT FX rates');
+  }
+
+  const data = (await response.json()) as UsdtRatesResponse;
+  const tetherRates = data?.tether;
+
+  if (!tetherRates?.usd || !tetherRates?.inr || !tetherRates?.eur || !tetherRates?.sgd) {
+    throw new Error('Invalid USDT FX rates response');
+  }
+
+  const normalizedRates = {
+    usd: tetherRates.usd,
+    inr: tetherRates.inr,
+    eur: tetherRates.eur,
+    sgd: tetherRates.sgd,
+  };
+
+  usdtFxRatesCache = {
+    data: normalizedRates,
+    fetchedAt: Date.now(),
+  };
+  setUsdtFxRatesToStorage(usdtFxRatesCache);
+
+  return normalizedRates;
+  })();
+
+  try {
+    return await usdtFxRatesRequestInFlight;
+  } finally {
+    usdtFxRatesRequestInFlight = null;
+  }
+}
+

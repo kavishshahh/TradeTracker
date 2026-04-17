@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { trackNavigation, trackUserEngagement } from '@/lib/analytics';
-import { Activity, BarChart3, BookOpen, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, Calculator, Calendar, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
@@ -26,6 +26,7 @@ export default function Layout({ children }: LayoutProps) {
     { name: 'Calendar', href: '/calendar', icon: Calendar },
     { name: 'Journal', href: '/journal', icon: BookOpen },
     { name: 'Monthly Returns', href: '/monthly-returns', icon: TrendingUp },
+    { name: 'Qty Calculator', href: '/qty-calculator', icon: Calculator },
   ];
 
   // Track navigation changes

@@ -21,6 +21,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  icons: {
+    icon: [{ url: '/tradebud-icon.svg', type: 'image/svg+xml' }],
+    shortcut: '/favicon.ico',
+  },
   title: {
     template: '%s | TradeBud',
     default: 'TradeBud — A clearer view of your trading'

@@ -16,6 +16,10 @@ const siteUrl = "https://tradebud.xyz";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  icons: {
+    icon: [{ url: "/tradebud-icon.svg", type: "image/svg+xml" }],
+    shortcut: "/favicon.ico",
+  },
   applicationName: "TradeBud",
   title: {
     default: "TradeBud — Free Trading Journal and Performance Analytics",

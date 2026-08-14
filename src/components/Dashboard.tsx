@@ -321,6 +321,13 @@ export default function Dashboard() {
         }
       },
       {
+        label: 'Last Quarter',
+        range: {
+          from: new Date(currentYear, Math.floor(currentMonth / 3) * 3 - 3, 1),
+          to: new Date(currentYear, Math.floor(currentMonth / 3) * 3, 0)
+        }
+      },
+      {
         label: 'This Year',
         range: {
           from: new Date(currentYear, 0, 1),
@@ -387,26 +394,57 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Date Range Selector */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Select Date Range</h3>
+        {/* Date filters stay available when the selected period has no data. */}
+        <div className="dashboard-filter bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quick Date Filters</label>
             <button
               onClick={toggleCalendar}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              className="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
               type="button"
             >
-              <CalendarIcon className="h-4 w-4 mr-2" />
-              {isCalendarOpen ? 'Close Calendar' : 'Open Calendar'}
+              <CalendarIcon className="h-3 w-3 mr-1" />
+              Custom Range
             </button>
+          </div>
+
+          <div className="dashboard-filter-shortcuts flex flex-wrap gap-2 mb-3">
+            <button
+              onClick={clearDateFilter}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                !selectedDateRange
+                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              } border`}
+            >
+              All Time
+            </button>
+            {getMonthShortcuts().map((shortcut) => {
+              const isSelected = selectedDateRange?.from?.getTime() === shortcut.range.from?.getTime() &&
+                                selectedDateRange?.to?.getTime() === shortcut.range.to?.getTime();
+
+              return (
+                <button
+                  key={shortcut.label}
+                  onClick={() => handleMonthShortcut(shortcut)}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    isSelected
+                      ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  } border`}
+                >
+                  {shortcut.label}
+                </button>
+              );
+            })}
           </div>
           
           {isCalendarOpen && (
-            <div ref={calendarRef} className="relative">
+            <div ref={calendarRef} className="relative border-t border-gray-200 dark:border-gray-700 pt-3">
               {/* Close Button */}
               <button
                 onClick={closeCalendar}
-                className="absolute top-2 right-2 p-1 hover:bg-gray-100 rounded-md z-10"
+                className="absolute top-4 right-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md z-10"
                 aria-label="Close calendar"
               >
                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -423,10 +461,10 @@ export default function Dashboard() {
               />
               
               {/* Filter Button */}
-              <div className="mt-4 flex justify-end">
+              <div className="mt-3 flex justify-end">
                 <button
                   onClick={handleApplyFilter}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
                   type="button"
                 >
                   Apply Filter

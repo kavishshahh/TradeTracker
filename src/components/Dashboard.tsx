@@ -719,8 +719,8 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
 
   // Prepare win/loss pie chart data
   const pieData = [
-    { name: 'Winning Trades', value: displayMetrics?.winning_trades || 0, color: '#10B981' },
-    { name: 'Losing Trades', value: displayMetrics?.losing_trades || 0, color: '#EF4444' }
+    { name: 'Winning Trades', value: displayMetrics?.winning_trades || 0, color: '#1F6B46' },
+    { name: 'Losing Trades', value: displayMetrics?.losing_trades || 0, color: '#A4483F' }
   ];
 
   // Prepare radar chart data for trading score
@@ -950,17 +950,17 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
                         day: 'numeric' 
                       })}
                       contentStyle={{
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #e2e8f0',
+                        backgroundColor: '#fbfaf6',
+                        border: '1px solid #d5d0c4',
                         borderRadius: '6px'
                       }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="equity" 
-                      stroke="#3B82F6" 
+                      stroke="#1F6B46"
                       strokeWidth={2}
-                      dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                      dot={{ fill: '#1F6B46', strokeWidth: 2, r: 4 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -990,21 +990,21 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
                         day: 'numeric' 
                       })}
                       contentStyle={{
-                        backgroundColor: '#f8fafc',
-                        border: '1px solid #e2e8f0',
+                        backgroundColor: '#fbfaf6',
+                        border: '1px solid #d5d0c4',
                         borderRadius: '6px'
                       }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="equity" 
-                      stroke="#10B981" 
+                      stroke="#1F6B46"
                       strokeWidth={2}
                       dot={(props) => {
                         const { payload } = props;
-                        let color = '#10B981'; // Default green
-                        if (payload?.type === 'current') color = '#F59E0B'; // Orange for current
-                        if (payload?.type === 'month_start') color = '#8B5CF6'; // Purple for month starts
+                        let color = '#1F6B46';
+                        if (payload?.type === 'current') color = '#A67B32';
+                        if (payload?.type === 'month_start') color = '#687A6D';
                         return <circle {...props} fill={color} r={4} stroke={color} strokeWidth={2} />;
                       }}
                     />
@@ -1045,7 +1045,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
                 labelLine={false}
                 label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                 outerRadius={80}
-                fill="#8884d8"
+                fill="#687A6D"
                 dataKey="value"
               >
                 {pieData.map((entry, index) => (
@@ -1068,8 +1068,8 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
               <Radar
                 name="Score"
                 dataKey="A"
-                stroke="#3B82F6"
-                fill="#3B82F6"
+                stroke="#1F6B46"
+                fill="#1F6B46"
                 fillOpacity={0.2}
               />
             </RadarChart>

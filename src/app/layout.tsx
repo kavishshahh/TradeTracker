@@ -22,10 +22,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | TradeBud - Professional Trading Journal',
-    default: 'TradeBud - Professional Trading Journal & Performance Analytics'
+    template: '%s | TradeBud',
+    default: 'TradeBud — A clearer view of your trading'
   },
-  description: "Advanced trading journal platform with real-time analytics, performance tracking, and comprehensive trade management. Track your trading journey, analyze profits/losses, and improve your trading strategy with data-driven insights.",
+  description: "Journal your trades, measure performance, account for fees, and turn your trading history into a process you can trust.",
   keywords: ["trading journal", "trading analytics", "trade tracker", "trading performance", "stock trading", "forex trading", "investment tracking", "trading dashboard", "portfolio analysis", "trading statistics"],
   authors: [{ name: "TradeBud" }],
   creator: "TradeBud",
@@ -40,8 +40,8 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'TradeBud - Professional Trading Journal & Performance Analytics',
-    description: 'Advanced trading journal platform with real-time analytics, performance tracking, and comprehensive trade management.',
+    title: 'TradeBud — A clearer view of your trading',
+    description: 'Journal decisions, measure performance, and build a trading process you can trust.',
     url: '/',
     siteName: 'TradeBud',
     locale: 'en_US',
@@ -57,8 +57,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'TradeBud - Professional Trading Journal',
-    description: 'Advanced trading journal platform with real-time analytics and performance tracking.',
+    title: 'TradeBud — A clearer view of your trading',
+    description: 'Journal decisions, measure performance, and build a trading process you can trust.',
     images: ['/og-image.png'],
   },
   robots: {

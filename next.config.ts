@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: process.cwd(),
+  },
+
   // Enable experimental features for better SEO
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts'],

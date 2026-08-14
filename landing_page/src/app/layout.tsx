@@ -13,20 +13,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TradeBud - Professional Trading Journal | Track Your Trading Journey",
-  description: "Professional trading journal with comprehensive analytics and performance tracking. Document, analyze, and learn from every trade - completely free. Start tracking your trading journey today.",
+  metadataBase: new URL("https://tradebud.xyz"),
+  title: "TradeBud — A clearer view of your trading",
+  description: "Journal your trades, measure performance, account for fees, and turn your trading history into a process you can trust.",
   keywords: "trading journal, trading analytics, performance tracking, trade management, risk management, trading calendar, free trading tools",
   authors: [{ name: "Kavish Shah" }],
   openGraph: {
-    title: "TradeBud - Professional Trading Journal",
-    description: "Track your trading journey with comprehensive analytics and performance tracking. Completely free.",
+    title: "TradeBud — A clearer view of your trading",
+    description: "Journal decisions, measure performance, and build a trading process you can trust.",
     type: "website",
     locale: "en_US",
+    images: [{ url: "/og.png", width: 1736, height: 907, alt: "TradeBud — Your trading history should teach you something." }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "TradeBud - Professional Trading Journal",
-    description: "Track your trading journey with comprehensive analytics and performance tracking. Completely free.",
+    title: "TradeBud — A clearer view of your trading",
+    description: "Journal decisions, measure performance, and build a trading process you can trust.",
+    images: ["/og.png"],
   },
   robots: "index, follow",
 };

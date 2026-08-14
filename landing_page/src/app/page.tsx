@@ -1,394 +1,302 @@
 'use client';
 
-import { ArrowRight, BarChart3, BookOpen, Calculator, Calendar, CheckCircle, Target, TrendingUp } from "lucide-react";
-import React, { useState } from "react";
+import {
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  Check,
+  CircleDollarSign,
+  Menu,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+  X,
+} from 'lucide-react';
+import { useState } from 'react';
 
-// Feature highlight component
-function FeatureCard({ icon: Icon, title, description }: { icon: React.ComponentType<{ className?: string }>, title: string, description: string }) {
+const APP_URL = 'https://app.tradebud.xyz';
+
+const features = [
+  {
+    number: '01',
+    icon: BarChart3,
+    title: 'Know what is working',
+    description:
+      'See win rate, profit factor, expectancy, average win and loss, and your equity curve in one clean view.',
+  },
+  {
+    number: '02',
+    icon: BookOpen,
+    title: 'Keep the context',
+    description:
+      'Record the setup, thesis, execution, and notes behind each trade—not just the final P&L.',
+  },
+  {
+    number: '03',
+    icon: ShieldCheck,
+    title: 'Account for real costs',
+    description:
+      'Track brokerage and exchange fees so your results reflect what actually reached your account.',
+  },
+];
+
+const workflow = [
+  ['Log', 'Add the trade, position size, entry, exit, and your reasoning.'],
+  ['Review', 'Use calendar and journal views to spot recurring decisions.'],
+  ['Improve', 'Turn your history into rules you can repeat—and mistakes you can avoid.'],
+];
+
+function BrandMark() {
   return (
-    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 hover:border-white/30 transition-all duration-300 hover:transform hover:scale-105 text-center">
-      <div className="bg-gradient-to-r from-blue-500 to-cyan-500 w-12 h-12 rounded-lg flex items-center justify-center mb-4 mx-auto">
-        <Icon className="h-6 w-6 text-white" />
-      </div>
-      <h3 className="text-xl font-semibold text-white mb-3">{title}</h3>
-      <p className="text-gray-300 leading-relaxed">{description}</p>
-    </div>
+    <span className="brand-mark" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
   );
 }
 
-// Testimonial component
-// Testimonial component - removed since not used
-// function TestimonialCard({ quote, author, role, rating }: { quote: string, author: string, role: string, rating: number }) {
-//   return (
-//     <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
-//       <div className="flex mb-4">
-//         {[...Array(rating)].map((_, i) => (
-//           <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
-//         ))}
-//       </div>
-//       <p className="text-gray-300 mb-4 italic">&ldquo;{quote}&rdquo;</p>
-//       <div>
-//         <p className="text-white font-semibold">{author}</p>
-//         <p className="text-gray-400 text-sm">{role}</p>
-//       </div>
-//     </div>
-//   );
-// }
+function ProductPreview() {
+  const chartPath =
+    'M8 142 C42 139, 57 128, 84 132 S125 119, 151 121 S194 96, 222 104 S267 72, 292 78 S335 55, 362 62 S405 35, 442 44';
 
-// Benefit item component
-function BenefitItem({ text }: { text: string }) {
-  const CheckIcon = CheckCircle as React.ComponentType<{ className?: string }>;
   return (
-    <div className="flex items-center space-x-3">
-      <CheckIcon className="h-5 w-5 text-green-400 flex-shrink-0" />
-      <span className="text-gray-300">{text}</span>
+    <div className="product-frame" aria-label="TradeBud dashboard preview">
+      <div className="app-sidebar">
+        <div className="sidebar-logo"><BrandMark /></div>
+        {[BarChart3, CircleDollarSign, CalendarDays, BookOpen].map((Icon, index) => (
+          <span className={index === 0 ? 'side-icon active' : 'side-icon'} key={index}>
+            <Icon size={16} strokeWidth={1.8} />
+          </span>
+        ))}
+      </div>
+
+      <div className="app-main">
+        <div className="preview-head">
+          <div>
+            <small>OVERVIEW</small>
+            <strong>Trading performance</strong>
+          </div>
+          <span>May 2026</span>
+        </div>
+
+        <div className="metric-row">
+          <div><small>Net P&amp;L</small><strong className="positive">+$4,286</strong><em>+12.4%</em></div>
+          <div><small>Win rate</small><strong>63.8%</strong><em>30 / 47 trades</em></div>
+          <div><small>Profit factor</small><strong>2.14</strong><em>Healthy</em></div>
+        </div>
+
+        <div className="chart-card">
+          <div className="chart-title"><span>Account equity</span><small>$38,420</small></div>
+          <div className="chart-wrap">
+            <div className="chart-grid"><span /><span /><span /><span /></div>
+            <svg viewBox="0 0 450 160" preserveAspectRatio="none" role="img" aria-label="Upward account equity chart">
+              <path className="chart-area" d={`${chartPath} L442 160 L8 160 Z`} />
+              <path className="chart-line" d={chartPath} />
+            </svg>
+          </div>
+          <div className="chart-labels"><span>May 01</span><span>May 08</span><span>May 15</span><span>May 22</span><span>May 29</span></div>
+        </div>
+
+        <div className="trade-strip">
+          <div><span className="ticker">NVDA</span><small>Breakout · Long</small></div>
+          <span>May 28</span><strong className="positive">+$618.40</strong>
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function Home() {
-  const [email, setEmail] = useState('');
-
-  const handleGetStarted = () => {
-    // For now, redirect to the main app. In production, this would handle sign-up
-    window.location.href = 'https://app.tradebud.xyz';
-  };
-
-  const handleEmailSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // For now, this would integrate with your email service
-    // In production, you'd use a service like SendGrid, Mailgun, or your own backend
-    console.log('Support request submitted:', email);
-    
-    // Create mailto link for immediate support
-    const mailtoLink = `mailto:kavishshah30@gmail.com?subject=TradeBud Support Request&body=Hi, I need help with TradeBud. Please contact me at: ${email}`;
-    window.open(mailtoLink, '_blank');
-    
-    setEmail('');
-    alert('Opening email client. If it doesn\'t open, please email us directly at kavishshah30@gmail.com');
-  };
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black">
-      {/* Navigation */}
-      <nav className="relative z-50 bg-black/20 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-2 cursor-pointer">
-              <div className="bg-gradient-to-r from-blue-500 to-cyan-500 w-8 h-8 rounded-lg flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-white">TradeBud</span>
-            </div>
-            <div className="hidden md:flex space-x-8">
-              <a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a>
-              <a href="#benefits" className="text-gray-300 hover:text-white transition-colors">Benefits</a>
-              <a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a>
-            </div>
-            <button 
-              onClick={handleGetStarted}
-              className="cursor-pointer bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-6 py-2 rounded-lg hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 font-semibold"
-            >
-              Start Free
-            </button>
-          </div>
-        </div>
-      </nav>
+    <main>
+      <header className="site-header">
+        <div className="shell nav-wrap">
+          <a className="brand" href="#top" aria-label="TradeBud home">
+            <BrandMark />
+            <span>TradeBud</span>
+          </a>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden py-20 lg:py-32">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 backdrop-blur-3xl"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-              Track Your Trading 
-              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent"> Journey</span>
-            </h1>
-            <p className="text-xl md:text-2xl text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
-              Professional trading journal with comprehensive analytics and performance tracking. 
-              Document, analyze, and learn from every trade - completely free.
+          <nav className="desktop-nav" aria-label="Main navigation">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#pricing">Pricing</a>
+          </nav>
+
+          <div className="nav-actions">
+            <a className="text-link" href={APP_URL}>Sign in</a>
+            <a className="button button-small" href={APP_URL}>Start tracking</a>
+          </div>
+
+          <button
+            className="menu-button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+
+        {menuOpen && (
+          <nav className="mobile-nav" aria-label="Mobile navigation">
+            <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
+            <a href="#how-it-works" onClick={() => setMenuOpen(false)}>How it works</a>
+            <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
+            <a href={APP_URL}>Sign in</a>
+            <a className="button" href={APP_URL}>Start tracking</a>
+          </nav>
+        )}
+      </header>
+
+      <section className="hero" id="top">
+        <div className="shell hero-grid">
+          <div className="hero-copy">
+            <p className="eyebrow"><span /> A clearer view of your trading</p>
+            <h1>Your trading history should teach you something.</h1>
+            <p className="hero-lede">
+              TradeBud turns every trade into useful feedback. Journal decisions, measure performance, and build a process you can trust.
             </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-              <button 
-                onClick={handleGetStarted}
-                className="cursor-pointer bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center"
-              >
-                Start
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
-              {/* <button className="border border-white/30 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:bg-white/10 transition-all duration-300 flex items-center">
-                Watch Demo
-                <ChevronRight className="ml-2 h-5 w-5" />
-              </button> */}
+            <div className="hero-actions">
+              <a className="button button-large" href={APP_URL}>
+                Start tracking free <ArrowRight size={18} />
+              </a>
+              <a className="quiet-link" href="#features">Explore the product</a>
             </div>
+            <div className="proof-line">
+              <span><Check size={15} /> No credit card</span>
+              <span><Check size={15} /> Unlimited trades</span>
+              <span><Check size={15} /> Fees included</span>
+            </div>
+          </div>
 
-            {/* Features highlight */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mt-12">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">100%</div>
-                <div className="text-gray-400">Free</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">All</div>
-                <div className="text-gray-400">Features Included</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-white mb-2">No</div>
-                <div className="text-gray-400">Hidden Costs</div>
-              </div>
-            </div>
+          <div className="preview-column">
+            <ProductPreview />
+            <p className="preview-note"><span>LIVE INSIGHT</span> Net results after estimated trading fees</p>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-20 bg-black/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-              Everything You Need to 
-              <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent"> Succeed</span>
-            </h2>
-            <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-              Comprehensive trading tools designed by traders, for traders. Completely free with all features included.
-            </p>
+      <section className="signal-bar" aria-label="TradeBud capabilities">
+        <div className="shell signal-grid">
+          <p>Built for deliberate traders</p>
+          <span>Performance analytics</span>
+          <span>Trade journal</span>
+          <span>Risk tracking</span>
+          <span>Fee calculations</span>
+        </div>
+      </section>
+
+      <section className="section features-section" id="features">
+        <div className="shell">
+          <div className="section-heading">
+            <p className="kicker">THE FEEDBACK LOOP</p>
+            <h2>Less noise. Better decisions.</h2>
+            <p>TradeBud brings your execution, results, and notes together so you can review the whole decision—not a disconnected spreadsheet row.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={BarChart3}
-              title="Advanced Analytics"
-              description="Real-time P&L tracking, win rates, expectancy calculations, and comprehensive performance metrics."
-            />
-            <FeatureCard 
-              icon={Target}
-              title="Risk Management"
-              description="Track position sizes, risk-to-reward ratios, and maintain disciplined trading habits."
-            />
-            <FeatureCard 
-              icon={Calendar}
-              title="Trading Calendar"
-              description="Visualize trading activity with interactive calendar views and daily summaries."
-            />
-            <FeatureCard 
-              icon={TrendingUp}
-              title="Performance Tracking"
-              description="Monitor your equity curve, monthly returns, and track overall performance trends."
-            />
-            <FeatureCard 
-              icon={BookOpen}
-              title="Trading Journal"
-              description="Document trades with rich text notes, screenshots, and searchable tags."
-            />
-            <FeatureCard 
-              icon={Calculator}
-              title="Fee Calculation"
-              description="Accurate commission and fee tracking no matter your broker."
-            />
+          <div className="feature-list">
+            {features.map(({ number, icon: Icon, title, description }) => (
+              <article className="feature-row" key={number}>
+                <span className="feature-number">{number}</span>
+                <div className="feature-icon"><Icon size={21} strokeWidth={1.7} /></div>
+                <h3>{title}</h3>
+                <p>{description}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Benefits Section */}
-      <section id="benefits" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-                Why Choose 
-                <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">TradeBud</span>
-              </h2>
-              <p className="text-xl text-gray-300 mb-8">
-                A complete trading journal solution that helps you track, analyze, and improve your trading - at no cost.
-              </p>
-              
-              <div className="space-y-6">
-                <BenefitItem text="Track all your trades in one organized platform" />
-                <BenefitItem text="Analyze performance with comprehensive metrics" />
-                <BenefitItem text="Visualize your trading data with interactive charts" />
-                <BenefitItem text="Keep detailed notes and journal entries for each trade" />
-                <BenefitItem text="Monitor risk management and position sizing" />
-                <BenefitItem text="Access everything completely free with no limitations" />
-              </div>
+      <section className="section workflow-section" id="how-it-works">
+        <div className="shell workflow-grid">
+          <div className="workflow-intro">
+            <p className="kicker">A SIMPLE PRACTICE</p>
+            <h2>From execution to insight in three steps.</h2>
+            <p>The journal stays out of your way during the session, then gives you the structure to review it honestly.</p>
+          </div>
 
-              <button 
-                onClick={handleGetStarted}
-                className="mt-8 bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center"
-              >
-                Start Tracking Today
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
-              <div className="text-center mb-6">
-                <BarChart3 className="h-16 w-16 text-blue-400 mx-auto mb-4" />
-                <h3 className="text-2xl font-bold text-white mb-2">What You Get</h3>
+          <div className="workflow-list">
+            {workflow.map(([title, description], index) => (
+              <div className="workflow-step" key={title}>
+                <span>0{index + 1}</span>
+                <div><h3>{title}</h3><p>{description}</p></div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-400">∞</div>
-                  <div className="text-gray-300">Unlimited Trades</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-cyan-400">All</div>
-                  <div className="text-gray-300">Analytics Features</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-400">$0</div>
-                  <div className="text-gray-300">Monthly Cost</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-400">24/7</div>
-                  <div className="text-gray-300">Always Available</div>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
- 
-
-              {/* Contact Section */}
-        <section className="py-20 bg-black/20">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-              Need Help?
-            </h2>
-            <p className="text-xl text-gray-300 mb-8">
-              Get in touch with our support team for any questions or assistance.
-            </p>
-            
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 max-w-2xl mx-auto">
-              <form onSubmit={handleEmailSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    placeholder="Your Name"
-                    className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400"
-                    required
-                  />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Your Email"
-                    className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400"
-                    required
-                  />
-                </div>
-                <textarea
-                  placeholder="How can we help you?"
-                  rows={4}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 resize-none"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-8 py-4 rounded-xl text-lg font-semibold hover:from-blue-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105 shadow-lg"
-                >
-                  Send Message
-                </button>
-              </form>
+      <section className="section detail-section">
+        <div className="shell detail-grid">
+          <div className="calendar-card" aria-label="Trading calendar example">
+            <div className="calendar-head"><strong>May 2026</strong><span>Monthly P&amp;L <b>+$4,286</b></span></div>
+            <div className="weekdays">{['MON','TUE','WED','THU','FRI'].map(day => <span key={day}>{day}</span>)}</div>
+            <div className="calendar-days">
+              {[
+                ['', ''], ['', ''], ['', ''], ['1', '+$214'], ['2', '—'],
+                ['5', '+$386'], ['6', '-$94'], ['7', '+$712'], ['8', '+$128'], ['9', '—'],
+                ['12', '+$440'], ['13', '+$96'], ['14', '-$182'], ['15', '+$804'], ['16', '+$215'],
+                ['19', '—'], ['20', '+$326'], ['21', '-$76'], ['22', '+$510'], ['23', '+$190'],
+              ].map(([day, pnl], index) => (
+                <span className={pnl.startsWith('+') ? 'day win' : pnl.startsWith('-') ? 'day loss' : 'day'} key={index}>
+                  <small>{day}</small><b>{pnl}</b>
+                </span>
+              ))}
             </div>
           </div>
-        </section>
 
-        {/* CTA Section */}
-        <section className="py-20">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center"> 
-          <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">
-            Ready to Transform Your Trading?
-          </h2>
-          <p className="text-xl text-gray-300 mb-8">
-            Join others who are already using TradeBud to improve their performance. 
-            Start your tracking today.
-          </p>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
-            <button 
-              onClick={handleGetStarted}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-10 py-4 rounded-xl text-xl font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center"
-            >
-              Start Free Trial Now
-              <ArrowRight className="ml-2 h-6 w-6" />
-            </button>
+          <div className="detail-copy">
+            <p className="kicker">PATTERNS, MADE VISIBLE</p>
+            <h2>See the days behind the numbers.</h2>
+            <p>A single monthly result can hide a lot. The trading calendar shows consistency, drawdowns, and clusters of good or poor execution at a glance.</p>
+            <ul>
+              <li><Target size={18} /> Review performance by day and month</li>
+              <li><TrendingUp size={18} /> Separate process trends from one-off outcomes</li>
+              <li><CalendarDays size={18} /> Move from a date straight into the underlying trades</li>
+            </ul>
           </div>
-
-          {/* Email Signup */}
-          <form onSubmit={handleEmailSubmit} className="max-w-md mx-auto">
-            <p className="text-gray-400 mb-4">Or get notified about updates:</p>
-            <div className="flex gap-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400"
-                required
-              />
-              <button
-                type="submit"
-                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 font-semibold"
-              >
-                Notify Me
-              </button>
-            </div>
-          </form>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-black/40 border-t border-white/10 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="bg-gradient-to-r from-blue-400 to-purple-500 w-8 h-8 rounded-lg flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-xl font-bold text-white">TradeBud</span>
-              </div>
-              <p className="text-gray-400">
-                Professional trading journal platform for serious traders.
-              </p>
-            </div>
-            
-            <div>
-              <h3 className="text-white font-semibold mb-4">Product</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#features" className="hover:text-white transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">API</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-white font-semibold mb-4">Company</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">About</a></li>
-                {/* <li><a href="#" className="hover:text-white transition-colors">Contact</a></li> */}
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="text-white font-semibold mb-4">Support</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><a href="mailto:kavishshah30@gmail.com" className="hover:text-white transition-colors">Email Support</a></li>
-                {/* <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li> */}
-                {/* <li><a href="#" className="hover:text-white transition-colors">Community</a></li> */}
-              </ul>
-            </div>
+      <section className="section pricing-section" id="pricing">
+        <div className="shell pricing-grid">
+          <div>
+            <p className="kicker">PRICING</p>
+            <h2>Use the full journal. Pay nothing.</h2>
           </div>
-          
-          <div className="border-t border-white/10 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 TradeBud. All rights reserved.</p>
+          <div className="price-card">
+            <div><span>TradeBud</span><strong>$0</strong><small>Free to use</small></div>
+            <ul>
+              <li><Check size={16} /> Unlimited trade entries</li>
+              <li><Check size={16} /> Complete performance analytics</li>
+              <li><Check size={16} /> Journal and calendar views</li>
+              <li><Check size={16} /> Fee-aware net P&amp;L</li>
+            </ul>
+            <a className="button button-large" href={APP_URL}>Create your journal <ArrowRight size={18} /></a>
+            <p>No trial clock. No card required.</p>
           </div>
+        </div>
+      </section>
+
+      <footer>
+        <div className="shell footer-grid">
+          <div>
+            <a className="brand footer-brand" href="#top"><BrandMark /><span>TradeBud</span></a>
+            <p>A clearer record of every trading decision.</p>
+          </div>
+          <div className="footer-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How it works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="mailto:kavishshah30@gmail.com">Support</a>
+          </div>
+          <p className="copyright">© {new Date().getFullYear()} TradeBud</p>
         </div>
       </footer>
-    </div>
+    </main>
   );
 }

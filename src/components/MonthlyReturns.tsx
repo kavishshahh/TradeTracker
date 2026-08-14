@@ -162,7 +162,7 @@ export default function MonthlyReturns() {
     }));
 
   const getBarColor = (value: number) => {
-    return value >= 0 ? '#10b981' : '#ef4444'; // Green for positive, red for negative
+    return value >= 0 ? '#1f6b46' : '#a4483f';
   };
 
   if (loading) {

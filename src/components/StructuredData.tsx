@@ -17,9 +17,10 @@ export const websiteStructuredData = {
   "@type": "WebApplication",
   "name": "TradeBud",
   "applicationCategory": "FinanceApplication",
-  "description": "Professional trading journal platform with real-time analytics, performance tracking, and comprehensive trade management tools.",
+  "description": "A completely free trading journal with performance analytics, fee-aware profit and loss, calendar views, and trade notes.",
   "url": process.env.NEXT_PUBLIC_BASE_URL || "https://app.tradebud.xyz",
   "operatingSystem": "Web",
+  "isAccessibleForFree": true,
   "author": {
     "@type": "Organization",
     "name": "TradeBud"
@@ -45,12 +46,8 @@ export const organizationStructuredData = {
   "@context": "https://schema.org",
   "@type": "Organization",
   "name": "TradeBud",
-  "description": "Advanced trading journal platform for traders to track, analyze, and improve their trading performance.",
-  "url": process.env.NEXT_PUBLIC_BASE_URL || "https://app.tradebud.xyz",
-  "logo": `${process.env.NEXT_PUBLIC_BASE_URL || "https://app.tradebud.xyz"}/logo.png`,
-  "sameAs": [
-    // Add your social media URLs here when available
-  ]
+  "description": "TradeBud provides a completely free trading journal for recording decisions and analyzing trading performance.",
+  "url": "https://tradebud.xyz"
 }
 
 // SoftwareApplication structured data
@@ -60,9 +57,10 @@ export const softwareStructuredData = {
   "name": "TradeBud Trading Journal",
   "applicationCategory": "BusinessApplication",
   "applicationSubCategory": "FinanceApplication",
-  "description": "Comprehensive trading journal application for tracking trades, analyzing performance, and improving trading strategies.",
+  "description": "A completely free trading journal application for recording trades, reviewing decisions, and analyzing performance.",
   "operatingSystem": "Web Browser",
   "url": process.env.NEXT_PUBLIC_BASE_URL || "https://app.tradebud.xyz",
+  "isAccessibleForFree": true,
   "author": {
     "@type": "Organization",
     "name": "TradeBud"
@@ -71,13 +69,7 @@ export const softwareStructuredData = {
     "@type": "Offer",
     "price": "0",
     "priceCurrency": "USD",
-    "availability": "https://schema.org/InStock"
-  },
-  "aggregateRating": {
-    "@type": "AggregateRating",
-    "ratingValue": "4.8",
-    "ratingCount": "150",
-    "bestRating": "5",
-    "worstRating": "1"
+    "availability": "https://schema.org/InStock",
+    "url": "https://app.tradebud.xyz"
   }
 }

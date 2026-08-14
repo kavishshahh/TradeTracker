@@ -2,49 +2,15 @@ import { MetadataRoute } from 'next'
  
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'TradeBud - Professional Trading Journal',
+    name: 'TradeBud — Free Trading Journal',
     short_name: 'TradeBud',
-    description: 'Advanced trading journal platform with real-time analytics, performance tracking, and comprehensive trade management.',
+    description: 'A completely free trading journal for recording decisions and analyzing performance.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#000000',
+    background_color: '#f4f1e9',
+    theme_color: '#1f6b46',
     orientation: 'portrait',
     categories: ['finance', 'business', 'productivity'],
     lang: 'en',
-    icons: [
-      {
-        src: '/icon-192.png',
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'maskable'
-      },
-      {
-        src: '/icon-512.png',
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'maskable'
-      },
-      {
-        src: '/apple-touch-icon.png',
-        sizes: '180x180',
-        type: 'image/png',
-        purpose: 'any'
-      }
-    ],
-    screenshots: [
-      {
-        src: '/screenshot-wide.png',
-        sizes: '1280x720',
-        type: 'image/png',
-        form_factor: 'wide'
-      },
-      {
-        src: '/screenshot-narrow.png',
-        sizes: '750x1334',
-        type: 'image/png',
-        form_factor: 'narrow'
-      }
-    ]
   }
 }

@@ -9,6 +9,7 @@ export const metadata: Metadata = {
     description: 'Sign in to access your trading journal and performance analytics.',
     url: '/login',
   },
+  robots: { index: false, follow: false },
 };
 
 export default function LoginPage() {

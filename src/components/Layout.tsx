@@ -102,6 +102,12 @@ export default function Layout({ children }: LayoutProps) {
               </span>
             )}
           </a>
+          {sidebarOpen && (
+            <div className="sidebar-legal">
+              <a href="https://tradebud.xyz/privacy">Privacy</a>
+              <a href="https://tradebud.xyz/terms">Terms</a>
+            </div>
+          )}
           <button
             onClick={() => {
               trackUserEngagement('logout', 'sidebar');

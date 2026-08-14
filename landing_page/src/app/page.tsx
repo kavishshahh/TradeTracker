@@ -124,6 +124,7 @@ export default function Home() {
             <a href="#features">Features</a>
             <a href="#how-it-works">How it works</a>
             <a href="#pricing">Pricing</a>
+            <a href="/blog">Journal</a>
           </nav>
 
           <div className="nav-actions">
@@ -146,6 +147,7 @@ export default function Home() {
             <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
             <a href="#how-it-works" onClick={() => setMenuOpen(false)}>How it works</a>
             <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
+            <a href="/blog">Journal</a>
             <a href={APP_URL}>Sign in</a>
             <a className="button" href={APP_URL}>Start tracking</a>
           </nav>
@@ -262,14 +264,31 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="section home-faq-section" id="questions">
+        <div className="shell home-faq-grid">
+          <div>
+            <p className="kicker">STRAIGHT ANSWERS</p>
+            <h2>Before you start.</h2>
+            <p>TradeBud is a journal and analytics tool—not a broker, signal service, or financial adviser.</p>
+            <a href="/free-trading-journal">Read the complete product guide <ArrowRight size={16} /></a>
+          </div>
+          <div>
+            <details open><summary>Is TradeBud completely free?</summary><p>Yes. TradeBud’s core trading journal, unlimited trade entries, calendar, and performance analytics are free forever. There is no credit card requirement or trial clock.</p></details>
+            <details><summary>What does TradeBud track?</summary><p>TradeBud records the trade details and notes you enter, then calculates fee-aware P&amp;L, win rate, profit factor, expectancy, average results, equity curves, and monthly performance.</p></details>
+            <details><summary>Does TradeBud connect to a broker?</summary><p>No. TradeBud is an independent journal. It does not place trades, hold funds, recommend securities, or provide brokerage services.</p></details>
+            <details><summary>Who is it designed for?</summary><p>It is designed for self-directed traders who want a structured record of their decisions, risk, costs, and results.</p></details>
+          </div>
+        </div>
+      </section>
+
       <section className="section pricing-section" id="pricing">
         <div className="shell pricing-grid">
           <div>
             <p className="kicker">PRICING</p>
-            <h2>Use the full journal. Pay nothing.</h2>
+            <h2>The full journal. Free forever.</h2>
           </div>
           <div className="price-card">
-            <div><span>TradeBud</span><strong>$0</strong><small>Free to use</small></div>
+            <div><span>TradeBud</span><strong>$0</strong><small>Free forever</small></div>
             <ul>
               <li><Check size={16} /> Unlimited trade entries</li>
               <li><Check size={16} /> Complete performance analytics</li>
@@ -277,7 +296,7 @@ export default function Home() {
               <li><Check size={16} /> Fee-aware net P&amp;L</li>
             </ul>
             <a className="button button-large" href={APP_URL}>Create your journal <ArrowRight size={18} /></a>
-            <p>No trial clock. No card required.</p>
+            <p>No trial clock. No card required. No hidden subscription.</p>
           </div>
         </div>
       </section>
@@ -292,6 +311,11 @@ export default function Home() {
             <a href="#features">Features</a>
             <a href="#how-it-works">How it works</a>
             <a href="#pricing">Pricing</a>
+            <a href="/free-trading-journal">Product guide</a>
+            <a href="/blog">Journal</a>
+            <a href="/about">About</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
             <a href="mailto:kavishshah30@gmail.com">Support</a>
           </div>
           <p className="copyright">© {new Date().getFullYear()} TradeBud</p>

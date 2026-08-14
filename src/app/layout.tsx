@@ -36,8 +36,11 @@ export const metadata: Metadata = {
     telephone: false,
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://app.tradebud.xyz'),
-  alternates: {
-    canonical: '/',
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
   },
   openGraph: {
     title: 'TradeBud — A clearer view of your trading',
@@ -49,8 +52,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: '/og-image.png',
-        width: 1200,
-        height: 630,
+        width: 1736,
+        height: 907,
         alt: 'TradeBud Trading Journal Dashboard',
       },
     ],
@@ -60,17 +63,6 @@ export const metadata: Metadata = {
     title: 'TradeBud — A clearer view of your trading',
     description: 'Journal decisions, measure performance, and build a trading process you can trust.',
     images: ['/og-image.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
   },
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_VERIFICATION,

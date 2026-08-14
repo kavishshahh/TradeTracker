@@ -211,6 +211,43 @@
 .app-content .recharts-cartesian-grid line, .app-content .recharts-polar-grid-angle line, .app-content .recharts-polar-grid-concentric path { stroke: #ddd8cd; }
 .app-content .recharts-text { fill: #687069; font-size: 11px; }
 
+/* Dashboard — mirrors the compact, editorial product preview on the public site. */
+.dashboard-page { --dash-positive: #1f6b46; --dash-negative: #a4483f; }
+.dashboard-header { gap: 24px; padding-bottom: 2px; }
+.dashboard-eyebrow { display: block; margin-bottom: 9px; color: #1f6b46; font-family: var(--font-geist-mono); font-size: 9px; font-weight: 700; letter-spacing: .15em; }
+.dashboard-view-toggle { flex: 0 0 auto; border: 1px solid #d5d0c4; background: #ebe7dc !important; }
+.dashboard-view-toggle button { min-height: 34px; white-space: nowrap; }
+.dashboard-filter { padding: 16px 18px !important; }
+.dashboard-filter > div:first-child { margin-bottom: 11px; }
+.dashboard-filter-shortcuts { margin-bottom: 0 !important; }
+.dashboard-filter-shortcuts button { min-height: 32px; padding-inline: 12px; }
+.dashboard-fees { border-left: 3px solid #a67b32 !important; background: #f2ead9 !important; }
+.dashboard-metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid #d5d0c4; background: #d5d0c4; gap: 1px; }
+.dashboard-metric { min-width: 0; min-height: 150px; padding: 18px; background: #fbfaf6; }
+.dashboard-metric-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dashboard-metric-icon { width: 25px; height: 25px; display: grid; place-items: center; flex: 0 0 auto; background: #e4ece6; color: #1f6b46; }
+.dashboard-metric-label { overflow: hidden; color: #697169; font-size: 10px; font-weight: 650; letter-spacing: .045em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.dashboard-metric-body { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; margin-top: 27px; }
+.dashboard-metric-value { max-width: 100%; color: #171b17; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(25px, 2vw, 32px); line-height: 1; letter-spacing: -.045em; overflow-wrap: anywhere; }
+.dashboard-metric-trend { display: flex; align-items: center; gap: 4px; min-width: 0; font-family: var(--font-geist-mono); font-size: 9px; font-weight: 650; }
+.dashboard-metric-trend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.dashboard-chart-grid-secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dashboard-card { min-width: 0; padding: 22px !important; overflow: hidden; }
+.dashboard-card h3 { min-height: 44px; margin-bottom: 12px !important; font-size: 14px !important; line-height: 1.45; font-weight: 620 !important; }
+.dashboard-performance-card { align-self: stretch; }
+.dashboard-performance-card > div > div { min-height: 35px; border-bottom: 1px solid #e3dfd4; }
+.dashboard-performance-card > div > div:last-child { border-bottom: 0; }
+
+/* Shared viewport hardening for the authenticated application. */
+.app-content { overflow-wrap: anywhere; }
+.app-content img, .app-content svg { max-width: 100%; }
+.app-content .overflow-x-auto { overscroll-behavior-inline: contain; scrollbar-width: thin; }
+.app-content table { width: 100%; }
+.app-content [role='dialog'], .app-content .fixed.inset-0 > div { max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
+.app-content .recharts-responsive-container { min-width: 0 !important; }
+.app-content button, .app-content a, .app-content input, .app-content select, .app-content textarea { touch-action: manipulation; }
+
 .dark .app-content .dark\:bg-gray-900 { background-color: #111512 !important; }
 .dark .app-content .dark\:bg-gray-800 { background-color: #1b211d !important; }
 .dark .app-content .dark\:bg-gray-700 { background-color: #29312b !important; }
@@ -223,9 +260,28 @@
 .dark .app-content .bg-white.shadow, .dark .app-content .bg-white.shadow-sm, .dark .app-content .bg-white.shadow-lg, .dark .app-content .bg-white.shadow-xl { border-color: #3d473f; }
 .dark .app-content input:not([type='checkbox']):not([type='radio']), .dark .app-content select, .dark .app-content textarea { background-color: #202722 !important; border-color: #465048 !important; color: #eef0e9 !important; }
 .dark .app-content table tbody tr:hover { background-color: #242c26 !important; }
+.dark .dashboard-view-toggle { border-color: #3d473f; background: #29312b !important; }
+.dark .dashboard-metrics-grid { border-color: #3d473f; background: #3d473f; }
+.dark .dashboard-metric { background: #1b211d; }
+.dark .dashboard-metric-icon { background: #293b30; color: #8fc3a0; }
+.dark .dashboard-metric-label { color: #9da59f; }
+.dark .dashboard-metric-value { color: #f2f0e8; }
+.dark .dashboard-fees { background: #312a1f !important; }
+.dark .dashboard-performance-card > div > div { border-color: #354039; }
 
 .tradebud-toast { position: relative; display: flex; min-height: 52px; padding: 10px; overflow: hidden; cursor: pointer; border: 1px solid #d5d0c4; border-radius: 2px; background: #fbfaf6; color: #171b17; box-shadow: 0 14px 40px rgba(20, 24, 20, .15); }
 .tradebud-toast-progress { background: #1f6b46 !important; }
+
+@media (max-width: 1200px) {
+  .dashboard-metrics-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dashboard-chart-grid-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-chart-grid-secondary .dashboard-performance-card { grid-column: 1 / -1; }
+}
+
+@media (max-width: 1100px) {
+  .dashboard-chart-grid { grid-template-columns: 1fr; }
+  .dashboard-chart-grid-secondary .dashboard-performance-card { grid-column: auto; }
+}
 
 @media (max-width: 900px) {
   .app-sidebar { position: fixed; inset: 0 auto 0 0; width: 260px !important; transform: translateX(-100%); box-shadow: 20px 0 50px rgba(0, 0, 0, .22); }
@@ -238,6 +294,37 @@
   .mobile-app-header span { font-size: 13px; font-weight: 600; text-align: center; }
   .app-content { padding: 26px 17px 48px; }
   .app-content h1 { font-size: 27px !important; }
+  .app-content .flex.items-center.justify-between { row-gap: 12px; }
+  .dashboard-header { align-items: flex-start !important; flex-direction: column; }
+  .dashboard-view-toggle { width: 100%; }
+  .dashboard-view-toggle button { flex: 1; }
+  .dashboard-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-metric { min-height: 132px; }
+  .dashboard-chart-grid { grid-template-columns: 1fr; }
+  .dashboard-chart-grid-secondary { grid-template-columns: 1fr; }
+  .dashboard-card { padding: 18px !important; }
+  .dashboard-card .recharts-wrapper { font-size: 10px; }
+}
+
+@media (max-width: 560px) {
+  .app-content { padding-inline: 13px; }
+  .dashboard-page { gap: 17px !important; }
+  .dashboard-filter { padding: 14px !important; }
+  .dashboard-filter > div:first-child { align-items: flex-start !important; flex-direction: column; }
+  .dashboard-filter > div:first-child button { width: 100%; justify-content: center; }
+  .dashboard-filter-shortcuts { flex-wrap: nowrap !important; margin-inline: -14px; padding: 0 14px 3px; overflow-x: auto; scrollbar-width: none; }
+  .dashboard-filter-shortcuts::-webkit-scrollbar { display: none; }
+  .dashboard-filter-shortcuts button { flex: 0 0 auto; }
+  .dashboard-metrics-grid { grid-template-columns: 1fr; }
+  .dashboard-metric { min-height: 116px; padding: 15px; }
+  .dashboard-metric-body { margin-top: 18px; }
+  .dashboard-metric-value { font-size: 28px; }
+  .dashboard-card { margin-inline: -1px; padding: 14px 10px !important; }
+  .dashboard-card h3 { min-height: 0; padding-inline: 5px; }
+  .dashboard-card .recharts-legend-wrapper { font-size: 10px; }
+  .app-content table { min-width: 680px; }
+  .app-content .overflow-x-auto { margin-inline: -13px; padding-inline: 13px; }
+  .app-content [role='dialog'], .app-content .fixed.inset-0 > div { width: calc(100vw - 18px) !important; max-width: calc(100vw - 18px) !important; max-height: calc(100dvh - 18px); overflow-y: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -51,18 +51,18 @@ interface MonthShortcut {
 
 function MetricCard({ title, value, icon: Icon, trend, trendValue }: MetricCardProps) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="flex items-center">
-        <div className="flex-shrink-0">
-          <Icon className="h-8 w-8 text-blue-500 dark:text-blue-400" />
-        </div>
-        <div className="ml-5 w-0 flex-1">
-          <dl>
-            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{title}</dt>
-            <dd className="flex items-baseline">
-              <div className="text-2xl font-semibold text-gray-900 dark:text-white">{value}</div>
+    <div className="dashboard-metric bg-white dark:bg-gray-800">
+      <div className="dashboard-metric-head">
+        <span className="dashboard-metric-icon" aria-hidden="true">
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="dashboard-metric-label">{title}</span>
+      </div>
+      <dl>
+        <dd className="dashboard-metric-body">
+              <div className="dashboard-metric-value">{value}</div>
               {trend && trendValue && (
-                <div className={`ml-2 flex items-baseline text-sm font-semibold ${
+                <div className={`dashboard-metric-trend ${
                   trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-gray-500'
                 }`}>
                   {trend === 'up' ? (
@@ -70,13 +70,11 @@ function MetricCard({ title, value, icon: Icon, trend, trendValue }: MetricCardP
                   ) : trend === 'down' ? (
                     <TrendingDown className="h-4 w-4 flex-shrink-0" />
                   ) : null}
-                  <span className="ml-1">{trendValue}</span>
+                  <span>{trendValue}</span>
                 </div>
               )}
-            </dd>
-          </dl>
-        </div>
-      </div>
+        </dd>
+      </dl>
     </div>
   );
 }
@@ -733,10 +731,11 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="dashboard-page space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="dashboard-header flex items-center justify-between">
         <div>
+          <span className="dashboard-eyebrow">PERFORMANCE OVERVIEW</span>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
           <p className="mt-1 text-sm text-gray-500">
             Your trading performance for {formatDateRange(selectedDateRange)}
@@ -745,7 +744,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
         
         {/* Profit Type Toggle */}
         {feesConfig && (
-          <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+          <div className="dashboard-view-toggle flex items-center space-x-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => {
                 setShowNetProfits(false);
@@ -781,7 +780,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
 
 
         {/* Quick Date Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        <div className="dashboard-filter bg-white dark:bg-gray-800 rounded-lg shadow p-4">
           <div className="flex items-center justify-between mb-3">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quick Date Filters</label>
             <button
@@ -794,7 +793,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
             </button>
           </div>
           
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="dashboard-filter-shortcuts flex flex-wrap gap-2 mb-3">
             <button
               onClick={clearDateFilter}
               className={`px-3 py-1 text-sm rounded-md transition-colors ${
@@ -865,7 +864,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
       <div className="space-y-4">
         {/* Total Fees Card (only show when displaying net profits) */}
         {showNetProfits && feesConfig && adjustedMetrics && 'total_fees' in adjustedMetrics && (
-          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+          <div className="dashboard-fees bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-orange-800 dark:text-orange-200">Total Trading Fees Paid</p>
@@ -883,7 +882,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="dashboard-metrics-grid">
           <MetricCard
             title={showNetProfits ? "Net P&L (After Fees)" : "Gross P&L"}
             value={formatCurrency(displayMetrics?.net_pnl || 0)}
@@ -926,10 +925,10 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
       {(hasPnLChartData || hasEquityChartData) ? (
         <div className="space-y-6">
           {/* Trading P&L and Account Equity Curves */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="dashboard-chart-grid">
             {/* Trading P&L Curve */}
             {hasPnLChartData && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <div className="dashboard-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
                   Trading P&L Curve ({showNetProfits ? 'Net After Fees' : 'Gross'}) - {formatDateRange(selectedDateRange)}
                 </h3>
@@ -969,7 +968,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
 
             {/* Account Equity Curve */}
             {hasEquityChartData && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <div className="dashboard-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
                   Account Equity Value Curve - {formatDateRange(selectedDateRange)}
                 </h3>
@@ -1031,10 +1030,10 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
           </div>
 
           {/* Additional Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="dashboard-chart-grid dashboard-chart-grid-secondary">
 
         {/* Win/Loss Distribution */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="dashboard-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Win/Loss Distribution - {formatDateRange(selectedDateRange)}</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
@@ -1043,7 +1042,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                 outerRadius={80}
                 fill="#687A6D"
                 dataKey="value"
@@ -1058,7 +1057,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
         </div>
 
         {/* Trading Score Radar */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="dashboard-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Trading Score - {formatDateRange(selectedDateRange)}</h3>
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={radarData}>
@@ -1077,7 +1076,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
         </div>
 
         {/* Recent Performance */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="dashboard-card dashboard-performance-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
             Performance Breakdown ({showNetProfits ? 'Net' : 'Gross'}) - {formatDateRange(selectedDateRange)}
           </h3>
@@ -1122,7 +1121,7 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+        <div className="dashboard-card bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
           <div className="text-gray-400 mb-4">
             <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />

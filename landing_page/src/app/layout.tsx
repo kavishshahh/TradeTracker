@@ -1,16 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import PublicAnalytics from "@/components/PublicAnalytics";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 const siteUrl = "https://tradebud.xyz";
 
@@ -22,20 +12,10 @@ export const metadata: Metadata = {
   },
   applicationName: "TradeBud",
   title: {
-    default: "TradeBud — Free Trading Journal and Performance Analytics",
+    default: "TradeBud — Trading Journal & Performance Analytics",
     template: "%s | TradeBud",
   },
-  description: "TradeBud is a completely free trading journal for recording trades, reviewing decisions, calculating fee-aware P&L, and analyzing performance. Free forever, with no credit card required.",
-  keywords: [
-    "free trading journal",
-    "trading journal app",
-    "trade tracker",
-    "trading performance analytics",
-    "trade diary",
-    "trading calendar",
-    "profit and loss tracker",
-    "risk management journal",
-  ],
+  description: "A free trading journal for recording decisions, reviewing fee-aware performance, and finding useful patterns in your history.",
   authors: [{ name: "TradeBud", url: siteUrl }],
   creator: "TradeBud",
   publisher: "TradeBud",
@@ -43,19 +23,19 @@ export const metadata: Metadata = {
   referrer: "origin-when-cross-origin",
   alternates: { canonical: "/", types: { "application/rss+xml": "https://tradebud.xyz/feed.xml" } },
   openGraph: {
-    title: "TradeBud — Free Trading Journal and Performance Analytics",
-    description: "Record every trade, review your decisions, and understand your performance. TradeBud is free forever.",
+    title: "TradeBud — Trading Journal & Performance Analytics",
+    description: "Record decisions, review fee-aware performance, and find useful patterns in your trading history.",
     url: siteUrl,
     siteName: "TradeBud",
     type: "website",
     locale: "en_US",
-    images: [{ url: "/og.png", width: 1736, height: 907, alt: "TradeBud — Your trading history should teach you something." }],
+    images: [{ url: "/og-demo.png", width: 1200, height: 630, alt: "TradeBud — illustrative trading journal dashboard preview." }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "TradeBud — Free Trading Journal",
-    description: "Record trades, review decisions, and analyze performance. Completely free forever.",
-    images: ["/og.png"],
+    title: "TradeBud — Trading Journal & Performance Analytics",
+    description: "Record decisions, review fee-aware performance, and find useful patterns in your trading history.",
+    images: ["/og-demo.png"],
   },
   robots: {
     index: true,
@@ -97,46 +77,19 @@ const structuredData = {
       publisher: { "@id": `${siteUrl}/#organization` },
       inLanguage: "en",
     },
-    {
-      "@type": "SoftwareApplication",
-      "@id": `${siteUrl}/#software`,
-      name: "TradeBud",
-      alternateName: "TradeBud Trading Journal",
-      url: siteUrl,
-      applicationCategory: "FinanceApplication",
-      applicationSubCategory: "Trading journal and performance analytics",
-      operatingSystem: "Web browser",
-      isAccessibleForFree: true,
-      description: "A completely free trading journal for recording trades, reviewing trading decisions, calculating fee-aware profit and loss, and analyzing performance over time.",
-      author: { "@id": `${siteUrl}/#organization` },
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-        url: "https://app.tradebud.xyz",
-      },
-      featureList: [
-        "Unlimited trade entries",
-        "Trading journal and notes",
-        "Performance analytics",
-        "Fee-aware net profit and loss",
-        "Trading calendar",
-        "Monthly returns tracking",
-        "Position quantity calculator",
-      ],
-    },
   ],
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className="antialiased">
+        <a className="skip-link" href="#main-content">Skip to content</a>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
+        <PublicAnalytics />
         {children}
       </body>
     </html>

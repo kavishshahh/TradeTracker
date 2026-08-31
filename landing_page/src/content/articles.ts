@@ -28,7 +28,7 @@ export const articles: Article[] = [
     category: "Journaling",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "8 min read",
+    readTime: "3 min read",
     intro: "A broker statement can tell you what happened. A trading journal is meant to help explain why it happened—and whether the decision deserves to be repeated. The value is not the act of logging trades; it is the quality of the review that the record makes possible.",
     sections: [
       {
@@ -76,7 +76,7 @@ export const articles: Article[] = [
     category: "Journaling",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "9 min read",
+    readTime: "3 min read",
     intro: "A spreadsheet and a dedicated trading journal can store many of the same numbers. The real difference is not where rows live—it is how much work is required to keep the record consistent and turn it into a useful review.",
     sections: [
       {
@@ -122,7 +122,7 @@ export const articles: Article[] = [
     category: "Journaling",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "10 min read",
+    readTime: "3 min read",
     intro: "The easiest journal to maintain is small enough to complete after every trade and structured enough to answer a real question later. Start with a minimum useful record, then add fields only when a review decision requires them.",
     sections: [
       {
@@ -167,7 +167,7 @@ export const articles: Article[] = [
     category: "Performance",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "11 min read",
+    readTime: "4 min read",
     intro: "A good dashboard is not the one with the most numbers. It is the one that helps you ask better questions. Win rate, average win and loss, expectancy, profit factor, drawdown, and costs describe different parts of the same record.",
     sections: [
       { heading: "Net profit and loss", paragraphs: ["Net P&L is the result after the costs included in your calculation. It answers whether the recorded sample gained or lost money, but not how consistently, how much risk was taken, or whether the result depended on one unusual trade.", "Always make clear which costs are included. A broker statement remains the authoritative record for actual account results." ] },
@@ -187,7 +187,7 @@ export const articles: Article[] = [
     category: "Performance",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "8 min read",
+    readTime: "3 min read",
     intro: "Trading expectancy estimates the average result per trade across a recorded sample. It is useful because it combines how often trades win with the average size of wins and losses. It does not predict the outcome of the next trade.",
     sections: [
       { heading: "The expectancy formula", paragraphs: ["Expectancy = (win rate × average win) − (loss rate × average loss). Use average loss as a positive magnitude in the subtraction. The output uses the same unit as your win and loss values: dollars, percentage points, or units of risk."], bullets: ["Win rate = winning trades ÷ closed trades", "Loss rate = losing trades ÷ closed trades", "Average win = total winning value ÷ winning trades", "Average loss = absolute total losing value ÷ losing trades"] },
@@ -206,7 +206,7 @@ export const articles: Article[] = [
     category: "Process",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "7 min read",
+    readTime: "3 min read",
     intro: "A post-trade review should be short enough to complete consistently and specific enough to change future behavior. Its purpose is not to explain away the result. It is to compare the trade that happened with the plan that existed before it.",
     sections: [
       { heading: "1. Reconstruct the original plan", paragraphs: ["Record the setup, entry condition, invalidation level, intended exit, position size, and maximum planned risk. Use notes made before or during the trade where possible; hindsight tends to make the original idea look clearer than it was." ] },
@@ -225,7 +225,7 @@ export const articles: Article[] = [
     category: "Costs",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "9 min read",
+    readTime: "3 min read",
     intro: "Gross P&L describes price movement captured by recorded trades. Net P&L attempts to describe what remains after included costs. If a journal ignores costs, it can overstate the result and make frequent, small-edge activity look stronger than it was.",
     sections: [
       { heading: "Costs change the hurdle", paragraphs: ["Every included cost increases the amount a trade must earn before it contributes to net performance. The effect is especially visible when average profits are small relative to the number of transactions.", "Investor.gov and FINRA both emphasize that fees and commissions reduce investment returns and that investors should understand the full set of charges attached to an account or transaction." ] },
@@ -248,7 +248,7 @@ export const articles: Article[] = [
     category: "Process",
     published: "2026-08-14",
     updated: "2026-08-14",
-    readTime: "9 min read",
+    readTime: "4 min read",
     intro: "A trading journal can contain hundreds of entries and still produce weak conclusions. Most problems come from inconsistent inputs, hindsight, or collecting information without a defined review decision.",
     sections: [
       { heading: "1. Recording only memorable trades", paragraphs: ["Logging unusually large wins and losses creates a biased sample. Use the same inclusion rule for every trade in the process you intend to evaluate." ] },
@@ -267,4 +267,11 @@ export const articles: Article[] = [
 
 export function getArticle(slug: string) {
   return articles.find((article) => article.slug === slug);
+}
+
+export function formatArticleDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
 }

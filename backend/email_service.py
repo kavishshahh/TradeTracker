@@ -24,10 +24,6 @@ class EmailService:
         self.from_email = os.getenv('FROM_EMAIL', 'noreply@tradebud.xyz')
         self.from_name = os.getenv('FROM_NAME', 'TradeBud')
         
-        # Debug output
-        if self.api_key:
-            logger.info(f"API key starts with: {self.api_key[:10]}...")
-        
         if not self.api_key or self.api_key == 'your_brevo_api_key_here':
             logger.error("❌ BREVO_API_KEY not configured properly")
             self.api_instance = None
@@ -44,10 +40,10 @@ class EmailService:
                 account_api = sib_api_v3_sdk.AccountApi(sib_api_v3_sdk.ApiClient(configuration))
                 try:
                     account_info = account_api.get_account()
-                    logger.info(f"✅ Brevo API key valid - Account: {account_info.email}")
+                    logger.info("✅ Brevo API key validated")
                     logger.info("✅ Brevo API initialized successfully")
                 except Exception as test_error:
-                    logger.error(f"❌ API key validation failed: {test_error}")
+                    logger.error("❌ API key validation failed")
                     logger.error("🔑 Please check your BREVO_API_KEY in the .env file")
                     logger.error("📋 Steps to fix:")
                     logger.error("   1. Go to app.brevo.com → Settings → API Keys")
@@ -85,14 +81,14 @@ class EmailService:
             
             # Send the email
             api_response = self.api_instance.send_transac_email(send_smtp_email)
-            logger.info(f"Email sent successfully to {to_email}. Message ID: {api_response.message_id}")
+            logger.info("Email sent successfully")
             return True
             
         except ApiException as e:
-            logger.error(f"Brevo API error when sending email to {to_email}: {e}")
+            logger.error("Brevo API error when sending email")
             return False
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error("Failed to send email")
             return False
     
     def send_welcome_email(self, user_email: str, user_name: str = None) -> bool:

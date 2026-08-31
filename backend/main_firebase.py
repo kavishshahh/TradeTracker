@@ -40,12 +40,12 @@ def initialize_firebase():
                     cred = credentials.Certificate(service_account_info)
                     firebase_admin.initialize_app(cred)
                     print("✅ Firebase Admin SDK initialized successfully from environment variable")
-                except json.JSONDecodeError as e:
-                    print(f"❌ Invalid JSON in FIREBASE_SERVICE_ACCOUNT_JSON: {e}")
+                except json.JSONDecodeError:
+                    print("❌ Invalid FIREBASE_SERVICE_ACCOUNT_JSON")
                     print("📝 Falling back to file path approach")
                     return _initialize_from_file()
-                except Exception as e:
-                    print(f"❌ Error initializing from environment variable: {e}")
+                except Exception:
+                    print("❌ Error initializing Firebase from environment variable")
                     print("📝 Falling back to file path approach")
                     return _initialize_from_file()
             else:
@@ -53,8 +53,8 @@ def initialize_firebase():
                 return _initialize_from_file()
         
         return firestore.client()
-    except Exception as e:
-        print(f"❌ Firebase initialization error: {e}")
+    except Exception:
+        print("❌ Firebase initialization error")
         print("📝 Using mock data instead")
         return None
 
@@ -69,16 +69,40 @@ def _initialize_from_file():
             print("✅ Firebase Admin SDK initialized successfully from file")
             return firestore.client()
         else:
-            print(f"❌ Service account file not found: {service_account_path}")
+            print("❌ Firebase service account file not found")
             print("📝 Using mock data instead")
             return None
-    except Exception as e:
-        print(f"❌ File-based initialization error: {e}")
+    except Exception:
+        print("❌ File-based Firebase initialization error")
         print("📝 Using mock data instead")
         return None
 
 # Initialize Firestore
 db = initialize_firebase()
+
+
+def _parse_query_date(value: Optional[str], field_name: str) -> Optional[str]:
+    """Validate an API date filter and return its canonical ISO representation."""
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value).isoformat()
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail=f"{field_name} must use YYYY-MM-DD format")
+
+
+def _trade_date_for_metrics(trade: dict) -> Optional[str]:
+    """Return the date used for filtering a trade without exposing raw values."""
+    value = trade.get("exit_date") if trade.get("status") == "closed" and trade.get("exit_date") else trade.get("date")
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    value_text = str(value)
+    # Firestore timestamps and legacy strings can include a time component.
+    return value_text[:10] if len(value_text) >= 10 else None
 
 # Authentication dependency
 async def get_current_user(authorization: str = Header(None)):
@@ -92,10 +116,9 @@ async def get_current_user(authorization: str = Header(None)):
         # Verify the Firebase ID token
         decoded_token = auth.verify_id_token(token)
         user_id = decoded_token['uid']
-        print(f"🔐 Authenticated user: {user_id}")
         return user_id
     except Exception as e:
-        print(f"❌ Authentication error: {e}")
+        print("❌ Authentication failed")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # Pydantic models
@@ -221,8 +244,7 @@ async def root():
 @app.post("/add-trade")
 async def add_trade(trade: Trade, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Add trade request: user={current_user}")
-        print(f"📊 Trade data received: {trade.model_dump()}")
+        print("🔍 Add trade request received")
         
         # Validation based on status
         if trade.status == "open":
@@ -255,8 +277,8 @@ async def add_trade(trade: Trade, current_user: str = Depends(get_current_user))
                         account_balance = 10000.0  # Default
                 else:
                     account_balance = 10000.0  # Mock default
-            except Exception as e:
-                print(f"⚠️ Could not fetch account balance: {e}")
+            except Exception:
+                print("⚠️ Could not fetch account balance")
                 account_balance = 10000.0  # Fallback default
         
         # Calculate missing risk field using account balance
@@ -273,7 +295,7 @@ async def add_trade(trade: Trade, current_user: str = Depends(get_current_user))
         
         # Ensure user_id matches authenticated user
         trade.user_id = current_user
-        print(f"🔐 Setting trade user_id to authenticated user: {current_user}")
+        print("🔐 Associating trade with authenticated account")
         
         trade.created_at = datetime.now()
         trade.updated_at = datetime.now()
@@ -302,46 +324,32 @@ async def add_trade(trade: Trade, current_user: str = Depends(get_current_user))
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error adding trade: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error adding trade")
+        raise HTTPException(status_code=500, detail="Unable to add trade")
 
 @app.post("/exit-trade/{user_id}")
 async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Exit trade request: user={user_id}, ticker={exit_request.ticker}, shares={exit_request.shares_to_exit}")
+        print("🔍 Exit trade request received")
         
         # Ensure user can only exit their own trades
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to exit {user_id}'s trades")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
             # Use Firebase Firestore
             trades_ref = db.collection('trades')
             
-            # Debug: First get all trades for this user
-            all_trades_query = trades_ref.where("user_id", "==", user_id)
-            all_docs = all_trades_query.get()
-            print(f"📊 Total trades for user {user_id}: {len(all_docs)}")
-            
-            for doc in all_docs:
-                trade_data = doc.to_dict()
-                print(f"   Trade: {trade_data.get('ticker')} - Status: {trade_data.get('status')} - Shares: {trade_data.get('shares')}")
-            
             # Find the open trade for this ticker and user
             query = trades_ref.where("user_id", "==", user_id).where("ticker", "==", exit_request.ticker).where("status", "==", "open")
             docs = query.get()
-            print(f"🎯 Open trades found for {exit_request.ticker}: {len(docs)}")
+            print("🎯 Searched open trades")
             
             if not docs:
                 # Check if there are any trades for this ticker (regardless of status)
                 ticker_query = trades_ref.where("user_id", "==", user_id).where("ticker", "==", exit_request.ticker)
                 ticker_docs = ticker_query.get()
-                print(f"📈 All trades for ticker {exit_request.ticker}: {len(ticker_docs)}")
-                
-                for doc in ticker_docs:
-                    trade_data = doc.to_dict()
-                    print(f"   {exit_request.ticker} Trade: Status={trade_data.get('status')}, Shares={trade_data.get('shares')}")
+                print("📈 No open trade matched the exit request")
                 
                 raise HTTPException(status_code=404, detail=f"No open trade found for {exit_request.ticker}. Found {len(ticker_docs)} total trades for this ticker.")
             
@@ -349,7 +357,7 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
             trade_doc = docs[0]
             trade_data = trade_doc.to_dict()
             current_shares = trade_data.get('shares', 0)
-            print(f"✅ Found open trade: {current_shares} shares of {exit_request.ticker}")
+            print("✅ Found an open trade for exit")
             
             # Validate exit shares
             if exit_request.shares_to_exit > current_shares:
@@ -461,14 +469,13 @@ async def exit_trade(user_id: str, exit_request: ExitTradeRequest, current_user:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error exiting trade: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error exiting trade")
+        raise HTTPException(status_code=500, detail="Unable to exit trade")
 
 @app.put("/trades/{trade_id}")
 async def update_trade(trade_id: str, update_request: UpdateTradeRequest, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Update trade request: trade_id={trade_id}, user={current_user}")
-        print(f"📊 Update data received: {update_request.model_dump()}")
+        print("🔍 Update trade request received")
         
         if db:
             # Use Firebase Firestore
@@ -477,14 +484,14 @@ async def update_trade(trade_id: str, update_request: UpdateTradeRequest, curren
             trade_doc = trade_doc_ref.get()
             
             if not trade_doc.exists:
-                print(f"❌ Trade not found: {trade_id}")
+                print("❌ Trade not found")
                 raise HTTPException(status_code=404, detail="Trade not found")
             
             trade_data = trade_doc.to_dict()
             
             # Ensure user can only update their own trades
             if trade_data.get('user_id') != current_user:
-                print(f"❌ Unauthorized access attempt: {current_user} trying to update trade owned by {trade_data.get('user_id')}")
+                print("❌ Unauthorized trade update attempt")
                 raise HTTPException(status_code=403, detail="Access denied")
             
             # Prepare update data - only include fields that are provided
@@ -546,7 +553,7 @@ async def update_trade(trade_id: str, update_request: UpdateTradeRequest, curren
             # Perform the update
             trade_doc_ref.update(update_data)
             
-            print(f"✅ Trade updated successfully: {trade_id}")
+            print("✅ Trade updated successfully")
             return {"message": "Trade updated successfully", "trade_id": trade_id}
         
         else:
@@ -589,13 +596,13 @@ async def update_trade(trade_id: str, update_request: UpdateTradeRequest, curren
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error updating trade: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error updating trade")
+        raise HTTPException(status_code=500, detail="Unable to update trade")
 
 @app.delete("/trades/{trade_id}")
 async def delete_trade(trade_id: str, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Delete trade request: trade_id={trade_id}, user={current_user}")
+        print("🔍 Delete trade request received")
         
         if db:
             # Use Firebase Firestore
@@ -604,40 +611,42 @@ async def delete_trade(trade_id: str, current_user: str = Depends(get_current_us
             trade_doc = trade_doc_ref.get()
             
             if not trade_doc.exists:
-                print(f"❌ Trade not found: {trade_id}")
+                print("❌ Trade not found")
                 raise HTTPException(status_code=404, detail="Trade not found")
             
             trade_data = trade_doc.to_dict()
             
             # Ensure user can only delete their own trades
             if trade_data.get('user_id') != current_user:
-                print(f"❌ Unauthorized access attempt: {current_user} trying to delete trade owned by {trade_data.get('user_id')}")
+                print("❌ Unauthorized trade deletion attempt")
                 raise HTTPException(status_code=403, detail="Access denied")
             
             # Delete the trade document
             trade_doc_ref.delete()
-            print(f"✅ Trade deleted successfully: {trade_id}")
+            print("✅ Trade deleted successfully")
             
             return {"message": "Trade deleted successfully", "trade_id": trade_id}
         else:
             # Mock data - simulate deletion
-            print(f"✅ Trade deleted successfully (mock): {trade_id}")
+            print("✅ Trade deleted successfully (mock)")
             return {"message": "Trade deleted successfully (mock)", "trade_id": trade_id}
     
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error deleting trade: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error deleting trade")
+        raise HTTPException(status_code=500, detail="Unable to delete trade")
 
 @app.get("/trades/{user_id}")
 async def get_trades(user_id: str, from_date: Optional[str] = None, to_date: Optional[str] = None, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Get trades request: user={user_id}, from={from_date}, to={to_date}")
+        from_date = _parse_query_date(from_date, "from_date")
+        to_date = _parse_query_date(to_date, "to_date")
+        if from_date and to_date and from_date > to_date:
+            raise HTTPException(status_code=422, detail="from_date must be on or before to_date")
         
         # Ensure user can only access their own trades
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s trades")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
@@ -674,171 +683,65 @@ async def get_trades(user_id: str, from_date: Optional[str] = None, to_date: Opt
                 
                 all_trades.append(trade_data)
             
-            # Apply date filtering in Python to consider exit_date for closed trades
+            # Filter once using exit_date for closed trades and entry date otherwise.
             trades = all_trades
             if from_date or to_date:
-                trades = []
-                for trade in all_trades:
-                    # For closed trades, use exit_date if available, otherwise use entry date
-                    trade_date = trade.get('exit_date') if trade.get('status') == 'closed' and trade.get('exit_date') else trade.get('date')
-                    
-                    # Check if trade falls within date range
-                    include_trade = True
-                    if from_date and trade_date < from_date:
-                        include_trade = False
-                    if to_date and trade_date > to_date:
-                        include_trade = False
-                    
-                    if include_trade:
-                        trades.append(trade)
-            
-            print(f"✅ Found {len(trades)} trades for user {user_id} (filtered from {len(all_trades)} total)")
+                trades = [
+                    trade for trade in all_trades
+                    if (trade_date := _trade_date_for_metrics(trade)) is not None
+                    and (not from_date or trade_date >= from_date)
+                    and (not to_date or trade_date <= to_date)
+                ]
             return {"trades": trades}
         else:
             # Fallback to mock data
             trades = [trade for trade in MOCK_TRADES if trade['user_id'] == user_id]
-            print(f"📝 Mock data: Found {len(trades)} trades for user {user_id}")
+            if from_date or to_date:
+                trades = [
+                    trade for trade in trades
+                    if (trade_date := _trade_date_for_metrics(trade)) is not None
+                    and (not from_date or trade_date >= from_date)
+                    and (not to_date or trade_date <= to_date)
+                ]
             return {"trades": trades}
-            
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"❌ Error fetching trades: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error fetching trades")
+        raise HTTPException(status_code=500, detail="Unable to fetch trades")
 
 @app.get("/metrics/{user_id}")
 async def get_metrics(user_id: str, from_date: Optional[str] = None, to_date: Optional[str] = None, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Get metrics request: user={user_id}, from_date={from_date}, to_date={to_date}")
-        
-        # Validate date parameters
-        if from_date:
-            try:
-                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
-                print(f"✅ from_date parsed: {from_date_obj}")
-            except ValueError as e:
-                print(f"❌ Invalid from_date format: {from_date}, error: {e}")
-                from_date = None
-        
-        if to_date:
-            try:
-                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
-                print(f"✅ to_date parsed: {to_date_obj}")
-            except ValueError as e:
-                print(f"❌ Invalid to_date format: {to_date}, error: {e}")
-                to_date = None
-        
+        from_date = _parse_query_date(from_date, "from_date")
+        to_date = _parse_query_date(to_date, "to_date")
+        if from_date and to_date and from_date > to_date:
+            raise HTTPException(status_code=422, detail="from_date must be on or before to_date")
+
         # Ensure user can only access their own metrics
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s metrics")
             raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Initialize variables for tracking all trades
-        all_trades = []
-        
+
         if db:
-            # Use Firebase Firestore
-            trades_ref = db.collection('trades')
-            
-            # First, get total trades without date filtering for comparison
-            total_query = trades_ref.where("user_id", "==", user_id)
-            total_docs = total_query.get()
-            all_trades = [doc.to_dict() for doc in total_docs]
-            print(f"📊 Total trades without date filtering: {len(all_trades)}")
-            
-            # Apply date filtering in Python to consider exit_date for closed trades
-            trades = all_trades
-            if from_date or to_date:
-                filtered_trades = []
-                for trade in all_trades:
-                    # For closed trades, use exit_date if available, otherwise use entry date
-                    trade_date = trade.get('exit_date') if trade.get('status') == 'closed' and trade.get('exit_date') else trade.get('date')
-                    
-                    # Check if trade falls within date range
-                    include_trade = True
-                    if from_date and trade_date < from_date:
-                        include_trade = False
-                    if to_date and trade_date > to_date:
-                        include_trade = False
-                    
-                    if include_trade:
-                        filtered_trades.append(trade)
-                
-                trades = filtered_trades
-                print(f"📊 Found {len(trades)} trades after Python date filtering (from {len(all_trades)} total)")
-            else:
-                print(f"📊 Using all {len(trades)} trades (no date filtering)")
-            
-            # Debug: Show first few trade dates
-            if trades:
-                sample_dates = [t.get('date') for t in trades[:5]]
-                print(f"📅 Sample trade dates: {sample_dates}")
-                
-                # Also show the date types and formats
-                for i, trade in enumerate(trades[:3]):
-                    date_val = trade.get('date')
-                    print(f"   Trade {i+1}: date={date_val}, type={type(date_val)}")
-                    if hasattr(date_val, 'strftime'):
-                        print(f"     Formatted: {date_val.strftime('%Y-%m-%d')}")
+            docs = db.collection("trades").where("user_id", "==", user_id).get()
+            all_trades = [doc.to_dict() for doc in docs]
         else:
-            # Fallback to mock data
             all_trades = [trade for trade in MOCK_TRADES if trade['user_id'] == user_id]
-            trades = all_trades.copy()
-            print(f"📝 Mock data: Found {len(all_trades)} trades for user {user_id}")
-        
-        # Apply additional date filtering in Python as a safety measure
+
+        trades = all_trades
         if from_date or to_date:
-            print(f"🔍 Applying additional Python date filtering...")
-            filtered_trades = []
-            for trade in trades:
-                trade_date = trade.get('date')
-                if not trade_date:
-                    continue
-                    
-                # Convert to string if it's a datetime object
-                if hasattr(trade_date, 'strftime'):
-                    trade_date_str = trade_date.strftime('%Y-%m-%d')
-                else:
-                    trade_date_str = str(trade_date)
-                
-                # Apply date filtering
-                if from_date and trade_date_str < from_date:
-                    continue
-                if to_date and trade_date_str > to_date:
-                    continue
-                    
-                filtered_trades.append(trade)
-            
-            trades = filtered_trades
-            print(f"📊 After Python filtering: {len(trades)} trades")
-            
-            # If no trades found, try to find the closest month
-            if len(trades) == 0 and (from_date or to_date):
-                print(f"⚠️  No trades found in date range {from_date} to {to_date}")
-                print(f"🔍 Available dates in database: {sorted(set(t.get('date') for t in all_trades if t.get('date')))}")
-                
-                # Try to find trades in the month of the from_date or to_date
-                target_month = None
-                if from_date:
-                    try:
-                        target_month = datetime.strptime(from_date, '%Y-%m-%d').strftime('%Y-%m')
-                    except:
-                        pass
-                elif to_date:
-                    try:
-                        target_month = datetime.strptime(to_date, '%Y-%m-%d').strftime('%Y-%m')
-                    except:
-                        pass
-                
-                if target_month:
-                    print(f"🔍 Looking for trades in month: {target_month}")
-                    month_trades = [t for t in all_trades if t.get('date') and str(t.get('date')).startswith(target_month)]
-                    if month_trades:
-                        print(f"📊 Found {len(month_trades)} trades in month {target_month}")
-                        trades = month_trades
-        
-        # Calculate metrics (same logic as before)
-        closed_trades = [t for t in trades if t['status'] == 'closed' and t.get('sell_price') and t.get('buy_price')]
-        print(f"🔒 Found {len(closed_trades)} closed trades for metrics calculation")
-        
+            trades = [
+                trade for trade in all_trades
+                if (trade_date := _trade_date_for_metrics(trade)) is not None
+                and (not from_date or trade_date >= from_date)
+                and (not to_date or trade_date <= to_date)
+            ]
+
+        closed_trades = [
+            trade for trade in trades
+            if trade.get("status") == "closed" and trade.get("sell_price") is not None and trade.get("buy_price") is not None
+        ]
+
         if not closed_trades:
             return TradeMetrics(
                 net_pnl=0, trade_expectancy=0, profit_factor=0, win_percentage=0,
@@ -870,24 +773,9 @@ async def get_metrics(user_id: str, from_date: Optional[str] = None, to_date: Op
         
         # Profit Factor = Gross Profit / Gross Loss
         gross_profit = sum(winning_trades) if winning_trades else 0
-        gross_loss = abs(sum(losing_trades)) if losing_trades else 1  # Avoid division by zero
+        gross_loss = abs(sum(losing_trades)) if losing_trades else 0
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
-        
-        # Debug: Show final metrics
-        print(f"📈 Final metrics for date range {from_date} to {to_date}:")
-        print(f"   Total trades: {total_trades}")
-        print(f"   Net P&L: {net_pnl}")
-        print(f"   Win rate: {win_percentage}%")
-        
-        # Also return debug info in development
-        debug_info = {
-            "date_range": {"from": from_date, "to": to_date},
-            "total_trades_before_filtering": len(all_trades) if 'all_trades' in locals() else "N/A",
-            "trades_after_firebase_filtering": len(trades),
-            "closed_trades_for_metrics": len(closed_trades)
-        }
-        print(f"🔍 Debug info: {debug_info}")
-        
+
         return TradeMetrics(
             net_pnl=net_pnl,
             trade_expectancy=trade_expectancy,
@@ -900,18 +788,17 @@ async def get_metrics(user_id: str, from_date: Optional[str] = None, to_date: Op
             losing_trades=loss_count
         )
         
-    except Exception as e:
-        print(f"❌ Error calculating metrics: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        print("❌ Error calculating metrics")
+        raise HTTPException(status_code=500, detail="Unable to calculate metrics")
 
 @app.get("/profile/{user_id}")
 async def get_user_profile(user_id: str, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Get profile request: user={user_id}")
-        
         # Ensure user can only access their own profile
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s profile")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
@@ -949,19 +836,19 @@ async def get_user_profile(user_id: str, current_user: str = Depends(get_current
                     "risk_tolerance": 2.0
                 }
             }
-    except Exception as e:
-        print(f"❌ Error fetching profile: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        print("❌ Error fetching profile")
+        raise HTTPException(status_code=500, detail="Unable to fetch profile")
 
 @app.put("/profile/{user_id}")
 async def update_user_profile(user_id: str, profile_data: dict, current_user: str = Depends(get_current_user)):
     try:
-        print(f"🔍 Profile update request: user={user_id}")
-        print(f"📊 Raw profile data received: {profile_data}")
+        print("🔍 Profile update request received")
         
         # Ensure user can only update their own profile
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to update {user_id}'s profile")
             raise HTTPException(status_code=403, detail="Access denied")
         
         # Validate required fields
@@ -973,20 +860,20 @@ async def update_user_profile(user_id: str, profile_data: dict, current_user: st
         try:
             account_balance = float(profile_data['account_balance'])
             if account_balance <= 0:
-                print(f"❌ Account balance must be positive: {account_balance}")
+                print("❌ Account balance must be positive")
                 raise HTTPException(status_code=422, detail="account_balance must be a positive number")
         except (ValueError, TypeError):
-            print(f"❌ Invalid account_balance format: {profile_data['account_balance']}")
+            print("❌ Invalid account_balance format")
             raise HTTPException(status_code=422, detail="account_balance must be a valid number")
         
         # Convert and validate risk_tolerance (handle string input from frontend)
         try:
             risk_tolerance = float(profile_data.get('risk_tolerance', 2.0))
             if risk_tolerance < 0 or risk_tolerance > 100:
-                print(f"❌ Risk tolerance out of range: {risk_tolerance}")
+                print("❌ Risk tolerance out of range")
                 raise HTTPException(status_code=422, detail="risk_tolerance must be between 0 and 100")
         except (ValueError, TypeError):
-            print(f"❌ Invalid risk_tolerance format: {profile_data.get('risk_tolerance')}")
+            print("❌ Invalid risk_tolerance format")
             raise HTTPException(status_code=422, detail="risk_tolerance must be a valid number")
         
         # Create profile object with defaults
@@ -997,8 +884,7 @@ async def update_user_profile(user_id: str, profile_data: dict, current_user: st
             'updated_at': datetime.now()
         }
         
-        print(f"✅ Profile validation passed")
-        print(f"📋 Processed profile data: {profile_obj}")
+        print("📋 Profile validation passed")
         
         if db:
             # Use Firebase Firestore
@@ -1007,29 +893,28 @@ async def update_user_profile(user_id: str, profile_data: dict, current_user: st
             
             # Check if profile exists
             profile_exists = doc_ref.get().exists
-            print(f"📋 Profile exists: {profile_exists}")
+            print("📋 Profile lookup completed")
             
             if not profile_exists:
                 profile_obj['created_at'] = datetime.now()
-                print(f"🆕 Creating new profile with created_at: {profile_obj['created_at']}")
+                print("🆕 Creating new profile")
             
             # Update profile
             print(f"💾 Saving profile data to Firestore")
             doc_ref.set(profile_obj, merge=True)
-            print(f"✅ Profile saved successfully for user: {user_id}")
+            print("✅ Profile saved successfully")
             
             return {"message": "Profile updated successfully", "user_id": user_id}
         else:
             # Mock data fallback
-            print(f"📝 Using mock data for profile update: {user_id}")
+            print("📝 Using mock data for profile update")
             return {"message": "Profile updated successfully (mock)", "user_id": user_id}
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error updating profile: {e}")
-        print(f"🔍 Raw data that caused error: {profile_data}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error updating profile")
+        raise HTTPException(status_code=500, detail="Unable to update profile")
 
 @app.get("/profile/{user_id}/account-balance")
 async def get_account_balance(user_id: str, current_user: str = Depends(get_current_user)):
@@ -1037,7 +922,6 @@ async def get_account_balance(user_id: str, current_user: str = Depends(get_curr
     try:
         # Ensure user can only access their own account balance
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s account balance")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
@@ -1051,9 +935,11 @@ async def get_account_balance(user_id: str, current_user: str = Depends(get_curr
                 return {"account_balance": 10000.0}  # Default
         else:
             return {"account_balance": 10000.0}  # Mock default
-    except Exception as e:
-        print(f"❌ Error fetching account balance: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        print("❌ Error fetching account balance")
+        raise HTTPException(status_code=500, detail="Unable to fetch account balance")
 
 # Monthly Returns Management Endpoints
 
@@ -1061,11 +947,8 @@ async def get_account_balance(user_id: str, current_user: str = Depends(get_curr
 async def get_monthly_returns(user_id: str, current_user: str = Depends(get_current_user)):
     """Get all monthly returns for a user"""
     try:
-        print(f"🔍 Get monthly returns request: user={user_id}")
-        
         # Ensure user can only access their own monthly returns
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s monthly returns")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
@@ -1086,7 +969,6 @@ async def get_monthly_returns(user_id: str, current_user: str = Depends(get_curr
                 
                 returns.append(return_data)
             
-            print(f"✅ Found {len(returns)} monthly returns for user {user_id}")
             return {"monthly_returns": returns}
         else:
             # Mock data fallback
@@ -1118,16 +1000,15 @@ async def get_monthly_returns(user_id: str, current_user: str = Depends(get_curr
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error fetching monthly returns: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error fetching monthly returns")
+        raise HTTPException(status_code=500, detail="Unable to fetch monthly returns")
 
 @app.post("/monthly-returns")
 async def create_or_update_monthly_return(monthly_return: MonthlyReturn, current_user: str = Depends(get_current_user)):
     """Create or update a monthly return"""
     try:
-        print(f"🔍 Create/update monthly return request: user={current_user}")
-        print(f"📊 Monthly return data received: {monthly_return.model_dump()}")
+        print("🔍 Create/update monthly return request received")
         
         # Ensure user can only create/update their own monthly returns
         monthly_return.user_id = current_user
@@ -1165,7 +1046,7 @@ async def create_or_update_monthly_return(monthly_return: MonthlyReturn, current
                 update_data = {k: v for k, v in update_data.items() if v is not None}
                 doc_ref.update(update_data)
                 return_id = existing_docs[0].id
-                print(f"✅ Updated existing monthly return: {return_id}")
+                print("✅ Updated existing monthly return")
             else:
                 # Create new
                 monthly_return.created_at = datetime.now()
@@ -1174,7 +1055,7 @@ async def create_or_update_monthly_return(monthly_return: MonthlyReturn, current
                 doc_data = {k: v for k, v in doc_data.items() if v is not None}
                 doc_ref = returns_ref.add(doc_data)
                 return_id = doc_ref[1].id
-                print(f"✅ Created new monthly return: {return_id}")
+                print("✅ Created new monthly return")
             
             return {
                 "message": "Monthly return saved successfully",
@@ -1192,14 +1073,14 @@ async def create_or_update_monthly_return(monthly_return: MonthlyReturn, current
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error saving monthly return: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error saving monthly return")
+        raise HTTPException(status_code=500, detail="Unable to save monthly return")
 
 @app.delete("/monthly-returns/{return_id}")
 async def delete_monthly_return(return_id: str, current_user: str = Depends(get_current_user)):
     """Delete a monthly return"""
     try:
-        print(f"🔍 Delete monthly return request: return_id={return_id}, user={current_user}")
+        print("🔍 Delete monthly return request received")
         
         if db:
             # Use Firebase Firestore
@@ -1217,7 +1098,7 @@ async def delete_monthly_return(return_id: str, current_user: str = Depends(get_
                 raise HTTPException(status_code=403, detail="Access denied")
             
             doc_ref.delete()
-            print(f"✅ Deleted monthly return: {return_id}")
+            print("✅ Deleted monthly return")
             
             return {"message": "Monthly return deleted successfully"}
         else:
@@ -1227,8 +1108,8 @@ async def delete_monthly_return(return_id: str, current_user: str = Depends(get_
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error deleting monthly return: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print("❌ Error deleting monthly return")
+        raise HTTPException(status_code=500, detail="Unable to delete monthly return")
 
 # Fees Configuration Management Endpoints
 
@@ -1236,11 +1117,8 @@ async def delete_monthly_return(return_id: str, current_user: str = Depends(get_
 async def get_fees_config(user_id: str, current_user: str = Depends(get_current_user)):
     """Get fees configuration for a user"""
     try:
-        print(f"🔍 Get fees config request: user={user_id}")
-        
         # Ensure user can only access their own fees configuration
         if user_id != current_user:
-            print(f"❌ Unauthorized access attempt: {current_user} trying to access {user_id}'s fees config")
             raise HTTPException(status_code=403, detail="Access denied")
         
         if db:
@@ -1257,12 +1135,10 @@ async def get_fees_config(user_id: str, current_user: str = Depends(get_current_
                     if isinstance(fees_data.get(field), datetime):
                         fees_data[field] = fees_data[field].isoformat()
                 
-                print(f"✅ Found fees config for user {user_id}")
                 return {"fees_config": fees_data}
             else:
                 # Return default fees configuration
                 default_config = FeesConfig(user_id=user_id)
-                print(f"📝 Returning default fees config for user {user_id}")
                 return {"fees_config": default_config.model_dump(exclude={'id', 'created_at', 'updated_at'})}
         else:
             # Mock data fallback
@@ -1271,16 +1147,15 @@ async def get_fees_config(user_id: str, current_user: str = Depends(get_current_
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error fetching fees config: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error fetching fees config")
+        raise HTTPException(status_code=500, detail="Unable to fetch fees configuration")
 
 @app.post("/fees-config")
 async def save_fees_config(fees_config: FeesConfig, current_user: str = Depends(get_current_user)):
     """Save or update fees configuration"""
     try:
-        print(f"🔍 Save fees config request: user={current_user}")
-        print(f"📊 Fees config data received: {fees_config.model_dump()}")
+        print("🔍 Save fees config request received")
         
         # Ensure user can only save their own fees configuration
         fees_config.user_id = current_user
@@ -1323,22 +1198,21 @@ async def save_fees_config(fees_config: FeesConfig, current_user: str = Depends(
             config_data = fees_config.model_dump(exclude={'id'})
             
             # Save fees configuration
-            print(f"💾 Saving fees config data to Firestore")
+            print("💾 Saving fees config data to Firestore")
             doc_ref.set(config_data, merge=True)
-            print(f"✅ Fees config saved successfully for user: {current_user}")
+            print("✅ Fees config saved successfully")
             
             return {"message": "Fees configuration saved successfully", "user_id": current_user}
         else:
             # Mock data fallback
-            print(f"📝 Using mock data for fees config save: {current_user}")
+            print("📝 Using mock data for fees config save")
             return {"message": "Fees configuration saved successfully (mock)", "user_id": current_user}
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error saving fees config: {e}")
-        print(f"🔍 Raw data that caused error: {fees_config.model_dump()}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error saving fees config")
+        raise HTTPException(status_code=500, detail="Unable to save fees configuration")
 
 # Email-related models
 class EmailRequest(BaseModel):
@@ -1365,7 +1239,7 @@ class WeeklySummaryRequest(BaseModel):
 async def resubscribe_email(request: EmailRequest, current_user: str = Depends(get_current_user)):
     """Re-subscribe user email that was previously unsubscribed"""
     try:
-        print(f"📧 Re-subscribing email: {request.email}")
+        print("📧 Re-subscribe email request received")
         
         # Verify the user is resubscribing their own email
         user_record = auth.get_user(current_user)
@@ -1375,23 +1249,23 @@ async def resubscribe_email(request: EmailRequest, current_user: str = Depends(g
         success = email_service.resubscribe_email(request.email)
         
         if success:
-            print(f"✅ Email resubscribed successfully: {request.email}")
+            print("✅ Email resubscribed successfully")
             return {"message": "Email resubscribed successfully", "email": request.email}
         else:
-            print(f"❌ Failed to resubscribe email: {request.email}")
+            print("❌ Failed to resubscribe email")
             raise HTTPException(status_code=500, detail="Failed to resubscribe email")
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error resubscribing email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error resubscribing email")
+        raise HTTPException(status_code=500, detail="Unable to resubscribe email")
 
 @app.post("/trigger-welcome-email")
 async def trigger_welcome_email(request: TriggerWelcomeEmailRequest, current_user: str = Depends(get_current_user)):
     """Trigger welcome email on login/signup with user tracking"""
     try:
-        print(f"📧 Triggering welcome email for: {request.email} (new user: {request.is_new_user})")
+        print("📧 Welcome email request received")
         
         # Verify the user is triggering email for themselves
         user_record = auth.get_user(current_user)
@@ -1409,10 +1283,10 @@ async def trigger_welcome_email(request: TriggerWelcomeEmailRequest, current_use
                     welcome_email_sent = user_data.get('welcome_email_sent', False)
                     
                 if welcome_email_sent:
-                    print(f"🔄 Welcome email already sent to {request.email}, skipping...")
+                    print("🔄 Welcome email already sent; skipping")
                     return {"message": "Welcome email already sent", "email": request.email, "skipped": True}
-            except Exception as e:
-                print(f"⚠️ Could not check welcome email status: {e}")
+            except Exception:
+                print("⚠️ Could not check welcome email status")
         
         # Send the welcome email
         success = email_service.send_welcome_email(request.email, request.user_name)
@@ -1427,28 +1301,28 @@ async def trigger_welcome_email(request: TriggerWelcomeEmailRequest, current_use
                         'welcome_email_sent_at': datetime.now(),
                         'email': request.email
                     }, merge=True)
-                    print(f"✅ Marked welcome email as sent for user: {current_user}")
-                except Exception as e:
-                    print(f"⚠️ Could not update user welcome email status: {e}")
+                    print("✅ Marked welcome email as sent")
+                except Exception:
+                    print("⚠️ Could not update user welcome email status")
             
-            print(f"✅ Welcome email sent successfully to {request.email}")
+            print("✅ Welcome email sent successfully")
             return {"message": "Welcome email sent successfully", "email": request.email, "triggered": True}
         else:
-            print(f"❌ Failed to send welcome email to {request.email}")
+            print("❌ Failed to send welcome email")
             raise HTTPException(status_code=500, detail="Failed to send welcome email")
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error triggering welcome email: {e}")
+    except Exception:
+        print("❌ Error triggering welcome email")
         # Don't fail the login process if email fails
-        return {"message": "Email service temporarily unavailable", "email": request.email, "error": str(e)}
+        return {"message": "Email service temporarily unavailable", "email": request.email}
 
 @app.post("/send-welcome-email")
 async def send_welcome_email(request: EmailRequest, current_user: str = Depends(get_current_user)):
     """Send welcome email to user"""
     try:
-        print(f"📧 Sending welcome email to: {request.email}")
+        print("📧 Send welcome email request received")
         
         # Verify the user is sending email to themselves or has permission
         user_record = auth.get_user(current_user)
@@ -1458,23 +1332,23 @@ async def send_welcome_email(request: EmailRequest, current_user: str = Depends(
         success = email_service.send_welcome_email(request.email, request.user_name)
         
         if success:
-            print(f"✅ Welcome email sent successfully to {request.email}")
+            print("✅ Welcome email sent successfully")
             return {"message": "Welcome email sent successfully", "email": request.email}
         else:
-            print(f"❌ Failed to send welcome email to {request.email}")
+            print("❌ Failed to send welcome email")
             raise HTTPException(status_code=500, detail="Failed to send welcome email")
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error sending welcome email: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error sending welcome email")
+        raise HTTPException(status_code=500, detail="Unable to send welcome email")
 
 @app.post("/send-trade-reminder")
 async def send_trade_reminder(request: TradeReminderRequest, current_user: str = Depends(get_current_user)):
     """Send trade reminder email to user"""
     try:
-        print(f"📧 Sending trade reminder to: {request.email}")
+        print("📧 Send trade reminder request received")
         
         # Verify the user is sending email to themselves
         user_record = auth.get_user(current_user)
@@ -1488,23 +1362,23 @@ async def send_trade_reminder(request: TradeReminderRequest, current_user: str =
         )
         
         if success:
-            print(f"✅ Trade reminder sent successfully to {request.email}")
+            print("✅ Trade reminder sent successfully")
             return {"message": "Trade reminder sent successfully", "email": request.email}
         else:
-            print(f"❌ Failed to send trade reminder to {request.email}")
+            print("❌ Failed to send trade reminder")
             raise HTTPException(status_code=500, detail="Failed to send trade reminder")
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error sending trade reminder: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error sending trade reminder")
+        raise HTTPException(status_code=500, detail="Unable to send trade reminder")
 
 @app.post("/send-weekly-summary")
 async def send_weekly_summary(request: WeeklySummaryRequest, current_user: str = Depends(get_current_user)):
     """Send weekly summary email to user"""
     try:
-        print(f"📧 Sending weekly summary to: {request.email}")
+        print("📧 Send weekly summary request received")
         
         # Verify the user is sending email to themselves
         user_record = auth.get_user(current_user)
@@ -1545,10 +1419,10 @@ async def send_weekly_summary(request: WeeklySummaryRequest, current_user: str =
                     'worst_trade': worst_trade
                 }
                 
-                print(f"📊 Calculated summary data: {summary_data}")
+                print("📊 Weekly summary data calculated")
                 
-            except Exception as e:
-                print(f"⚠️ Could not fetch trading data, using defaults: {e}")
+            except Exception:
+                print("⚠️ Could not fetch trading data; using defaults")
                 summary_data = None
         
         success = email_service.send_weekly_summary(
@@ -1558,17 +1432,17 @@ async def send_weekly_summary(request: WeeklySummaryRequest, current_user: str =
         )
         
         if success:
-            print(f"✅ Weekly summary sent successfully to {request.email}")
+            print("✅ Weekly summary sent successfully")
             return {"message": "Weekly summary sent successfully", "email": request.email}
         else:
-            print(f"❌ Failed to send weekly summary to {request.email}")
+            print("❌ Failed to send weekly summary")
             raise HTTPException(status_code=500, detail="Failed to send weekly summary")
             
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"❌ Error sending weekly summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        print("❌ Error sending weekly summary")
+        raise HTTPException(status_code=500, detail="Unable to send weekly summary")
 
 @app.get("/health")
 async def health_check():

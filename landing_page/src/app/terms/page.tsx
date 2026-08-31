@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: "The terms that govern access to and use of the free TradeBud trading journal and performance analytics application.",
   alternates: { canonical: "/terms" },
-  openGraph: { title: "Terms of Service | TradeBud", description: "Terms governing use of TradeBud.", url: "/terms" },
+  openGraph: { type: "website", title: "Terms of Service | TradeBud", description: "Terms governing use of TradeBud.", url: "https://tradebud.xyz/terms", siteName: "TradeBud", locale: "en_US", images: [{ url: "https://tradebud.xyz/og-demo.png", width: 1200, height: 630, alt: "TradeBud terms of service" }] },
+  twitter: { card: "summary_large_image", title: "Terms of Service | TradeBud", description: "Terms governing use of TradeBud.", images: ["https://tradebud.xyz/og-demo.png"] },
 };
 
 export default function TermsPage() {
   return (
-    <main className="legal-page">
+    <main id="main-content" className="legal-page">
       <header className="legal-header">
-        <a href="/" className="legal-brand"><span aria-hidden="true">TB</span>TradeBud</a>
-        <nav aria-label="Legal navigation"><a href="/free-trading-journal">Product guide</a><a href="/privacy">Privacy</a><a href="https://app.tradebud.xyz">Open app</a></nav>
+        <Link href="/" className="legal-brand"><span aria-hidden="true">TB</span>TradeBud</Link>
+        <nav aria-label="Legal navigation"><Link href="/free-trading-journal">Product guide</Link><Link href="/tools">Free tools</Link><Link href="/privacy">Privacy</Link><a href="https://app.tradebud.xyz">Open app</a></nav>
       </header>
 
       <article className="legal-article">
-        <div className="legal-title"><p>LEGAL</p><h1>Terms of Service</h1><span>Last updated: 14 August 2026</span></div>
+        <div className="legal-title"><p>LEGAL</p><h1>Terms of Service</h1><span>Last updated: 31 August 2026</span></div>
         <p className="legal-summary">These terms govern your access to TradeBud. By creating an account or using the service, you agree to them.</p>
 
         <section><h2>1. The service</h2><p>TradeBud is a personal trading journal and analytics application. It lets you record trade information, maintain notes, calculate estimated trading costs, and review performance. Features and calculations are provided for informational and organizational purposes.</p></section>
@@ -50,7 +52,7 @@ export default function TermsPage() {
         <section><h2>15. Contact</h2><p>Questions about these terms can be sent to <a href="mailto:kavishshah30@gmail.com">kavishshah30@gmail.com</a>.</p></section>
       </article>
 
-      <footer className="legal-footer"><span>© 2026 TradeBud</span><a href="/">Home</a><a href="/privacy">Privacy</a></footer>
+      <footer className="legal-footer"><span>© 2026 TradeBud</span><Link href="/">Home</Link><Link href="/privacy">Privacy</Link></footer>
     </main>
   );
 }

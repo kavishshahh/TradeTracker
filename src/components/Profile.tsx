@@ -131,7 +131,7 @@ export default function Profile() {
       
       // Track successful profile update
       trackFormSubmission('profile_form', true);
-      trackEvent('profile_update', 'profile', 'success');
+      trackEvent('profile_update', 'profile');
       
       // Reset success state after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
@@ -140,7 +140,7 @@ export default function Profile() {
       toast.error('Failed to update profile. Please try again.');
       // Track failed profile update
       trackFormSubmission('profile_form', false);
-      trackEvent('profile_update', 'profile', 'error');
+      trackEvent('profile_update', 'profile');
     } finally {
       setIsSubmitting(false);
     }
@@ -196,7 +196,7 @@ export default function Profile() {
       toast.success('Password changed successfully!');
       
       // Track successful password change
-      trackEvent('password_change', 'security', 'success');
+      trackEvent('password_change', 'security');
       
       // Reset form and success state
       resetPassword();
@@ -218,7 +218,7 @@ export default function Profile() {
       }
       
       toast.error(errorMessage);
-      trackEvent('password_change', 'security', 'error');
+      trackEvent('password_change', 'security');
     } finally {
       setIsPasswordSubmitting(false);
     }
@@ -482,7 +482,7 @@ function ProfileTabContent({
                 type="button"
                 onClick={() => {
                   toggleTheme();
-                  trackEvent('theme_toggle', 'profile', theme === 'light' ? 'dark' : 'light');
+                  trackEvent('theme_toggle', 'profile');
                 }}
                 className="flex items-center space-x-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               >

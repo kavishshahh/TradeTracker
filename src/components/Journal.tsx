@@ -399,7 +399,7 @@ export default function Journal() {
         setFilteredTrades(sortedTrades);
         // Track journal page view
         trackPageView('/journal');
-        trackUserEngagement('journal_view', `trades_${sortedTrades.length}`);
+        trackUserEngagement('journal_view');
       } catch (error) {
         console.error('Error fetching trades:', error);
       } finally {
@@ -431,8 +431,8 @@ export default function Journal() {
 
   const handleEditTrade = (trade: Trade) => {
     setEditingTrade(trade);
-    trackEvent('journal_edit', 'journal', trade.ticker);
-    trackUserEngagement('trade_edit', trade.status);
+    trackEvent('journal_edit', 'journal');
+    trackUserEngagement('trade_edit');
   };
 
   const handleSaveTrade = async (updatedTrade: Trade) => {
@@ -563,7 +563,7 @@ export default function Journal() {
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  trackEvent('journal_search', 'journal', e.target.value);
+                  trackEvent('journal_search', 'journal');
                 }}
                 className="w-full pl-10 pr-3 py-2 border border-gray-300  dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               />
@@ -582,8 +582,8 @@ export default function Journal() {
                   onChange={(e) => {
                     const newFilter = e.target.value as 'all' | 'open' | 'closed';
                     setStatusFilter(newFilter);
-                    trackEvent('journal_filter', 'journal', newFilter);
-                    trackUserEngagement('filter_change', newFilter);
+                    trackEvent('journal_filter', 'journal');
+                    trackUserEngagement('filter_change');
                   }}
                   className="border border-gray-300  dark:border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >

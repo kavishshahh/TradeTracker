@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "How TradeBud collects, uses, protects, and lets you control account, trading journal, and usage data.",
   alternates: { canonical: "/privacy" },
-  openGraph: { title: "Privacy Policy | TradeBud", description: "How TradeBud handles and protects your information.", url: "/privacy" },
+  openGraph: { type: "website", title: "Privacy Policy | TradeBud", description: "How TradeBud handles and protects your information.", url: "https://tradebud.xyz/privacy", siteName: "TradeBud", locale: "en_US", images: [{ url: "https://tradebud.xyz/og-demo.png", width: 1200, height: 630, alt: "TradeBud privacy policy" }] },
+  twitter: { card: "summary_large_image", title: "Privacy Policy | TradeBud", description: "How TradeBud handles and protects your information.", images: ["https://tradebud.xyz/og-demo.png"] },
 };
 
 export default function PrivacyPage() {
   return (
-    <main className="legal-page">
+    <main id="main-content" className="legal-page">
       <header className="legal-header">
-        <a href="/" className="legal-brand"><span aria-hidden="true">TB</span>TradeBud</a>
-        <nav aria-label="Legal navigation"><a href="/free-trading-journal">Product guide</a><a href="/terms">Terms</a><a href="https://app.tradebud.xyz">Open app</a></nav>
+        <Link href="/" className="legal-brand"><span aria-hidden="true">TB</span>TradeBud</Link>
+        <nav aria-label="Legal navigation"><Link href="/free-trading-journal">Product guide</Link><Link href="/tools">Free tools</Link><Link href="/terms">Terms</Link><a href="https://app.tradebud.xyz">Open app</a></nav>
       </header>
 
       <article className="legal-article">
-        <div className="legal-title"><p>LEGAL</p><h1>Privacy Policy</h1><span>Last updated: 14 August 2026</span></div>
+        <div className="legal-title"><p>LEGAL</p><h1>Privacy Policy</h1><span>Last updated: 31 August 2026</span></div>
         <p className="legal-summary">This policy explains what information TradeBud handles, why it is needed, and the choices available to you. TradeBud does not sell your personal information.</p>
 
         <section><h2>1. Information we collect</h2><p>We may collect the following categories of information when you use TradeBud:</p><ul>
@@ -49,7 +51,7 @@ export default function PrivacyPage() {
         <section><h2>12. Contact</h2><p>For privacy questions or requests, email <a href="mailto:kavishshah30@gmail.com">kavishshah30@gmail.com</a>.</p></section>
       </article>
 
-      <footer className="legal-footer"><span>© 2026 TradeBud</span><a href="/">Home</a><a href="/terms">Terms</a></footer>
+      <footer className="legal-footer"><span>© 2026 TradeBud</span><Link href="/">Home</Link><Link href="/terms">Terms</Link></footer>
     </main>
   );
 }

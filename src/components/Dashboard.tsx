@@ -16,11 +16,6 @@ import {
   LineChart,
   Pie,
   PieChart,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -271,8 +266,8 @@ export default function Dashboard() {
     setSelectedDateRange(dateRange);
     setIsCalendarOpen(false);
     // Track date filter usage
-    trackEvent('date_filter_applied', 'dashboard', formatDateRange(dateRange));
-    trackUserEngagement('filter_usage', formatDateRange(dateRange));
+    trackEvent('date_filter_applied', 'dashboard');
+    trackUserEngagement('filter_usage');
   };
 
   // Toggle calendar open/close
@@ -348,17 +343,17 @@ export default function Dashboard() {
   const handleMonthShortcut = (shortcut: MonthShortcut) => {
     setSelectedDateRange(shortcut.range);
     setDateRange(shortcut.range);
-    // Track shortcut usage
-    trackEvent('date_shortcut_used', 'dashboard', shortcut.label);
-    trackUserEngagement('shortcut_usage', shortcut.label);
+    // Track shortcut usage without sending date values.
+    trackEvent('date_shortcut_used', 'dashboard');
+    trackUserEngagement('shortcut_usage');
   };
 
   // Clear date filter
   const clearDateFilter = () => {
     setSelectedDateRange(undefined);
     setDateRange(undefined);
-    // Track filter clearing
-    trackEvent('date_filter_cleared', 'dashboard', 'all_time');
+    // Track filter clearing without sending the selected range.
+    trackEvent('date_filter_cleared', 'dashboard');
     trackUserEngagement('filter_clear');
   };
 
@@ -718,37 +713,6 @@ export default function Dashboard() {
   const latestPeriod = periodStats[periodStats.length - 1];
   const previousPeriod = periodStats[periodStats.length - 2];
 
-  // Calculate Sharpe Ratio
-const calculateSharpeRatio = (riskFreeRate = 0): number => {
-  if (!trades.length || !pnlCurveData.length) return 0;
-
-  const returns = pnlCurveData.map((point, index) => {
-    if (index === 0) return 0;
-    const prevEquity = pnlCurveData[index - 1].equity;
-    return prevEquity !== 0 ? (point.equity - prevEquity) / Math.abs(prevEquity) : 0;
-  }).filter(r => r !== 0);
-
-  if (returns.length <= 1) return 0;
-
-  const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1);
-  const stdDev = Math.sqrt(variance);
-  const dailySharpe = stdDev !== 0 ? (avgReturn - riskFreeRate) / stdDev : 0;
-  // Annualize assuming daily returns
-  return dailySharpe * Math.sqrt(252);
-};
-
-
-  // Get Sharpe Ratio label
-  const getSharpeRatioLabel = (sharpeRatio: number): string => {
-    if (sharpeRatio >= 2.0) return 'Excellent';
-    if (sharpeRatio >= 1.5) return 'Very Good';
-    if (sharpeRatio >= 1.0) return 'Good';
-    if (sharpeRatio >= 0.5) return 'Fair';
-    if (sharpeRatio >= 0) return 'Poor';
-    return 'Very Poor';
-  };
-
   // Check if we have enough data for charts
   const hasPnLChartData = pnlCurveData.length > 0;
   const hasEquityChartData = accountEquityCurveData.length > 0;
@@ -759,14 +723,11 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
     { name: 'Losing Trades', value: displayMetrics?.losing_trades || 0, color: '#A4483F' }
   ];
 
-  // Prepare radar chart data for trading score
-  const radarData = [
-    { subject: 'Win Rate', A: displayMetrics?.win_percentage || 0, fullMark: 100 },
-    { subject: 'Risk Management', A: 75, fullMark: 100 },
-    { subject: 'Discipline', A: 80, fullMark: 100 },
-    { subject: 'Consistency', A: 70, fullMark: 100 },
-    { subject: 'Resilience', A: 85, fullMark: 100 },
-  ];
+  // Payoff ratio is a direct comparison of the observed average win and loss.
+  // It is intentionally shown instead of a synthetic score or an invalid Sharpe estimate.
+  const averageWin = displayMetrics?.avg_win || 0;
+  const averageLoss = displayMetrics?.avg_loss || 0;
+  const payoffRatio = averageLoss > 0 ? averageWin / averageLoss : null;
 
   return (
     <div className="dashboard-page space-y-6">
@@ -786,8 +747,8 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
             <button
               onClick={() => {
                 setShowNetProfits(false);
-                trackEvent('profit_toggle', 'dashboard', 'gross_pnl');
-                trackUserEngagement('toggle_profit_view', 'gross');
+                trackEvent('profit_toggle', 'dashboard');
+                trackUserEngagement('toggle_profit_view');
               }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 !showNetProfits 
@@ -800,8 +761,8 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
             <button
               onClick={() => {
                 setShowNetProfits(true);
-                trackEvent('profit_toggle', 'dashboard', 'net_pnl');
-                trackUserEngagement('toggle_profit_view', 'net');
+                trackEvent('profit_toggle', 'dashboard');
+                trackUserEngagement('toggle_profit_view');
               }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 showNetProfits 
@@ -950,11 +911,11 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
             trendValue={`Per Trade`}
           />
           <MetricCard
-            title="Sharpe Ratio"
-            value={calculateSharpeRatio().toFixed(2)}
+            title="Payoff Ratio"
+            value={payoffRatio === null ? '—' : payoffRatio.toFixed(2)}
             icon={TrendingUp}
-            trend={calculateSharpeRatio() >= 1 ? 'up' : calculateSharpeRatio() >= 0 ? 'neutral' : 'down'}
-            trendValue={getSharpeRatioLabel(calculateSharpeRatio())}
+            trend={payoffRatio === null ? 'neutral' : payoffRatio >= 1 ? 'up' : 'down'}
+            trendValue={payoffRatio === null ? 'Needs losses' : 'Avg win / loss'}
           />
         </div>
       </div>
@@ -1094,23 +1055,16 @@ const calculateSharpeRatio = (riskFreeRate = 0): number => {
           </ResponsiveContainer>
         </div>
 
-        {/* Trading Score Radar */}
+        {/* Process review: only display measures that are calculated from the journal. */}
         <div className="dashboard-card bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Trading Score - {formatDateRange(selectedDateRange)}</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <RadarChart data={radarData}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="subject" />
-              <PolarRadiusAxis />
-              <Radar
-                name="Score"
-                dataKey="A"
-                stroke="#1F6B46"
-                fill="#1F6B46"
-                fillOpacity={0.2}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Process review</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">TradeBud does not invent discipline or consistency scores. Use the recorded fields below to review the process behind the outcomes.</p>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Closed trades</span><span className="font-medium text-gray-900 dark:text-white">{displayMetrics?.total_trades || 0}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Winning trades</span><span className="font-medium text-green-600 dark:text-green-400">{displayMetrics?.winning_trades || 0}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Losing trades</span><span className="font-medium text-red-600 dark:text-red-400">{displayMetrics?.losing_trades || 0}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500 dark:text-gray-400">Fees included</span><span className="font-medium text-gray-900 dark:text-white">{showNetProfits ? 'Yes' : 'Gross view'}</span></div>
+          </div>
         </div>
 
         {/* Recent Performance */}

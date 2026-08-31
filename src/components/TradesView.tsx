@@ -815,7 +815,7 @@ export default function TradesView() {
       
       // Track trades page view
       trackPageView('/trades');
-      trackUserEngagement('trades_view', `trades_${sortedTrades.length}`);
+      trackUserEngagement('trades_view');
     } catch (error) {
       console.error('Error fetching trades:', error);
     } finally {
@@ -1272,8 +1272,8 @@ export default function TradesView() {
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
                     if (e.target.value.length > 2) {
-                      trackEvent('trades_search', 'trades', e.target.value.length.toString());
-                      trackUserEngagement('search_usage', 'trades');
+                      trackEvent('trades_search', 'trades');
+                      trackUserEngagement('search_usage');
                     }
                   }}
                   placeholder="Search by ticker or notes..."
@@ -1290,8 +1290,8 @@ export default function TradesView() {
                 onChange={(e) => {
                   const newFilter = e.target.value as 'all' | 'open' | 'closed';
                   setStatusFilter(newFilter);
-                  trackEvent('trades_filter', 'trades', newFilter);
-                  trackUserEngagement('filter_change', `status_${newFilter}`);
+                  trackEvent('trades_filter', 'trades');
+                  trackUserEngagement('filter_change');
                 }}
                 className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
@@ -1439,8 +1439,8 @@ export default function TradesView() {
                       className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                       onClick={() => {
                         setSelectedTrade(trade);
-                        trackEvent('trade_detail_view', 'trades', trade.ticker);
-                        trackUserEngagement('trade_interaction', trade.status);
+                        trackEvent('trade_detail_view', 'trades');
+                        trackUserEngagement('trade_interaction');
                       }}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
@@ -1496,8 +1496,8 @@ export default function TradesView() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditingTrade(trade);
-                              trackEvent('trade_edit', 'trades', trade.ticker);
-                              trackUserEngagement('edit_action', trade.status);
+                              trackEvent('trade_edit', 'trades');
+                              trackUserEngagement('edit_action');
                             }}
                             className="text-blue-600 hover:text-blue-800 transition-colors p-1"
                             title="Edit trade"
@@ -1508,8 +1508,8 @@ export default function TradesView() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeletingTrade(trade);
-                              trackEvent('trade_delete_click', 'trades', trade.ticker);
-                              trackUserEngagement('delete_action', trade.status);
+                              trackEvent('trade_delete_click', 'trades');
+                              trackUserEngagement('delete_action');
                             }}
                             className="text-red-600 hover:text-red-800 transition-colors p-1"
                             title="Delete trade"

@@ -26,8 +26,8 @@ function CalendarDay({ date, stats, isCurrentMonth, isToday, onClick }: Calendar
       onClick={() => {
         onClick(date, stats);
         if (hasData) {
-          trackEvent('calendar_day_click', 'calendar', date.toISOString().split('T')[0], stats?.trade_count);
-          trackUserEngagement('day_interaction', `trades_${stats?.trade_count}`);
+          trackEvent('calendar_day_click', 'calendar');
+          trackUserEngagement('day_interaction');
         }
       }}
       className={`
@@ -276,24 +276,24 @@ export default function CalendarView() {
   const goToPreviousPeriod = () => {
     if (viewMode === 'yearly') {
       setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1));
-      trackEvent('calendar_navigation', 'calendar', 'previous_year');
-      trackUserEngagement('year_navigation', 'previous');
+      trackEvent('calendar_navigation', 'calendar');
+      trackUserEngagement('year_navigation');
     } else {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-      trackEvent('calendar_navigation', 'calendar', 'previous_month');
-      trackUserEngagement('month_navigation', 'previous');
+      trackEvent('calendar_navigation', 'calendar');
+      trackUserEngagement('month_navigation');
     }
   };
 
   const goToNextPeriod = () => {
     if (viewMode === 'yearly') {
       setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1));
-      trackEvent('calendar_navigation', 'calendar', 'next_year');
-      trackUserEngagement('year_navigation', 'next');
+      trackEvent('calendar_navigation', 'calendar');
+      trackUserEngagement('year_navigation');
     } else {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-      trackEvent('calendar_navigation', 'calendar', 'next_month');
-      trackUserEngagement('month_navigation', 'next');
+      trackEvent('calendar_navigation', 'calendar');
+      trackUserEngagement('month_navigation');
     }
   };
 
@@ -351,7 +351,7 @@ export default function CalendarView() {
             <button
               onClick={() => {
                 setViewMode('monthly');
-                trackEvent('calendar_view_toggle', 'calendar', 'monthly');
+                trackEvent('calendar_view_toggle', 'calendar');
               }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 viewMode === 'monthly'
@@ -364,7 +364,7 @@ export default function CalendarView() {
             <button
               onClick={() => {
                 setViewMode('yearly');
-                trackEvent('calendar_view_toggle', 'calendar', 'yearly');
+                trackEvent('calendar_view_toggle', 'calendar');
               }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 viewMode === 'yearly'
@@ -381,7 +381,7 @@ export default function CalendarView() {
             <button
               onClick={() => {
                 setShowNetProfits(false);
-                trackEvent('calendar_fees_toggle', 'calendar', 'gross');
+                trackEvent('calendar_fees_toggle', 'calendar');
               }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 !showNetProfits
@@ -394,7 +394,7 @@ export default function CalendarView() {
             <button
               onClick={() => {
                 setShowNetProfits(true);
-                trackEvent('calendar_fees_toggle', 'calendar', 'net');
+                trackEvent('calendar_fees_toggle', 'calendar');
               }}
               className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
                 showNetProfits
@@ -510,7 +510,7 @@ export default function CalendarView() {
                     onClick={() => {
                       if (stats && stats.trade_count > 0) {
                         setSelectedDay({ date: monthDate, stats });
-                        trackEvent('calendar_month_click', 'calendar', monthKey, stats?.trade_count);
+                        trackEvent('calendar_month_click', 'calendar');
                       }
                     }}
                     className={`

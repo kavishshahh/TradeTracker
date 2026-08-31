@@ -1,5 +1,3 @@
-'use client';
-
 import {
   ArrowRight,
   BarChart3,
@@ -7,15 +5,31 @@ import {
   CalendarDays,
   Check,
   CircleDollarSign,
-  Menu,
   ShieldCheck,
   Target,
   TrendingUp,
-  X,
 } from 'lucide-react';
-import { useState } from 'react';
+import Link from 'next/link';
+import MobileNavigation from '@/components/MobileNavigation';
 
 const APP_URL = 'https://app.tradebud.xyz';
+
+const productStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://tradebud.xyz/#software",
+  name: "TradeBud",
+  alternateName: "TradeBud Trading Journal",
+  url: "https://tradebud.xyz",
+  applicationCategory: "FinanceApplication",
+  applicationSubCategory: "Trading journal and performance analytics",
+  operatingSystem: "Web browser",
+  isAccessibleForFree: true,
+  description: "A free trading journal for recording decisions, reviewing fee-aware performance, and finding patterns in trading history.",
+  author: { "@type": "Organization", name: "TradeBud", url: "https://tradebud.xyz" },
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock", url: APP_URL },
+  featureList: ["Unlimited trade entries", "Trading journal and notes", "Performance analytics", "Fee-aware net profit and loss", "Trading calendar", "Monthly returns tracking"],
+};
 
 const features = [
   {
@@ -62,7 +76,7 @@ function ProductPreview() {
     'M8 142 C42 139, 57 128, 84 132 S125 119, 151 121 S194 96, 222 104 S267 72, 292 78 S335 55, 362 62 S405 35, 442 44';
 
   return (
-    <div className="product-frame" aria-label="TradeBud dashboard preview">
+    <div className="product-frame" aria-label="Illustrative TradeBud dashboard preview">
       <div className="app-sidebar">
         <div className="sidebar-logo"><BrandMark /></div>
         {[BarChart3, CircleDollarSign, CalendarDays, BookOpen].map((Icon, index) => (
@@ -75,7 +89,7 @@ function ProductPreview() {
       <div className="app-main">
         <div className="preview-head">
           <div>
-            <small>OVERVIEW</small>
+            <small>ILLUSTRATIVE DEMO</small>
             <strong>Trading performance</strong>
           </div>
           <span>May 2026</span>
@@ -109,10 +123,9 @@ function ProductPreview() {
 }
 
 export default function Home() {
-  const [menuOpen, setMenuOpen] = useState(false);
-
   return (
-    <main>
+    <main id="main-content">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productStructuredData) }} />
       <header className="site-header">
         <div className="shell nav-wrap">
           <a className="brand" href="#top" aria-label="TradeBud home">
@@ -124,7 +137,8 @@ export default function Home() {
             <a href="#features">Features</a>
             <a href="#how-it-works">How it works</a>
             <a href="#pricing">Pricing</a>
-            <a href="/blog">Journal</a>
+            <Link href="/tools">Free tools</Link>
+            <Link href="/blog">Guides</Link>
           </nav>
 
           <div className="nav-actions">
@@ -132,26 +146,8 @@ export default function Home() {
             <a className="button button-small" href={APP_URL}>Start tracking</a>
           </div>
 
-          <button
-            className="menu-button"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-expanded={menuOpen}
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          >
-            {menuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
+          <MobileNavigation />
         </div>
-
-        {menuOpen && (
-          <nav className="mobile-nav" aria-label="Mobile navigation">
-            <a href="#features" onClick={() => setMenuOpen(false)}>Features</a>
-            <a href="#how-it-works" onClick={() => setMenuOpen(false)}>How it works</a>
-            <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
-            <a href="/blog">Journal</a>
-            <a href={APP_URL}>Sign in</a>
-            <a className="button" href={APP_URL}>Start tracking</a>
-          </nav>
-        )}
       </header>
 
       <section className="hero" id="top">
@@ -177,7 +173,7 @@ export default function Home() {
 
           <div className="preview-column">
             <ProductPreview />
-            <p className="preview-note"><span>LIVE INSIGHT</span> Net results after estimated trading fees</p>
+            <p className="preview-note"><span>DEMO DATA</span> Illustrative results after estimated trading fees</p>
           </div>
         </div>
       </section>
@@ -234,7 +230,7 @@ export default function Home() {
 
       <section className="section detail-section">
         <div className="shell detail-grid">
-          <div className="calendar-card" aria-label="Trading calendar example">
+          <div className="calendar-card" aria-label="Illustrative trading calendar example">
             <div className="calendar-head"><strong>May 2026</strong><span>Monthly P&amp;L <b>+$4,286</b></span></div>
             <div className="weekdays">{['MON','TUE','WED','THU','FRI'].map(day => <span key={day}>{day}</span>)}</div>
             <div className="calendar-days">
@@ -270,7 +266,7 @@ export default function Home() {
             <p className="kicker">STRAIGHT ANSWERS</p>
             <h2>Before you start.</h2>
             <p>TradeBud is a journal and analytics tool—not a broker, signal service, or financial adviser.</p>
-            <a href="/free-trading-journal">Read the complete product guide <ArrowRight size={16} /></a>
+            <Link href="/free-trading-journal">Read the complete product guide <ArrowRight size={16} /></Link>
           </div>
           <div>
             <details open><summary>Is TradeBud completely free?</summary><p>Yes. TradeBud’s core trading journal, unlimited trade entries, calendar, and performance analytics are free forever. There is no credit card requirement or trial clock.</p></details>
@@ -311,11 +307,12 @@ export default function Home() {
             <a href="#features">Features</a>
             <a href="#how-it-works">How it works</a>
             <a href="#pricing">Pricing</a>
-            <a href="/free-trading-journal">Product guide</a>
-            <a href="/blog">Journal</a>
-            <a href="/about">About</a>
-            <a href="/privacy">Privacy</a>
-            <a href="/terms">Terms</a>
+            <Link href="/tools">Free tools</Link>
+            <Link href="/methodology">Methodology</Link>
+            <Link href="/blog">Guides</Link>
+            <Link href="/about">About</Link>
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/terms">Terms</Link>
             <a href="mailto:kavishshah30@gmail.com">Support</a>
           </div>
           <p className="copyright">© {new Date().getFullYear()} TradeBud</p>

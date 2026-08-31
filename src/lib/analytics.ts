@@ -23,34 +23,37 @@ export const trackPageView = (url: string) => {
 export const trackEvent = (
   action: string,
   category: string,
-  label?: string,
-  value?: number
+  ..._ignoredDetails: unknown[]
 ) => {
+  void _ignoredDetails;
   if (typeof window !== 'undefined' && window.gtag) {
     window.gtag('event', action, {
       event_category: category,
-      event_label: label,
-      value: value,
     });
   }
 };
 
 // Track trading-specific events
-export const trackTradeEvent = (action: 'add' | 'edit' | 'delete' | 'exit', ticker: string, pnl?: number) => {
-  trackEvent(action, 'trading', ticker, pnl);
+export const trackTradeEvent = (action: 'add' | 'edit' | 'delete' | 'exit', ..._ignoredDetails: unknown[]) => {
+  void _ignoredDetails;
+  trackEvent(action, 'trading');
 };
 
 // Track user engagement events
-export const trackUserEngagement = (action: string, label?: string) => {
-  trackEvent(action, 'user_engagement', label);
+export const trackUserEngagement = (action: string, ..._ignoredDetails: unknown[]) => {
+  void _ignoredDetails;
+  trackEvent(action, 'user_engagement');
 };
 
 // Track form submissions
 export const trackFormSubmission = (formName: string, success: boolean) => {
-  trackEvent('form_submit', 'form_interaction', `${formName}_${success ? 'success' : 'error'}`);
+  void formName;
+  trackEvent(success ? 'form_submit_success' : 'form_submit_error', 'form_interaction');
 };
 
 // Track navigation events
 export const trackNavigation = (from: string, to: string) => {
-  trackEvent('navigation', 'page_navigation', `${from}_to_${to}`);
+  void from;
+  void to;
+  trackEvent('navigation', 'page_navigation');
 };

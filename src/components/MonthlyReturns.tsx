@@ -65,10 +65,11 @@ export default function MonthlyReturns() {
       const totalDollar = returns.reduce((sum, item) => sum + (item.dollar_return || 0), 0);
       const totalINR = returns.reduce((sum, item) => sum + (item.inr_return || 0), 0);
       
-      // Calculate overall percentage (simple average for now)
+      // Link period returns rather than averaging percentages. A simple average
+      // overstates or understates multi-period performance when returns compound.
       const returnsWithPercentage = returns.filter(item => item.percentage_return !== undefined);
-      const totalPercentage = returnsWithPercentage.length > 0 
-        ? returnsWithPercentage.reduce((sum, item) => sum + (item.percentage_return || 0), 0) / returnsWithPercentage.length
+      const totalPercentage = returnsWithPercentage.length > 0
+        ? (returnsWithPercentage.reduce((factor, item) => factor * (1 + (item.percentage_return || 0) / 100), 1) - 1) * 100
         : 0;
 
       setTotalReturn({
@@ -79,7 +80,7 @@ export default function MonthlyReturns() {
       
       // Track monthly returns page view
       trackPageView('/monthly-returns');
-      trackUserEngagement('monthly_returns_view', `returns_${returns.length}`);
+      trackUserEngagement('monthly_returns_view');
     } catch (error) {
       console.error('Error fetching monthly returns:', error);
       toast.error('Failed to fetch monthly returns');

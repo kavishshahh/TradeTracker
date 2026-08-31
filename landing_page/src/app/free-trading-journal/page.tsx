@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Free Trading Journal — Track, Review, and Improve Every Trade",
@@ -6,15 +7,20 @@ export const metadata: Metadata = {
   keywords: ["free trading journal", "free trade tracker", "trading diary", "trading journal analytics", "fee aware P&L"],
   alternates: { canonical: "/free-trading-journal" },
   openGraph: {
+    type: "website",
     title: "Free Trading Journal | TradeBud",
     description: "A practical trading journal with analytics, notes, fee-aware P&L, and unlimited trade entries—free forever.",
-    url: "/free-trading-journal",
+    url: "https://tradebud.xyz/free-trading-journal",
+    siteName: "TradeBud",
+    locale: "en_US",
+    images: [{ url: "https://tradebud.xyz/og-demo.png", width: 1200, height: 630, alt: "TradeBud free trading journal" }],
   },
+  twitter: { card: "summary_large_image", title: "Free Trading Journal | TradeBud", description: "A practical trading journal with analytics, notes, fee-aware P&L, and unlimited trade entries—free forever.", images: ["https://tradebud.xyz/og-demo.png"] },
 };
 
 const faq = [
   ["Is TradeBud really free forever?", "Yes. TradeBud’s core journal, trade tracking, calendar, and performance analytics are free forever. There is no trial clock or credit card requirement."],
-  ["What can I record in the trading journal?", "You can record dates, ticker symbols, entry and exit prices, quantities, open or closed status, risk, notes, account balances, and configurable trading fees."],
+  ["What can I record in the trading journal?", "You can record dates, ticker symbols, entry and exit prices, quantities, open or closed status, risk, notes, account balances, and configurable trading fees. The current journal is designed for manual entry; broker imports are not part of this release."],
   ["Does TradeBud place trades or connect to my broker?", "No. TradeBud is an independent journal and analytics tool. It does not execute trades, hold funds, provide brokerage services, or recommend securities."],
   ["How does TradeBud calculate performance?", "TradeBud uses the trade data and fee settings you enter to calculate metrics such as net P&L, win rate, profit factor, expectancy, average win and loss, and equity curves."],
   ["Who is TradeBud for?", "TradeBud is for self-directed traders who want a structured record of their process. It can be used for stocks and other instruments that can be recorded by symbol, price, and quantity."],
@@ -32,11 +38,11 @@ export default function FreeTradingJournalPage() {
   };
 
   return (
-    <main className="guide-page">
+    <main id="main-content" className="guide-page">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <header className="legal-header">
-        <a href="/" className="legal-brand"><span aria-hidden="true">TB</span>TradeBud</a>
-        <nav aria-label="Product navigation"><a href="/#features">Features</a><a href="/about">About</a><a href="https://app.tradebud.xyz">Open app</a></nav>
+        <Link href="/" className="legal-brand"><span aria-hidden="true">TB</span>TradeBud</Link>
+        <nav aria-label="Product navigation"><Link href="/#features">Features</Link><Link href="/tools">Free tools</Link><Link href="/about">About</Link><a href="https://app.tradebud.xyz">Open app</a></nav>
       </header>
 
       <article className="guide-article">
@@ -67,10 +73,12 @@ export default function FreeTradingJournalPage() {
 
         <section className="guide-section guide-faq"><div><p>COMMON QUESTIONS</p><h2>Free trading journal FAQ.</h2></div><div>{faq.map(([question, answer]) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></section>
 
+        <section className="guide-section"><div><p>KEEP LEARNING</p><h2>Use the journal with a clear reference.</h2></div><div><p>Start with the <Link href="/tools">free trading calculators</Link> for transparent arithmetic, check the <Link href="/glossary">performance glossary</Link> when a metric needs a definition, and read the <Link href="/methodology">methodology</Link> to see what TradeBud includes in its estimates.</p></div></section>
+
         <section className="guide-cta"><p>KEEP THE RECORD. LEARN FROM IT.</p><h2>Start with your next trade.</h2><a href="https://app.tradebud.xyz">Create your free journal</a><span>Free forever. No credit card required.</span></section>
       </article>
 
-      <footer className="legal-footer"><span>© 2026 TradeBud</span><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></footer>
+      <footer className="legal-footer"><span>© 2026 TradeBud</span><Link href="/about">About</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></footer>
     </main>
   );
 }

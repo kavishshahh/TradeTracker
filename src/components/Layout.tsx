@@ -46,7 +46,7 @@ export default function Layout({ children }: LayoutProps) {
     const previousPathname = previousPathnameRef.current;
     if (previousPathname !== pathname) {
       trackNavigation(previousPathname, pathname);
-      trackUserEngagement('page_navigation', activePage);
+      trackUserEngagement('page_navigation');
       previousPathnameRef.current = pathname;
       if (window.innerWidth < 900) setSidebarOpen(false);
     }
@@ -54,7 +54,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const toggleSidebar = () => {
     setSidebarOpen((open) => !open);
-    trackUserEngagement('sidebar_toggle', sidebarOpen ? 'collapse' : 'expand');
+    trackUserEngagement('sidebar_toggle');
   };
 
   return (
@@ -110,7 +110,7 @@ export default function Layout({ children }: LayoutProps) {
           )}
           <button
             onClick={() => {
-              trackUserEngagement('logout', 'sidebar');
+              trackUserEngagement('logout');
               logout();
             }}
             className="logout-button"

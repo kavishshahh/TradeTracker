@@ -83,10 +83,9 @@ export default function TradeForm() {
       setSubmitSuccess(true);
       
       // Track successful trade submission
-      const pnl = data.sell_price && data.buy_price ? (data.sell_price - data.buy_price) * data.shares : undefined;
-      trackTradeEvent(tradeType === 'exit' ? 'exit' : 'add', data.ticker, pnl);
+      trackTradeEvent(tradeType === 'exit' ? 'exit' : 'add');
       trackFormSubmission('trade_form', true);
-      trackEvent('trade_submission', 'trading', `${tradeType}_${data.status}`, data.shares);
+      trackEvent('trade_submission', 'trading');
       
       reset();
       
@@ -103,7 +102,7 @@ export default function TradeForm() {
       
       // Track failed submission
       trackFormSubmission('trade_form', false);
-      trackEvent('trade_submission_error', 'trading', 'form_error');
+      trackEvent('trade_submission_error', 'trading');
       
       toast.error('❌ Failed to add trade. Please try again!', {
         className: '!bg-gradient-to-r !from-red-400 !to-red-600 !text-white',
@@ -152,7 +151,7 @@ export default function TradeForm() {
                   date: new Date().toISOString().split('T')[0],
                 });
                 // Track trade type toggle
-                trackEvent('trade_type_toggle', 'trading', 'entry');
+                trackEvent('trade_type_toggle', 'trading');
               }}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
                 tradeType === 'entry'
@@ -171,7 +170,7 @@ export default function TradeForm() {
                   date: new Date().toISOString().split('T')[0],
                 });
                 // Track trade type toggle
-                trackEvent('trade_type_toggle', 'trading', 'exit');
+                trackEvent('trade_type_toggle', 'trading');
               }}
               className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
                 tradeType === 'exit'
@@ -243,7 +242,7 @@ export default function TradeForm() {
                 type="button"
                 onClick={() => {
                   reset({ ...watch(), status: 'open' });
-                  trackEvent('trade_status_toggle', 'trading', 'open');
+                  trackEvent('trade_status_toggle', 'trading');
                 }}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-l-md border ${
                   status === 'open'
@@ -257,7 +256,7 @@ export default function TradeForm() {
                 type="button"
                 onClick={() => {
                   reset({ ...watch(), status: 'closed' });
-                  trackEvent('trade_status_toggle', 'trading', 'closed');
+                  trackEvent('trade_status_toggle', 'trading');
                 }}
                 className={`flex-1 py-2 px-4 text-sm font-medium rounded-r-md border-t border-r border-b ${
                   status === 'closed'

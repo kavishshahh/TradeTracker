@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TradeBud">
-  <rect width="64" height="64" rx="12" fill="#171c18"/>
-  <path d="M14 49h36" stroke="#7eb791" stroke-width="3" stroke-linecap="square"/>
-  <rect x="16" y="32" width="7" height="13" fill="#f2f0e8"/>
-  <rect x="28.5" y="16" width="7" height="29" fill="#f2f0e8"/>
-  <rect x="41" y="24" width="7" height="21" fill="#f2f0e8"/>
-</svg>

@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tradebud-paper-scheduler",
+  "main": "index.mjs",
+  "compatibility_date": "2026-10-07",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "* 3-10 * * MON-FRI"
+    ]
+  },
+  "vars": {
+    "API_BASE_URL": "https://ricotradetracker-1.onrender.com"
+  },
+  "account_id": "bfa51c5ee5378662a9bd937173404bcc"
+}

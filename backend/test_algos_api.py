@@ -30,9 +30,10 @@ class Database(dict):
     def collection(self, name): return Collection(self, name)
 
 
-async def request(app, path, method='GET', user=None, body=None):
+async def request(app, path, method='GET', user=None, body=None, extra_headers=None):
     messages = []
     headers = [(b'host', b'localhost'), (b'content-type', b'application/json')]
+    headers.extend((key.encode(), value.encode()) for key, value in (extra_headers or {}).items())
     if user: headers.append((b'authorization', ('Bearer ' + user).encode()))
     payload = json.dumps(body).encode() if body is not None else b''
     async def receive(): return {'type': 'http.request', 'body': payload, 'more_body': False}

@@ -43,14 +43,16 @@ or customize its fixed model capital. Only virtual trades are recorded.
 ## Runtime and deployment
 
 See [PAPER_DEPLOYMENT.md](PAPER_DEPLOYMENT.md) for exact local/Render steps.
-One continuously running backend worker runs both strategies using Dhan REST
-quotes and completed index candles. Both use the shared `backend/.env` locally
+Cloudflare schedules the existing Python API once per minute; its shared evaluator
+runs both strategies using Dhan REST quotes and completed index candles. Both use the shared `backend/.env` locally
 and the existing backend environment in production. No separate algo environment,
-external cron scheduler, database URL or SMTP configuration is required.
+database URL or SMTP configuration is required. One shared scheduler secret
+authenticates Cloudflare requests.
 
 `python algos/zen_credit/paper_worker.py --check-data` performs a read-only probe.
 `python -u algos/zen_credit/paper_worker.py` runs the paper accounts each minute.
-`algos/render.yaml` now deploys a single paid background worker.
+See `cloudflare-scheduler/README.md` for the free Cloudflare scheduler and existing
+backend deployment. The separate paid worker blueprint was removed.
 NSE is used only for exchange holiday metadata; live prices come from Dhan.
 
 ## Subdomain and access

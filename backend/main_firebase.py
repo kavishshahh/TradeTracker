@@ -10,7 +10,7 @@ import json
 from dotenv import load_dotenv
 
 # Load environment variables FIRST
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 # Now import email service after env vars are loaded
 from email_service import email_service
@@ -124,6 +124,8 @@ async def get_current_user(authorization: str = Header(None)):
 # Algo routes reuse the verified Firebase user and existing Firestore client.
 from algos_api import create_algos_router
 app.include_router(create_algos_router(db, get_current_user))
+from algos_scheduler_api import create_scheduler_router
+app.include_router(create_scheduler_router(db))
 
 # Pydantic models
 class Trade(BaseModel):

@@ -7,3 +7,6 @@ python-multipart==0.0.6
 # Use specific versions that have pre-compiled wheels for Python 3.11
 cryptography>=41.0.7
 sib-api-v3-sdk==7.6.0
+
+# Existing API hosts the Dhan paper cycle; Cloudflare schedules it.
+-r ../algos/zen_credit/requirements-paper.txt

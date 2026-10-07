@@ -6,7 +6,7 @@ One continuously running Python background worker runs both saved strategies.
 Every minute it obtains Dhan NIFTY index/option data, evaluates the strategies,
 records virtual entries/exits in Firestore, and publishes each paper account to
 `algo_paper_state`. The existing authenticated backend serves the records to
-Algo Lab; its UI refreshes every 30 seconds. No browser or cron trigger is needed.
+Algo Lab; its UI refreshes every 30 seconds. For production, Cloudflare triggers the API each minute; the standalone loop remains a local alternative.
 No Dhan order endpoints exist in the live provider.
 
 The strategy decisions, stops, targets and P&L marks are evaluated once per minute,
@@ -37,8 +37,7 @@ It is needed to persist the paper accounts, not to connect to Dhan.
 Strategy formula settings are pinned in versioned Python. Model capital is read
 from each Firestore catalogue record when the worker starts that strategy.
 Changing capital requires a worker restart; do not change it midway through an
-open position if you want comparable statistics. No cron secret, SMTP settings,
-strategy selector or database URL is required for this worker.
+open position if you want comparable statistics. The standalone loop needs no cron secret; the Cloudflare/API deployment needs one shared scheduler secret. SMTP settings, strategy selectors and database URLs are optional or unnecessary.
 
 ## Local check
 
@@ -60,40 +59,18 @@ Start the persistent worker:
 Keep the terminal running for local testing. Ctrl+C stops it. Open `/algos`, sign
 in with the existing account, select Paper feed, and verify evaluation timestamps.
 
-## Production: Render background worker
+## Production: Cloudflare scheduler + existing backend
 
-1. Commit/push the updated TradeTracker source to the connected Git repository.
-   Do not commit `.env`, service-account files, local venvs, caches or logs.
-2. Deploy the updated existing dashboard/API as usual. Set the frontend's
-   `NEXT_PUBLIC_API_BASE_URL` to that API's HTTPS URL before rebuilding.
-3. In Render, create an Environment Group named for your backend, containing the
-   existing Firebase service-account credential plus Dhan client ID/token. Link
-   it to the existing API and the new worker. Remove duplicate per-service values
-   for these keys if they would override the shared group. Never link it to the
-   frontend. Existing email settings belong to the API only if you use them.
-4. Choose New > Background Worker, connect the TradeTracker repository and branch.
-5. Use these settings:
+Use [cloudflare-scheduler/README.md](cloudflare-scheduler/README.md).
+Cloudflare Free calls the protected endpoint in the existing Python API every
+minute during the exchange session. The API hosts the same shared evaluator and
+stores paper results in Firestore. No separate paid Render background worker is
+required. Dhan/Firebase settings remain in the backend environment; one shared
+`PAPER_SCHEDULER_TOKEN` authenticates the Cloudflare scheduler.
 
-   | Setting | Value |
-   |---|---|
-   | Runtime | Python |
-   | Root directory | Leave blank (repository root) |
-   | Build command | `pip install -r algos/zen_credit/requirements-paper.txt` |
-   | Start command | `python -u algos/zen_credit/paper_worker.py` |
-   | Instance | Paid always-on worker; one instance |
-   | Environment group | The shared backend group from step 3 |
-
-6. Deploy and inspect logs for `Paper worker started. Provider=Dhan` and per-strategy
-   evaluation statuses. Start it before market open. It stays alive overnight;
-   the exchange calendar blocks market requests/trades outside the session.
-7. Verify that `algo_paper_state/strategy_01` and `strategy_02` evaluation times
-   advance, their `data_provider` is `dhan`, and the UI displays the corresponding
-   paper state. Actual simulated positions appear only when signal criteria align.
-
-Alternatively the repo includes `algos/render.yaml`, a Blueprint for the same
-single worker. Choose that Blueprint path and provide its three secret values.
-Do not create both the manual worker and the Blueprint worker. A background worker
-has no HTTP URL or health-check endpoint; monitor logs and Firestore/UI heartbeat.
+Do not run the local continuous worker and the cloud scheduler against the same
+accounts at the same time. Existing backend costs, cold starts and availability
+still apply. All evaluations and stops are minute-based.
 
 ## History, outages and credentials
 

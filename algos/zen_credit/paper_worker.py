@@ -57,7 +57,8 @@ def main():
             print('Outside regular market session; live quote freshness must be checked during trading hours.')
         return
     db = get_firestore_client()
-    runners = {}
+    from execution.coordinator import PaperCoordinator
+    coordinator = PaperCoordinator(db, provider=provider)
     stopped = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopped.set())
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
@@ -65,19 +66,7 @@ def main():
     while not stopped.is_set():
         now = now_ist()
         try:
-            catalog = {doc.id: doc.to_dict() for doc in db.collection('algo_catalog').stream(timeout=15)}
-            # Config/data provenance is pinned to the versioned implementation;
-            # per-strategy model capital is read from the catalogue.
-            for name, record in catalog.items():
-                if name not in STRATEGIES or name == 'description' or not record.get('enabled', True) or name in runners:
-                    continue
-                cfg = replace(CONFIG, strategy=replace(CONFIG.strategy, capital=float(record['capital'])),
-                              data=replace(CONFIG.data, provider='dhan'),
-                              email=replace(CONFIG.email, enabled=False),
-                              runtime=replace(CONFIG.runtime, strategy_name=name))
-                runners[name] = Runner.from_config(cfg, provider=provider)
-            provider.begin_round()
-            run_round(runners, catalog, now)
+            coordinator.run_once(now)
         except Exception as exc:
             log.error('Paper worker round failed: %s', type(exc).__name__)
         # Keep running overnight; exchange calendar blocks trading/data requests.

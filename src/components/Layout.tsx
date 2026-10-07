@@ -1,8 +1,9 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { trackNavigation, trackUserEngagement } from '@/lib/analytics';
-import { Activity, BarChart3, BookOpen, Calculator, Calendar, ChevronLeft, List, LogOut, Menu, Plus, TrendingUp, User, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, Calculator, Calendar, ChevronLeft, List, LogOut, Menu, Moon, Plus, Sun, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
@@ -36,6 +37,7 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const pathname = usePathname();
   const { currentUser, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const previousPathnameRef = useRef(pathname);
   const activePage = navigation.find((item) => item.href === pathname)?.name || 'TradeBud';
 
@@ -94,6 +96,10 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         <div className="sidebar-footer">
+          <button className="theme-button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>
+            {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+            {sidebarOpen && <span>{theme === 'light' ? 'Dark theme' : 'Light theme'}</span>}
+          </button>
           <a href="/profile" className={pathname === '/profile' ? 'account-link active' : 'account-link'} title={!sidebarOpen ? 'Profile settings' : undefined}>
             <span className="avatar"><User size={16} /></span>
             {sidebarOpen && (
@@ -142,7 +148,7 @@ export default function Layout({ children }: LayoutProps) {
         pauseOnFocusLoss
         draggable
         pauseOnHover
-        theme="light"
+        theme={theme}
         toastClassName="tradebud-toast"
         progressClassName="tradebud-toast-progress"
       />

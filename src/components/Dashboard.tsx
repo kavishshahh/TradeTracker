@@ -719,8 +719,8 @@ export default function Dashboard() {
 
   // Prepare win/loss pie chart data
   const pieData = [
-    { name: 'Winning Trades', value: displayMetrics?.winning_trades || 0, color: '#1F6B46' },
-    { name: 'Losing Trades', value: displayMetrics?.losing_trades || 0, color: '#A4483F' }
+    { name: 'Winning Trades', value: displayMetrics?.winning_trades || 0, color: 'var(--positive)' },
+    { name: 'Losing Trades', value: displayMetrics?.losing_trades || 0, color: 'var(--negative)' }
   ];
 
   // Payoff ratio is a direct comparison of the observed average win and loss.
@@ -948,17 +948,17 @@ export default function Dashboard() {
                         day: 'numeric' 
                       })}
                       contentStyle={{
-                        backgroundColor: '#fbfaf6',
-                        border: '1px solid #d5d0c4',
+                        backgroundColor: 'var(--popover)',
+                        border: '1px solid var(--border)',
                         borderRadius: '6px'
                       }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="equity" 
-                      stroke="#1F6B46"
+                      stroke="var(--positive)"
                       strokeWidth={2}
-                      dot={{ fill: '#1F6B46', strokeWidth: 2, r: 4 }}
+                      dot={{ fill: 'var(--positive)', strokeWidth: 2, r: 4 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -988,19 +988,19 @@ export default function Dashboard() {
                         day: 'numeric' 
                       })}
                       contentStyle={{
-                        backgroundColor: '#fbfaf6',
-                        border: '1px solid #d5d0c4',
+                        backgroundColor: 'var(--popover)',
+                        border: '1px solid var(--border)',
                         borderRadius: '6px'
                       }}
                     />
                     <Line 
                       type="monotone" 
                       dataKey="equity" 
-                      stroke="#1F6B46"
+                      stroke="var(--positive)"
                       strokeWidth={2}
                       dot={(props) => {
                         const { payload } = props;
-                        let color = '#1F6B46';
+                        let color = 'var(--positive)';
                         if (payload?.type === 'current') color = '#A67B32';
                         if (payload?.type === 'month_start') color = '#687A6D';
                         return <circle {...props} fill={color} r={4} stroke={color} strokeWidth={2} />;

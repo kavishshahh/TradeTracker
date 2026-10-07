@@ -3,6 +3,15 @@ import { auth } from './firebase';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
+// Read API errors defensively: proxies may return HTML or a non-string detail.
+async function getErrorDetail(response: Response): Promise<string | undefined> {
+  const body: unknown = await response.json().catch(() => null);
+  if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string') {
+    return body.detail || undefined;
+  }
+  return undefined;
+}
+
 // Helper function to get auth headers
 async function getAuthHeaders() {
   const user = auth.currentUser;
@@ -88,8 +97,8 @@ export async function updateTrade(tradeId: string, updateData: {
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to update trade');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to update trade');
   }
   
   return response.json();
@@ -103,8 +112,8 @@ export async function deleteTrade(tradeId: string): Promise<{ message: string; t
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to delete trade');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to delete trade');
   }
   
   return response.json();
@@ -124,8 +133,8 @@ export async function exitTrade(userId: string, exitData: {
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to exit trade');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to exit trade');
   }
   
   return response.json();
@@ -155,8 +164,8 @@ export async function updateUserProfile(userId: string, profileData: {
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to update profile');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to update profile');
   }
   
   return response.json();
@@ -202,8 +211,8 @@ export async function saveMonthlyReturn(monthlyReturn: {
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to save monthly return');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to save monthly return');
   }
   
   return response.json();
@@ -217,8 +226,8 @@ export async function deleteMonthlyReturn(returnId: string): Promise<{ message: 
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to delete monthly return');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to delete monthly return');
   }
   
   return response.json();
@@ -245,8 +254,8 @@ export async function saveFeesConfig(feesConfig: FeesConfig): Promise<{ message:
   });
   
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Failed to save fees configuration');
+    const detail = await getErrorDetail(response);
+    throw new Error(detail || 'Failed to save fees configuration');
   }
   
   return response.json();
@@ -267,8 +276,8 @@ export const sendWelcomeEmail = async (email: string, userName?: string) => {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to send welcome email');
+      const detail = await getErrorDetail(response);
+      throw new Error(detail || 'Failed to send welcome email');
     }
 
     return await response.json();
@@ -293,8 +302,8 @@ export const triggerWelcomeEmail = async (email: string, userName?: string, isNe
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to trigger welcome email');
+      const detail = await getErrorDetail(response);
+      throw new Error(detail || 'Failed to trigger welcome email');
     }
 
     return await response.json();
@@ -321,8 +330,8 @@ export const sendTradeReminder = async (email: string, userName?: string, daysIn
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to send trade reminder');
+      const detail = await getErrorDetail(response);
+      throw new Error(detail || 'Failed to send trade reminder');
     }
 
     return await response.json();
@@ -347,8 +356,8 @@ export const sendWeeklySummary = async (email: string, userName?: string, summar
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Failed to send weekly summary');
+      const detail = await getErrorDetail(response);
+      throw new Error(detail || 'Failed to send weekly summary');
     }
 
     return await response.json();

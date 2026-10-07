@@ -1,0 +1,30 @@
+{
+  "folders": {
+    "zen_credit": {
+      "source_files": 83,
+      "byte_identical_files": 81,
+      "source_bytes": 1301875
+    },
+    "data": {
+      "source_files": 3676,
+      "byte_identical_files": 3676,
+      "source_bytes": 1025171409
+    },
+    "reports": {
+      "source_files": 6072,
+      "byte_identical_files": 6072,
+      "source_bytes": 1984858531
+    }
+  },
+  "intentional_change": "zen_credit/main.py adds optional paper read-model export; original strategy files remain byte-identical",
+  "errors": [],
+  "env_copied": false,
+  "original_checkout_preserved": true,
+  "excluded_runtime_files": [
+    "zen_credit/logs/runner.log"
+  ],
+  "exclusion_reason": "Generated execution log; modified by isolated tests and removed from migrated source",
+  "verification_scope": "Initial source/data migration before the subsequent Firestore adapter change",
+  "current_storage": "Firestore only for production workers",
+  "current_strategy_formulas_unchanged": true
+}

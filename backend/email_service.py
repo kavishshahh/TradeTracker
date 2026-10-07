@@ -23,6 +23,7 @@ class EmailService:
         self.api_key = os.getenv('BREVO_API_KEY')
         self.from_email = os.getenv('FROM_EMAIL', 'noreply@tradebud.xyz')
         self.from_name = os.getenv('FROM_NAME', 'TradeBud')
+        self.last_message_id = None
         
         if not self.api_key or self.api_key == 'your_brevo_api_key_here':
             logger.error("❌ BREVO_API_KEY not configured properly")
@@ -59,6 +60,7 @@ class EmailService:
     
     def send_email(self, to_email: str, subject: str, html_content: str, plain_content: str = None) -> bool:
         """Send an email using Brevo"""
+        self.last_message_id = None
         if not self.api_instance:
             logger.error("Brevo not initialized. Cannot send email.")
             return False
@@ -81,14 +83,20 @@ class EmailService:
             
             # Send the email
             api_response = self.api_instance.send_transac_email(send_smtp_email)
-            logger.info("Email sent successfully")
+            message_id = getattr(api_response, 'message_id', None)
+            if not message_id:
+                logger.error("Brevo returned no message ID; the email was not confirmed")
+                return False
+
+            self.last_message_id = message_id
+            logger.info("Email accepted by Brevo with message ID %s", message_id)
             return True
             
         except ApiException as e:
-            logger.error("Brevo API error when sending email")
+            logger.error("Brevo API error when sending email: %s", e)
             return False
         except Exception as e:
-            logger.error("Failed to send email")
+            logger.error("Failed to send email: %s", e)
             return False
     
     def send_welcome_email(self, user_email: str, user_name: str = None) -> bool:

@@ -4,6 +4,29 @@ This directory contains email automation scripts for TradeBud using Firebase and
 
 ## Scripts
 
+### New-look announcement (approval required)
+
+`send_new_look_emails.py` contains the campaign announcing TradeBud's refreshed
+design. Generate and review the local preview before any send:
+
+```bash
+python send_new_look_emails.py --preview
+```
+
+After approval, send a single test message:
+
+```bash
+python send_new_look_emails.py --test-email=you@example.com --live
+```
+
+Only after the test is approved, send the campaign to registered users:
+
+```bash
+python send_new_look_emails.py --live
+```
+
+Without `--live`, the campaign always runs as a dry run and sends nothing.
+
 ### 1. `send_update_emails.py`
 Sends update notifications to all TradeBud users about new features and improvements.
 

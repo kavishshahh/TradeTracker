@@ -1,0 +1,19 @@
+# Web service
+flask>=3.0,<4
+gunicorn>=21.2
+
+# Durable paper state: existing TradeBud Firestore
+firebase-admin==6.4.0
+
+# Core numerics: signal engine, backtester
+numpy>=1.26,<3
+pandas>=2.2,<4
+
+# Market data: Dhan quotes, instrument master and one-minute index candles; NSE holiday calendar
+requests>=2.31
+
+# IANA timezone data for zoneinfo (Asia/Kolkata) on Windows / slim images
+tzdata>=2024.1
+
+# Local .env loading. Render injects env vars directly and ignores this.
+python-dotenv>=1.0

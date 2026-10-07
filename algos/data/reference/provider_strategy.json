@@ -1,0 +1,370 @@
+{
+  "ALGO_PARTNER_NAME": "STRATZY",
+  "STRATEGY_ID": "68596cd26aa2cba24bbb67da",
+  "STRATEGY_NAME": "Zen Credit Spread Overnight",
+  "ALGO_CATEGORY": "Index Strategies",
+  "ALGO_IMAGE_URL": "https://d3uapufm4k7730.cloudfront.net/b2bAdmin/profilePic/68596cd26aa2cba24bbb67da.png",
+  "ALGO_CAGR": 219.13,
+  "ALGO_HIT_RATIO": 58.37,
+  "ALGO_AVG_PROFIT": 5.32,
+  "ALGO_AVG_LOSS": -4.32,
+  "ALGO_MIN_CAPITAL": 100000,
+  "ALGO_MAX_CAPITAL": 320000,
+  "ALGO_AVG_DRAWNDOWN": -5.48,
+  "ALGO_SLOTS_LEFT": 500,
+  "liveSince": "2025-07-09T04:45:54.282Z",
+  "desc": "This is a credit spread options trading algorithm that implements a mean-reversion strategy based on volatility and volume analysis. The algorithm operates on NIFTY 50 index options and generates signals for credit put spreads (when bullish) and credit call spreads (when bearish). The core strategy relies on two primary alpha signals: alpha and alpha2. The first alpha signal (alpha) is calculated using a time-series rank of the 5-minute forward price change normalized by the opening price, with a lookback period of 800 minutes. The second alpha signal (alpha2) incorporates volume confirmation and volatility scaling - it multiplies the price change by the average volume ratio of ATM put and call options, then divides by the ATM volatility (sum of CE and PE rolling volatility), and applies a 300-minute time-series rank.\n\nThe algorithm generates trading signals when both alpha values exceed 0.8 (for long positions) or fall below 0.2 (for short positions), indicating strong directional conviction. When the conditions are met, it constructs credit spreads by selling ATM options and buying OTM/ITM options at different strike distances. For bullish signals (alpha > 0.8), it creates a credit put spread by selling ATM puts and buying ITM puts 400 points below. For bearish signals (alpha < 0.2), it creates a credit call spread by selling ATM calls and buying OTM calls 400 points above. The algorithm includes risk management through stop-loss calculations based on margin requirements and operates only during specific market hours (10:15 AM to 2:15 PM) to avoid high volatility periods around market open and close.",
+  "shortDesc": "Utilizing the principles of Hamiltonian mechanics, this algorithm identifies and executes optimal credit spread trades with precision.",
+  "tags": [
+    "Nifty",
+    "Hedged",
+    "Directional"
+  ],
+  "risk": "High",
+  "riskRewardRatio": "1.23",
+  "netAssetValue": 368.36,
+  "avgFrequency": "3 trades/week",
+  "videoLink": "https://d3uapufm4k7730.cloudfront.net/app_uploads/videos/algos/676aa59fc8f0da44991f2e90/676aa59fc8f0da44991f2e90.m3u8",
+  "videoImgUrl": "https://d3uapufm4k7730.cloudfront.net/app_uploads/png_images/algo_video_thumbnails/676aa59fc8f0da44991f2e90/1742989004071Thumbnail%20Hamilton%20Credit%20Spread.png",
+  "algoReturns": {
+    "1M": 17.56,
+    "1Y": 217.92,
+    "3M": 58.07,
+    "6M": 120.27,
+    "Annualized": 219.13
+  },
+  "algoEligibilityChecks": [
+    "MARGIN",
+    "PREMIUM"
+  ],
+  "subscriptionPlanDetails": {
+    "planId": "688a41804056f7b2a33ccecd",
+    "subPlans": [
+      {
+        "isActive": true,
+        "_id": "688a41804056f7b2a33ccece",
+        "name": "Monthly Plan",
+        "pricing": 749,
+        "duration": 30
+      },
+      {
+        "isActive": false,
+        "_id": "688a41804056f7b2a33ccecf",
+        "name": "Quarterly Plan",
+        "pricing": 0,
+        "duration": 91
+      },
+      {
+        "isActive": true,
+        "_id": "688a41804056f7b2a33cced0",
+        "name": "Half Yearly Plan",
+        "pricing": 2999,
+        "duration": 182
+      },
+      {
+        "isActive": true,
+        "_id": "688a41804056f7b2a33cced1",
+        "name": "Yearly Plan",
+        "pricing": 4499,
+        "duration": 365
+      }
+    ]
+  },
+  "AlgoSeoName": "zen-credit-spread-overnight",
+  "AlgoScore": 30.8,
+  "IsFeaturedAlgo": true,
+  "similarTo": {
+    "name": "",
+    "strategyId": ""
+  },
+  "avgTimeToRecovery": 8.53,
+  "maxTimeToRecovery": 60,
+  "sharpeRatio": 3.08,
+  "maxDrawdown": -25.37,
+  "allAccessPlanDetails": {
+    "planId": "693044b8fb50d61438eb755b",
+    "subPlans": [
+      {
+        "isActive": true,
+        "_id": "693044b8fb50d61438eb755c",
+        "name": "Monthly Plan",
+        "pricing": 2999,
+        "duration": 30
+      },
+      {
+        "isActive": false,
+        "_id": "693044b8fb50d61438eb755d",
+        "name": "Quarterly Plan",
+        "pricing": 8999,
+        "duration": 91
+      },
+      {
+        "isActive": true,
+        "_id": "693044b8fb50d61438eb755e",
+        "name": "Half Yearly Plan",
+        "pricing": 11999,
+        "duration": 182
+      },
+      {
+        "isActive": true,
+        "_id": "693044b8fb50d61438eb755f",
+        "name": "Yearly Plan",
+        "pricing": 17999,
+        "duration": 365
+      }
+    ],
+    "isIncluded": true
+  },
+  "overallCorrelation": {
+    "Aaram-Se 30% TSL": 0.00825719862355889,
+    "Aastha 35% TSL": 0.06023342388103104,
+    "Alpha Industries Automated": -0.005737532900154973,
+    "BTST": 0.04824768718241389,
+    "Balanced Portfolio Automated": 0.0072171201637320275,
+    "Bazaar Short Strangle Overnight": -0.14884819491563697,
+    "Big Boys Basket Automated": -0.007922470281905392,
+    "Bullion Strategy Automated": 0.006946723043423364,
+    "Burst GRID (30% SL)": -0.03647187733293057,
+    "Burst RR 1:2 (25% SL)": -0.03356374745503338,
+    "Carry Forward Strangle": -0.14393323516790776,
+    "Chain-Sync Credit Spread Overnight": 0.1897630964082051,
+    "Chanakya Short Strangle Overnight": -0.04879421775204508,
+    "Chhota-Move 30% SL FixedRR 1:2": 0.036090012441739934,
+    "Compressed Strangle": 0.004938559628678514,
+    "Convex Credit Spread Overnight": 0.31312199356686254,
+    "Crossover Formula Automated": -0.00866869128558624,
+    "Curvature Credit Spread Overnight": 0.11601736126136743,
+    "Curve-Whisper Credit Spread Overnight": 0.18489183325297168,
+    "Damper Credit Spread": 0.2306645921451993,
+    "Delta-Leverage Credit Spread Overnight": 0.17932583849215586,
+    "Delta-Ripple Credit Spread Overnight": 0.24906166466229634,
+    "Delta-Rotation Credit Spread Expiry": 0.10229303582161059,
+    "Delta-Shift Credit Spread Expiry": -0.016108969222976395,
+    "Dhyaan 35% TSL": 0.04443145661406205,
+    "Dividend Dons Automated": -0.008220893912700358,
+    "E-QUEUE Credit Spread Overnight": 0.05538590620334707,
+    "Emerging Bluechip": 0.04028068263257895,
+    "Emerging Bluechip Select": 0.04633545373271791,
+    "Expiry Short Strangle": 0.021883472522371748,
+    "Fixed RR 1:3 (30% SL)": -0.04015702269928674,
+    "Flux Strangle": 0.09327459088622327,
+    "Foundation Portfolio Automated": 0.0874116991288299,
+    "Free-Lunch 30% TSL": 0.061615542414814956,
+    "Gamma-Fluxer Credit Spread Overnight": 0.07131490146511228,
+    "High Volatility Stocks": 0.012740278468209703,
+    "Holonomy's Short Strangles": 0.09710199970921596,
+    "Homecoming Short Strangle Overnight": -0.09630525583309112,
+    "IV-Imbalance Credit Spread Overnight": 0.25466126377983134,
+    "Index Scalper": -0.027813428934499135,
+    "Index Sniper": -0.018859985646781048,
+    "Industry Champs Automated": 0.007046467081656609,
+    "Intraday Short Strangle": 0.027894949651314185,
+    "Lattice Short Straddles": 0.029691275702089473,
+    "Market-Pulse Short Strangle Overnight": -0.08370607092678585,
+    "Mathematician's Credit Spread Overnight": 0.18547502822623213,
+    "NIFTY Bellwether": -0.0021765422571345754,
+    "NIFTY Champions": 0.002719512236095012,
+    "Nischay 40% TSL": 0.06776381693351693,
+    "Only Longs": -0.00014287089136541387,
+    "Only Shorts": -0.017437342818119133,
+    "Only-Calls 40% TSL": -0.06005858923256296,
+    "Premium-zone Strangle": -0.1075440330977548,
+    "Quiet Short Straddle": -0.01959926036239975,
+    "Ratio-Fluxer Credit Spread Expiry": 0.10633100647636616,
+    "Ratio-Hunter2 Credit Spread Exit-Early": 0.08314780663506265,
+    "Ratio-Return Credit Spread Exit-Early": 0.12696967303823192,
+    "Ratio-Ripple Credit Spread Exit-Early": 0.10334477516881939,
+    "Ratio-Weave Credit Spread Expiry": -0.0013858249688267804,
+    "Ripple-Return Credit Spread Expiry": 0.08820738021565518,
+    "Rolling-Carry Credit Spread Exit-Early": 0.16981131658867468,
+    "Sahas 40% SL": -0.013914796788898908,
+    "Sahi-Nivesh Short Strangle Overnight": -0.004522862191484475,
+    "Savdhaan 35% SL": -0.013091975364704276,
+    "Seed-Fund 40% SL FixedRR 1:3": 0.055442237228721505,
+    "Settle-Down 40% TSL": -0.0716624733887852,
+    "Sidha-Sauda Short Strangle Overnight": -0.04577650514589359,
+    "Single Kurtosis Straddle": -0.09260223543005618,
+    "Single Rangetrap Straddle": -0.11559616226440929,
+    "Single Tightgrip Straddle": -0.09848407801451485,
+    "SkewHunter": 0.03858692076067803,
+    "SkewHunter TSL": 0.019984439936639356,
+    "Slow-Climb Short Strangle Overnight": -0.12558255612175595,
+    "Stocks Select": -0.01698845634459922,
+    "Stratzy Fund": 0.02114593304157402,
+    "Stratzy's Option Tracker": -0.005771039003105093,
+    "Stratzy's Swing Tracker": 0.01656085735073289,
+    "Super Entropy Credits": 0.03096673836044595,
+    "Theta-Flux Credit Spread Overnight": 0.17983335096332265,
+    "Theta-Harvest Credit Spread Expiry": -0.04153605727575552,
+    "Theta-zone Strangle": 0.05046313362008744,
+    "Thrifty 40% TSL": 0.05904219592226992,
+    "Trending Outliers Automated": -0.006539407101853828,
+    "True Turtles Trend Master": 0.011983183463665979,
+    "V-Score Credit Spread Overnight": 0.18702493702536208,
+    "Vacuum GRID (35% SL)": -0.030373293506287632,
+    "Value Picker Automated": -0.001121449367104601,
+    "Vega-Shift Credit Spread Expiry": 0.10938636907813541,
+    "Warp-Drive Credit Spread Exit-Early": 0.07450462813185793,
+    "Wave-Return Credit Spread Overnight": 0.026250201361327614,
+    "Wealth Magnet Automated": -0.00514853675160065,
+    "Wise-Move 25% TSL": -0.09539267943007965
+  },
+  "categoryCorrelation": {
+    "Chain-Sync Credit Spread Overnight": 0.19036392161979188,
+    "Convex Credit Spread Overnight": 0.3046863689093142,
+    "Curvature Credit Spread Overnight": 0.0997999931160203,
+    "Curve-Whisper Credit Spread Overnight": 0.18863494088510407,
+    "Damper Credit Spread": 0.21788234496287265,
+    "Delta-Leverage Credit Spread Overnight": 0.1704877705381027,
+    "Delta-Ripple Credit Spread Overnight": 0.2419223998651874,
+    "Delta-Rotation Credit Spread Expiry": 0.08947246686720484,
+    "Delta-Shift Credit Spread Expiry": -0.021158597023735487,
+    "E-QUEUE Credit Spread Overnight": 0.054418904224008136,
+    "Gamma-Fluxer Credit Spread Overnight": 0.06511712406851765,
+    "IV-Imbalance Credit Spread Overnight": 0.24782379163708232,
+    "Mathematician's Credit Spread Overnight": 0.17602117133028589,
+    "Ratio-Fluxer Credit Spread Expiry": 0.08290921091724854,
+    "Ratio-Hunter2 Credit Spread Exit-Early": 0.08684935399902517,
+    "Ratio-Return Credit Spread Exit-Early": 0.12118856104784315,
+    "Ratio-Ripple Credit Spread Exit-Early": 0.0966259364934893,
+    "Ratio-Weave Credit Spread Expiry": -0.012126147775226154,
+    "Ripple-Return Credit Spread Expiry": 0.08039953067490599,
+    "Rolling-Carry Credit Spread Exit-Early": 0.16824664422879967,
+    "Super Entropy Credits": 0.03590370232902366,
+    "Theta-Flux Credit Spread Overnight": 0.18679039477501186,
+    "Theta-Harvest Credit Spread Expiry": -0.04464797768380269,
+    "V-Score Credit Spread Overnight": 0.19919924138047945,
+    "Vega-Shift Credit Spread Expiry": 0.11239022867520303,
+    "Warp-Drive Credit Spread Exit-Early": 0.07358086118189056,
+    "Wave-Return Credit Spread Overnight": 0.01624231605733576
+  },
+  "displayCategory": "Credit Spread",
+  "rollingReturns30Day": [
+    {
+      "Key": "30/08/2026",
+      "Value": 138.5952
+    },
+    {
+      "Key": "05/09/2026",
+      "Value": 133.44
+    },
+    {
+      "Key": "12/09/2026",
+      "Value": 100.1064
+    },
+    {
+      "Key": "01/09/2026",
+      "Value": 124.8468
+    },
+    {
+      "Key": "13/09/2026",
+      "Value": 100.1064
+    },
+    {
+      "Key": "14/09/2026",
+      "Value": 100.1064
+    },
+    {
+      "Key": "18/09/2026",
+      "Value": 213.804
+    },
+    {
+      "Key": "19/09/2026",
+      "Value": 279.1896
+    },
+    {
+      "Key": "24/09/2026",
+      "Value": 60.2424
+    },
+    {
+      "Key": "31/08/2026",
+      "Value": 93.696
+    },
+    {
+      "Key": "22/09/2026",
+      "Value": 165.3468
+    },
+    {
+      "Key": "20/09/2026",
+      "Value": 260.0556
+    },
+    {
+      "Key": "21/09/2026",
+      "Value": 206.9796
+    },
+    {
+      "Key": "26/09/2026",
+      "Value": -0.1464
+    },
+    {
+      "Key": "02/09/2026",
+      "Value": 34.416
+    },
+    {
+      "Key": "03/09/2026",
+      "Value": 118.266
+    },
+    {
+      "Key": "10/09/2026",
+      "Value": 128.382
+    },
+    {
+      "Key": "16/09/2026",
+      "Value": 174.8772
+    },
+    {
+      "Key": "17/09/2026",
+      "Value": 213.804
+    },
+    {
+      "Key": "04/09/2026",
+      "Value": 118.266
+    },
+    {
+      "Key": "07/09/2026",
+      "Value": 233.9256
+    },
+    {
+      "Key": "27/09/2026",
+      "Value": 121.8504
+    },
+    {
+      "Key": "29/09/2026",
+      "Value": 210.6732
+    },
+    {
+      "Key": "15/09/2026",
+      "Value": 207.4176
+    },
+    {
+      "Key": "23/09/2026",
+      "Value": 207.906
+    },
+    {
+      "Key": "06/09/2026",
+      "Value": 133.44
+    },
+    {
+      "Key": "08/09/2026",
+      "Value": 213.414
+    },
+    {
+      "Key": "09/09/2026",
+      "Value": 159.1188
+    },
+    {
+      "Key": "11/09/2026",
+      "Value": 128.382
+    },
+    {
+      "Key": "25/09/2026",
+      "Value": 103.9344
+    },
+    {
+      "Key": "28/09/2026",
+      "Value": 121.8504
+    }
+  ],
+  "algoRank": 14,
+  "isExpiry": true
+}

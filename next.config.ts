@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
     ],
   },
   
+  async rewrites() {
+    return [{ source: '/', has: [{ type: 'host', value: 'algos.tradebud.xyz' }], destination: '/algos' }];
+  },
+
   // Compression
   compress: true,
   

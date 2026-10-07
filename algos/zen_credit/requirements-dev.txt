@@ -1,0 +1,8 @@
+# Test-only. Not installed on Render.
+-r requirements.txt
+pytest>=8.0
+# Throwaway local PostgreSQL for the database tests (never production Neon)
+pgserver>=0.1.4
+
+# Legacy isolated storage regression fixtures only
+psycopg[binary]>=3.1,<4

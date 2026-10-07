@@ -20,7 +20,7 @@ app = FastAPI(title="TradeTracker API", version="1.0.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://tradebud.vercel.app", "https://app.tradebud.xyz"],  # Next.js dev server
+    allow_origins=["http://localhost:3000", "https://tradebud.vercel.app", "https://app.tradebud.xyz", "https://algos.tradebud.xyz"],  # Next.js dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -120,6 +120,10 @@ async def get_current_user(authorization: str = Header(None)):
     except Exception as e:
         print("❌ Authentication failed")
         raise HTTPException(status_code=401, detail="Invalid token")
+
+# Algo routes reuse the verified Firebase user and existing Firestore client.
+from algos_api import create_algos_router
+app.include_router(create_algos_router(db, get_current_user))
 
 # Pydantic models
 class Trade(BaseModel):

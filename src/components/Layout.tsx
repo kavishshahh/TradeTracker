@@ -14,6 +14,7 @@ interface LayoutProps {
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: BarChart3 },
+  { name: 'Algo Lab', href: '/algos', icon: Activity },
   { name: 'Add Trade', href: '/add-trade', icon: Plus },
   { name: 'Active Trades', href: '/active-trades', icon: Activity },
   { name: 'Trades', href: '/trades', icon: List },

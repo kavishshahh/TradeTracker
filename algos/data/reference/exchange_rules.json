@@ -1,0 +1,7 @@
+{
+  "_comment": "Exchange contract metadata used ONLY by the historical backtest to reconstruct which weekly expiries were listed in the past (the live engine reads expiries from NSE's contract-info API). NIFTY weekly options expire on the weekday below; when that day is a trading holiday the expiry moves to the previous trading day. Source: NSE circulars (NIFTY weekly expiry moved from Thursday to Tuesday for contracts expiring on or after 1 Sep 2025).",
+  "nifty_weekly_expiry_weekday": [
+    {"effective_from": "2024-01-01", "weekday": "Thursday"},
+    {"effective_from": "2025-09-01", "weekday": "Tuesday"}
+  ]
+}

@@ -199,3 +199,10 @@ This project is licensed under the MIT License.
 - Inspired by TradeZella's trading journal interface
 - Built with modern web technologies
 - Designed for traders who want to improve their performance through data analysis
+
+
+## Algo Lab
+
+Authenticated `/algos` dashboard: `frontend/`. Strategy source, retained historical
+data and research results: `algos/`. Paper deployment and subdomain setup are
+documented in `algos/README.md`. No broker orders are placed.

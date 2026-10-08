@@ -3,8 +3,9 @@
 Structure mirrors the other Dhan algo projects: ``MarketCalendar.check(now)``
 returns a :class:`SessionVerdict` and the runner exits on anything but OPEN
 *before any market-data request*. Weekends are decided from the clock alone
-(no network I/O at all); holidays come from the official NSE holiday-master
-API, cached in the database so the cache survives Render restarts.
+(no network I/O at all). The production runner uses BundledNSECalendar with
+reviewed official NSE dates and no holiday HTTP requests. NSEHolidayCalendar
+remains available for legacy callers that explicitly request API-backed data.
 
 Zen Credit semantics are unchanged: the market is open for
 09:15 <= time < 15:30 on NSE trading days ("FO" segment, falling back to "CM");
@@ -16,11 +17,12 @@ import logging
 import time as _time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Callable
 
 from utils.time import to_ist
+from data.holiday_snapshot import HOLIDAYS_BY_YEAR
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +68,28 @@ class HolidaySetCalendar(TradingCalendar):
         return d.weekday() < 5 and d not in self.holidays
 
 
+class BundledNSECalendar(TradingCalendar):
+    """Reviewed NSE holiday snapshots; no HTTP requests or external cache.
+
+    Each calendar year must be supplied explicitly in holiday_snapshot.py.
+    Unknown years fail closed rather than assuming every weekday is open.
+    """
+
+    def is_trading_day(self, d: date) -> bool:
+        holidays = HOLIDAYS_BY_YEAR.get(d.year)
+        if holidays is None:
+            raise CalendarUnavailable(f"no bundled NSE holiday data for {d.year}")
+        return d.weekday() < 5 and d not in holidays
+
+    @property
+    def holidays_known(self) -> bool:
+        return to_ist(datetime.now(timezone.utc)).year in HOLIDAYS_BY_YEAR
+
+    def next_holidays(self, limit: int = 3) -> list[date]:
+        today = to_ist(datetime.now(timezone.utc)).date()
+        return sorted(d for d in HOLIDAYS_BY_YEAR.get(today.year, ()) if d >= today)[:limit]
+
+
 class ObservedSessionsCalendar(TradingCalendar):
     """Historical calendar built from dates on which the index actually traded
     (e.g. Yahoo daily bars). Used by the backtest for past years, for which the
@@ -102,9 +126,10 @@ class NSEHolidayCalendar(TradingCalendar):
     """Holidays from NSE_HOLIDAY_URL, cached for ``cache_hours``.
 
     The cache lives wherever ``cache_get``/``cache_set`` put it: the Postgres
-    state table in production (survives restarts), a dict in tests. If a refresh
+    state store in production (survives restarts), a dict in tests. If a refresh
     fails, a cached copy of the SAME calendar year is still used and a warning is
-    logged. With no usable data CalendarUnavailable is raised and nothing trades.
+    logged. A reviewed, year-specific NSE snapshot is the final fallback. With
+    no usable data CalendarUnavailable is raised and nothing trades.
     """
 
     def __init__(self, http, url: str, cache_get: Callable[[], dict | None] | None = None,
@@ -138,25 +163,47 @@ class NSEHolidayCalendar(TradingCalendar):
 
     def holidays(self) -> set[date]:
         now = self.clock()
-        if self._holidays is not None and now - self._loaded_at < self.cache_seconds:
+        year = to_ist(datetime.fromtimestamp(now, timezone.utc)).year
+        def valid_for_year(parsed):
+            return any(d.year == year for d in parsed)
+
+        if self._holidays is not None and valid_for_year(self._holidays) and now - self._loaded_at < self.cache_seconds:
             return self._holidays
         cached = self._read_cache()
-        if cached and now - cached[1] < self.cache_seconds:
-            self._holidays, self._loaded_at = parse_nse_holidays(cached[0]), now
+        cached_holidays = None
+        if cached:
+            try:
+                parsed = parse_nse_holidays(cached[0])
+                if valid_for_year(parsed):
+                    cached_holidays = parsed
+            except (ValueError, TypeError, AttributeError):
+                pass
+        if cached_holidays is not None and now - cached[1] < self.cache_seconds:
+            self._holidays, self._loaded_at = cached_holidays, cached[1]
             return self._holidays
         try:
             payload = self.http.get_json(self.url, nse=True)
             parsed = parse_nse_holidays(payload)
+            if not valid_for_year(parsed):
+                raise ValueError(f"no NSE holiday data for {year}")
             self._write_cache(payload)
             self._holidays, self._loaded_at = parsed, now
             return parsed
         except Exception as exc:  # network / format failure
-            if cached:
-                parsed = parse_nse_holidays(cached[0])
-                if any(d.year == date.fromtimestamp(now).year for d in parsed):
-                    log.warning("holiday refresh failed; using stale cache: %s", exc)
-                    self._holidays, self._loaded_at = parsed, now - self.cache_seconds + 900
-                    return parsed
+            fallback = cached_holidays
+            source = "stale cache"
+            if fallback is None and self._holidays is not None and valid_for_year(self._holidays):
+                fallback = self._holidays
+            if fallback is None and year in HOLIDAYS_BY_YEAR:
+                fallback = set(HOLIDAYS_BY_YEAR[year])
+                source = f"bundled NSE {year} snapshot"
+            if fallback is not None:
+                log.warning("holiday refresh failed; using %s: %s", source, exc)
+                # Retry the API in at most 15 minutes. Do not persist the
+                # snapshot as though it were a freshly fetched API response.
+                self._holidays = fallback
+                self._loaded_at = now - self.cache_seconds + min(900, self.cache_seconds)
+                return fallback
             raise CalendarUnavailable(f"NSE holiday data unavailable: {exc}") from exc
 
     @property

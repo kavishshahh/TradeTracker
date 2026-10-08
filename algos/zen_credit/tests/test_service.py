@@ -314,7 +314,7 @@ def test_service_provider_receives_selected_profile_underlying(calendar, monkeyp
         seen.append(args[-1])
         return ExplodingProvider(EXPS)
     monkeypatch.setattr(main, 'NSEMarketDataProvider', provider)
-    monkeypatch.setattr(main, 'NSEHolidayCalendar', lambda *a: calendar)
+    monkeypatch.setattr(main, 'BundledNSECalendar', lambda: calendar)
     runner = Runner.from_config(cfg)
     assert seen == ['NIFTY']
     assert runner.cfg.strategy.underlying == 'NIFTY'

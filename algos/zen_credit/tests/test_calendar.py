@@ -1,10 +1,11 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 
 from data.market_calendar import CalendarUnavailable, HolidaySetCalendar, ObservedSessionsCalendar
 from data.market_calendar import MarketCalendar, NSEHolidayCalendar, SessionState, parse_nse_holidays
+from data.market_calendar import BundledNSECalendar
 from tests.conftest import ist, load_fixture
 
 
@@ -17,6 +18,17 @@ class FakeHttp:
         if self.fail:
             raise RuntimeError("NSE down")
         return self.payload
+
+
+def test_bundled_calendar_session_and_year_coverage():
+    cal = BundledNSECalendar()
+    assert MarketCalendar(cal).check(ist(2026, 10, 8, 10, 30)).is_open
+    for holiday in (date(2026, 1, 15), date(2026, 10, 20), date(2026, 11, 10)):
+        assert not cal.is_trading_day(holiday)
+    assert not cal.is_trading_day(date(2026, 10, 10))
+    assert cal.previous_trading_day(date(2026, 10, 20)) == date(2026, 10, 19)
+    with pytest.raises(CalendarUnavailable, match="2027"):
+        cal.is_trading_day(date(2027, 1, 4))
 
 
 def test_parse_official_payload():
@@ -68,10 +80,49 @@ def test_nse_calendar_failure_uses_same_year_stale_cache():
     assert not cal.is_trading_day(date(2026, 10, 2))
 
 
-def test_nse_calendar_failure_without_cache_raises():
-    cal = _cal(FakeHttp(fail=True), DictCache(), [1_780_000_000.0])
+def test_nse_calendar_failure_without_supported_year_raises():
+    clock = [datetime(2031, 1, 6, tzinfo=timezone.utc).timestamp()]
+    cal = _cal(FakeHttp(fail=True), DictCache(), clock)
     with pytest.raises(CalendarUnavailable):
-        cal.is_trading_day(date(2026, 10, 1))
+        cal.is_trading_day(date(2031, 1, 6))
+
+
+def test_nse_403_uses_snapshot_and_retries_after_15_minutes():
+    clock = [1_780_000_000.0]
+    http = FakeHttp(fail=True)
+    cache = DictCache()
+    cal = _cal(http, cache, clock)
+    assert cal.is_trading_day(date(2026, 10, 8))
+    assert not cal.is_trading_day(date(2026, 10, 20))
+    assert not cal.is_trading_day(date(2026, 1, 15))
+    assert cache.blob is None
+    assert http.calls == 1
+    clock[0] += 901
+    http.fail = False
+    http.payload = load_fixture("nse_holidays_sample.json")
+    assert cal.is_trading_day(date(2026, 10, 8))
+    assert http.calls == 2
+    assert cache.blob is not None
+
+
+@pytest.mark.parametrize("payload", [{"FO": [{"tradingDate": "bad"}]},
+                                     {"FO": [{"tradingDate": "26-Jan-2025"}]}])
+def test_bad_or_wrong_year_cache_does_not_block_snapshot(payload):
+    clock = [1_780_000_000.0]
+    cache = DictCache()
+    cache.set({"payload": payload, "fetched_at": clock[0]})
+    cal = _cal(FakeHttp(fail=True), cache, clock)
+    assert cal.is_trading_day(date(2026, 10, 8))
+    assert not cal.is_trading_day(date(2026, 11, 10))
+
+
+def test_snapshot_not_reused_across_year_boundary():
+    clock = [datetime(2026, 12, 31, 18, 29, tzinfo=timezone.utc).timestamp()]
+    cal = _cal(FakeHttp(fail=True), DictCache(), clock)
+    cal.holidays()
+    clock[0] += 120  # January 1 in IST, still December 31 in UTC
+    with pytest.raises(CalendarUnavailable):
+        cal.holidays()
 
 
 def test_no_data_for_year_raises():

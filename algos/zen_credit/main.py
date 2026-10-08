@@ -27,7 +27,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from config import CONFIG, Config
-from data.market_calendar import CalendarUnavailable, MarketCalendar, NSEHolidayCalendar, TradingCalendar
+from data.market_calendar import BundledNSECalendar, CalendarUnavailable, MarketCalendar, TradingCalendar
 from data.providers.base import MarketDataError, MarketDataProvider
 from data.providers.http import HttpClient
 from data.providers.nse import NSEMarketDataProvider
@@ -167,8 +167,7 @@ class Runner:
                                                  cfg.strategy.underlying)
             else:
                 raise RuntimeError(f"unsupported DATA_PROVIDER={cfg.data.provider}")
-        calendar = NSEHolidayCalendar(http, cfg.data.nse_holiday_url, store.holiday_cache_get,
-                                      store.holiday_cache_set, cfg.data.holiday_cache_hours)
+        calendar = BundledNSECalendar()
         return cls(cfg, store, provider, calendar, EmailNotifier(cfg.email))
 
     # ------------------------------------------------------------------ emails

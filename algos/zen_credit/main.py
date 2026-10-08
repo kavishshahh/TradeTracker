@@ -202,7 +202,7 @@ class Runner:
         try:
             verdict = self.session.check(now)
         except CalendarUnavailable as exc:
-            log.error("calendar_unavailable", extra={"error": str(exc)})
+            log.error("calendar_unavailable: %s", exc, extra={"error": str(exc)})
             return {"status": "calendar_unavailable"}
         if not verdict.is_open and not force:
             log.info("skipped: %s", verdict.reason)

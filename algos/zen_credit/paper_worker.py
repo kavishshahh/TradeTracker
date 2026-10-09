@@ -18,23 +18,30 @@ from main import Runner, setup_logging
 from strategy.registry import STRATEGIES
 from utils.time import now_ist
 
-log = logging.getLogger('paper_worker')
+log = logging.getLogger('paper.worker')
 
 
 def run_round(runners, catalog, now):
     results = {}
     for name, runner in runners.items():
+        started = time.monotonic()
+        log.info('paper_strategy_start strategy=%s minute=%s', name, now.isoformat())
         # Disabling new entries must not abandon an existing paper position.
-        if not catalog.get(name, {}).get('enabled', False) and runner.store.open_position_row() is None:
-            continue
         try:
+            if not catalog.get(name, {}).get('enabled', False) and runner.store.open_position_row() is None:
+                log.info('paper_strategy_skipped strategy=%s minute=%s reason=disabled_and_flat duration_s=%.2f',
+                         name, now.isoformat(), time.monotonic() - started)
+                continue
             result = runner.locked_cycle(now)
             results[name] = result
-            log.info('%s: %s', name, result.get('status'))
+            log.info('paper_strategy_complete strategy=%s minute=%s status=%s duration_s=%.2f reason=%s',
+                     name, now.isoformat(), result.get('status'), time.monotonic() - started,
+                     result.get('reason') or result.get('detail') or '-')
         except Exception as exc:
             # The other strategy still runs; next minute can recover.
             results[name] = {'status': 'error', 'reason': type(exc).__name__}
-            log.error('%s: %s', name, type(exc).__name__)
+            log.error('paper_strategy_failed strategy=%s minute=%s duration_s=%.2f error=%s',
+                      name, now.isoformat(), time.monotonic() - started, type(exc).__name__)
     return results
 
 

@@ -7,6 +7,9 @@ from datetime import date, datetime
 import json
 import math
 import os
+import logging
+
+log = logging.getLogger('paper.dashboard')
 
 FIELDS = ('signal_id', 'status', 'direction', 'entry_ts', 'expiry', 'option_type',
           'sell_strike', 'buy_strike', 'lots', 'units', 'sell_price', 'buy_price',
@@ -81,9 +84,12 @@ def build_snapshot(runner, cycle):
 def publish_paper_snapshot(runner, cycle):
     default = 'true' if hasattr(runner.store, 'publish_dashboard') else 'false'
     if os.getenv('PAPER_FIREBASE_ENABLED', default).lower() != 'true':
+        log.info('paper_dashboard_skipped strategy=%s reason=publishing_disabled', runner.strategy_name)
         return
     if cycle.get('status') in ('busy', 'db_unavailable', 'strategy_state_mismatch'):
+        log.warning('paper_dashboard_skipped strategy=%s reason=%s', runner.strategy_name, cycle.get('status'))
         return
+    log.info('paper_dashboard_start strategy=%s status=%s', runner.strategy_name, cycle.get('status'))
     payload = build_snapshot(runner, cycle)
     json.dumps(payload, allow_nan=False)
     if hasattr(runner.store, 'publish_dashboard'):
@@ -91,3 +97,5 @@ def publish_paper_snapshot(runner, cycle):
     else:
         from execution.firebase_client import get_firestore_client
         get_firestore_client().collection('algo_paper_state').document(runner.strategy_name).set(payload, retry=None, timeout=8)
+    log.info('paper_dashboard_published strategy=%s last_evaluation=%s updated_at=%s status=%s',
+             runner.strategy_name, payload.get('last_evaluation'), payload.get('updated_at'), payload.get('status'))

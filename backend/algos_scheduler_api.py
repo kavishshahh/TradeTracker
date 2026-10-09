@@ -5,6 +5,9 @@ import os
 from pathlib import Path
 import sys
 import threading
+import logging
+
+log = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -49,7 +52,8 @@ def create_scheduler_router(db, coordinator_factory=None, clock=None):
             raise HTTPException(503, 'Paper storage unavailable')
         try:
             result = get_coordinator().run_once()
-        except Exception:
+        except Exception as exc:
+            log.error('paper_scheduler_failed scheduled_at=%s error=%s', scheduled.isoformat(), type(exc).__name__)
             raise HTTPException(503, 'Paper evaluation unavailable; inspect backend logs and credentials') from None
         if result.get('status') == 'busy':
             raise HTTPException(409, 'Another paper cycle is running')

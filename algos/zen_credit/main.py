@@ -40,7 +40,7 @@ from strategy.registry import apply_profile, create_engine
 from strategy.spreads import select_expiry
 from utils.time import minute_bucket, now_ist, to_ist
 
-log = logging.getLogger("zen_credit")
+log = logging.getLogger("paper.runner")
 
 SNAPSHOT_STRIKES_EACH_SIDE = 15
 SNAPSHOT_HISTORY_DAYS = 6
@@ -117,7 +117,19 @@ class RedactingFormatter(logging.Formatter):
         return redact(base)
 
 
+def configure_paper_logging() -> None:
+    """Expose paper INFO events even when hosted under Uvicorn's logging."""
+    logger = logging.getLogger("paper")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(RedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+        logger.addHandler(handler)
+
+
 def setup_logging(cfg: Config) -> None:
+    configure_paper_logging()
     fmt = RedactingFormatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
     root = logging.getLogger()
     root.setLevel(getattr(logging, cfg.runtime.log_level.upper(), logging.INFO))
@@ -234,7 +246,7 @@ class Runner:
             with self.store.session():
                 with self.store.lock() as acquired:
                     if not acquired:
-                        log.info("another cycle is in flight; returning busy")
+                        log.warning("paper_strategy_busy strategy=%s reason=lease_not_acquired", self.strategy_name)
                         return {"status": "busy", "strategy": self.strategy_name, "reason": "another cycle is running"}
                     result = self.cycle(now, force)
                     # Optional dashboard mirror; durable paper state precedes export.
@@ -242,7 +254,8 @@ class Runner:
                         from execution.firebase_paper import publish_paper_snapshot
                         publish_paper_snapshot(self, result)
                     except Exception as exc:
-                        log.warning("paper_dashboard_export_failed: %s", type(exc).__name__)
+                        log.warning("paper_dashboard_export_failed strategy=%s minute=%s error=%s",
+                                    self.strategy_name, self.last_context.get('minute'), type(exc).__name__)
                     return result
         except Exception as exc:
             if not is_db_error(exc):
@@ -260,6 +273,8 @@ class Runner:
         chains = {}
         expiries = None
         if position is not None:
+            log.info("paper_data_start strategy=%s minute=%s stage=held_position expiry=%s",
+                     self.strategy_name, minute.isoformat(), position.expiry)
             # Evaluate the existing contract before fetching any entry-only inputs.
             settlement = None
             chain = None
@@ -271,13 +286,17 @@ class Runner:
             view = MarketView(now=now, spot_bars=None, snapshots=None, chain=chain,
                               expiries=[], lot_size=None, position_chain=chain, settlement=settlement)
         else:
+            log.info("paper_data_start strategy=%s minute=%s stage=instrument_master", self.strategy_name, minute.isoformat())
             expiries = self.provider.get_expiries()
             nearest = select_expiry(now.date(), expiries)
+            log.info("paper_data_start strategy=%s minute=%s stage=option_quotes expiry=%s", self.strategy_name, minute.isoformat(), nearest)
             chain = self.provider.get_option_chain(nearest)
             chains[nearest] = chain
             self._collect_history(now, minute, chains, expiries)
             lot_size = self.provider.get_lot_size(nearest)
+            log.info("paper_data_start strategy=%s minute=%s stage=index_candles", self.strategy_name, minute.isoformat())
             bars = self.provider.get_spot_bars(now)
+            log.info("paper_data_start strategy=%s minute=%s stage=snapshot_history", self.strategy_name, minute.isoformat())
             snapshots = self.store.load_snapshots(now - timedelta(days=SNAPSHOT_HISTORY_DAYS))
             if not snapshots.empty:
                 snapshots = snapshots[snapshots["minute"] <= minute]
@@ -290,7 +309,9 @@ class Runner:
         d = res.diagnostics
         self.last_context.update(alpha=d.get("alpha"), alpha2=d.get("alpha2"), signal=d.get("signal"),
                                  position="IN_POSITION" if position is not None else "FLAT")
-        log.info("evaluation", extra={"action": res.action, "reason": res.reason,
+        log.info("paper_evaluation strategy=%s minute=%s action=%s reason=%s", self.strategy_name,
+                 minute.isoformat(), res.action, res.reason,
+                 extra={"action": res.action, "reason": res.reason,
                                       "spot": chain.spot if chain else None,
                                       "expiry": chain.expiry.isoformat() if chain else None,
                                       "position_open": position is not None,

@@ -4,7 +4,7 @@ Only data endpoints are allowlisted. There are no order/account methods.
 Shared by both strategies; cache lasts one worker round, with global throttling.
 """
 from datetime import date, datetime, timedelta
-import io
+import tempfile
 import math
 import os
 import time
@@ -84,19 +84,35 @@ class DhanLiveProvider(MarketDataProvider):
         if self.master_date == today:
             return
         try:
-            response = self.session.get(self.MASTER, timeout=60)
-            response.raise_for_status()
-            frame = pd.read_csv(io.StringIO(response.text), low_memory=False)
             required = {'EXCH_ID', 'INSTRUMENT', 'UNDERLYING_SYMBOL', 'SECURITY_ID',
                         'SM_EXPIRY_DATE', 'STRIKE_PRICE', 'OPTION_TYPE', 'LOT_SIZE'}
-            if not required.issubset(frame.columns):
-                raise MarketDataError('Dhan instrument master schema changed')
-            frame = frame.loc[frame.EXCH_ID.eq('NSE') & frame.INSTRUMENT.eq('OPTIDX') &
-                              frame.UNDERLYING_SYMBOL.eq('NIFTY')].copy()
-            frame['expiry'] = pd.to_datetime(frame.SM_EXPIRY_DATE).dt.date
-            frame = frame[frame.expiry >= today]
-            if frame.empty:
+            # Keep the full exchange master off the heap. Only retain active
+            # NIFTY options; the download, text decoding and dataframe must not
+            # each hold another full copy on a memory-limited API instance.
+            selected = []
+            with self.session.get(self.MASTER, timeout=60, stream=True) as response:
+                response.raise_for_status()
+                with tempfile.TemporaryFile(mode='w+b') as master:
+                    for block in response.iter_content(chunk_size=64 * 1024):
+                        master.write(block)
+                    master.seek(0)
+                    columns = pd.read_csv(master, nrows=0).columns
+                    if not required.issubset(columns):
+                        raise MarketDataError('Dhan instrument master schema changed')
+                    master.seek(0)
+                    with pd.read_csv(master, usecols=sorted(required), chunksize=5000) as chunks:
+                        for chunk in chunks:
+                            frame = chunk.loc[chunk.EXCH_ID.eq('NSE') & chunk.INSTRUMENT.eq('OPTIDX') &
+                                              chunk.UNDERLYING_SYMBOL.eq('NIFTY')].copy()
+                            if frame.empty:
+                                continue
+                            frame['expiry'] = pd.to_datetime(frame.SM_EXPIRY_DATE).dt.date
+                            frame = frame.loc[frame.expiry >= today]
+                            if not frame.empty:
+                                selected.append(frame)
+            if not selected:
                 raise MarketDataError('No active NIFTY options in Dhan master')
+            frame = pd.concat(selected, ignore_index=True)
             self.contracts, self.master_date = frame, today
         except (requests.RequestException, ValueError, KeyError):
             raise MarketDataError('Could not load Dhan instrument master') from None

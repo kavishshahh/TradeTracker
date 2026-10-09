@@ -25,6 +25,27 @@ def provider():
 
 
 class DhanLiveTests(unittest.TestCase):
+    def test_master_streams_and_filters_across_chunks(self):
+        header = 'EXCH_ID,INSTRUMENT,UNDERLYING_SYMBOL,SECURITY_ID,SM_EXPIRY_DATE,STRIKE_PRICE,OPTION_TYPE,LOT_SIZE,UNUSED\n'
+        irrelevant = 'NSE,OPTIDX,BANKNIFTY,99,2026-10-13,23000,CE,30,discard\n'
+        payload = (header + irrelevant * 5001 +
+                   'NSE,OPTIDX,NIFTY,1,2026-10-13,23000,CE,65,discard\n' +
+                   'NSE,OPTIDX,NIFTY,2,2026-10-06,23000,PE,65,discard\n').encode()
+        from unittest.mock import MagicMock
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.iter_content.return_value = (payload[i:i + 1024] for i in range(0, len(payload), 1024))
+        p = provider()
+        p.master_date = None
+        p.session = MagicMock()
+        p.session.get.return_value = response
+        p.refresh_master()
+        self.assertEqual(p.contracts.SECURITY_ID.tolist(), [1])
+        self.assertNotIn('UNUSED', p.contracts.columns)
+        self.assertEqual(p.get_lot_size(EXPIRY), 65)
+        p.session.get.assert_called_once_with(p.MASTER, timeout=60, stream=True)
+        response.__exit__.assert_called_once()
+
     def test_quotes_preserve_contract_identity_volume_depth_and_exchange_age(self):
         p = provider()
         fresh = {'last_price': 100, 'volume': 1500, 'last_trade_time': '07/10/2026 10:30:00',

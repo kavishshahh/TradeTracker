@@ -212,7 +212,8 @@ class Runner:
         try:
             result = self._evaluate(now, minute)
         except (MarketDataError, CalendarUnavailable) as exc:
-            log.error("run_data_error", extra={"error": str(exc)})
+            log.error("run_data_error [%s]: %s", self.strategy_name, exc,
+                      extra={"error": str(exc)})
             result = {"status": "data_error", "detail": str(exc)}
         except Exception as exc:  # never crash the endpoint
             log.exception("run_failed")

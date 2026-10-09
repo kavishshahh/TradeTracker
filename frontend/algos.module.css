@@ -38,7 +38,22 @@
 .stats p { color: var(--muted-foreground); font-size: 12px; margin-bottom: 12px; }
 .stats strong { display: block; font-size: clamp(21px, 2vw, 28px); font-weight: 500; letter-spacing: -.025em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .stats span { display: block; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; margin-top: 9px; }
-.green { color: var(--positive); } .red { color: var(--negative); }
+.lab .green { color: var(--positive); } .lab .red { color: var(--negative); }
+.positions { margin-top: 20px; }
+.positionSummary { display: flex; align-items: center; flex-wrap: wrap; gap: 28px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+.positionSummary b { margin-left: 8px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.positionHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 22px 0 12px; }
+.positionHeading > span { margin-left: auto; font-size: 11px; }
+.positionFilters { display: flex; flex-wrap: wrap; gap: 8px; }
+.positionFilters button { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground); font-size: 12px; cursor: pointer; }
+.positionFilters button span { padding: 1px 6px; border-radius: 3px; background: var(--muted); font-variant-numeric: tabular-nums; }
+.positionFilters .selectedFilter { border-color: var(--primary); color: var(--primary); background: var(--accent); }
+.positionTable { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.positionTable td:last-child { font-weight: 500; }
+.productBadge { display: inline-block; color: var(--primary); background: var(--accent); border: 1px solid var(--border); border-radius: 4px; padding: 3px 7px; font-size: 11px; }
+.positionEmpty { padding: 18px 16px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted-foreground); font-size: 12px; }
+.positionFooter { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--muted-foreground); }
+.positionFooter b { margin-left: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .tabs { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); margin-top: 22px; }
 .tabs > div { display: flex; gap: 24px; }
 .tabs > div button { font-size: 13px; color: var(--muted-foreground); padding: 14px 0; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }

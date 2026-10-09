@@ -40,6 +40,21 @@
 .stats span { display: block; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; margin-top: 9px; }
 .lab .green { color: var(--positive); } .lab .red { color: var(--negative); }
 .positions { margin-top: 20px; }
+.algoList { margin: 20px 0 28px; }
+.algoSummary { padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; }
+.algoSummary .sectionTitle { margin-bottom: 24px; }
+.algoSummary .sectionTitle > span { font-size: 11px; }
+.algoTotals { display: flex; flex-wrap: wrap; gap: 24px 64px; }
+.algoTotals span { display: block; color: var(--muted-foreground); font-size: 12px; margin-bottom: 8px; }
+.algoTotals strong { font-size: 21px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.algoName { display: flex; align-items: center; gap: 12px; color: var(--foreground); cursor: pointer; font-size: 13px; text-align: left; }
+.algoName:hover { color: var(--primary); }
+.algoIcon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--accent); color: var(--primary); border: 1px solid var(--border); border-radius: 5px; font-size: 11px; }
+.selectedAlgo { background: var(--accent); }
+.statusDot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); margin-right: 8px; }
+.sellBadge { color: var(--negative); font-weight: 600; }
+.buyBadge { color: var(--positive); font-weight: 600; }
+.positionTable tfoot td { border-top: 1px solid var(--border); color: var(--muted-foreground); }
 .positionSummary { display: flex; align-items: center; flex-wrap: wrap; gap: 28px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
 .positionSummary b { margin-left: 8px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .positionHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 22px 0 12px; }

@@ -35,6 +35,7 @@ def build_snapshot(runner, cycle):
     closed = store.closed_positions(limit=200)
     mtm = None
     mark_time = None
+    quote = None
     if hasattr(store, 'paper_totals_and_mark'):
         totals, quote = store.paper_totals_and_mark(opened)
         if quote:
@@ -63,6 +64,10 @@ def build_snapshot(runner, cycle):
                     mtm = (opened.entry_spread_price - (quote['sell'] - quote['buy'])) * opened.units
                     mark_time = quote['minute'].isoformat()
     count = totals['closed_trades']
+    open_trade = public_trade(opened) if opened else None
+    if open_trade and quote:
+        open_trade['sell_mark'] = float(quote['sell'])
+        open_trade['buy_mark'] = float(quote['buy'])
     known = not totals['unknown_pnl']
     last_context = runner.last_context
     return {'strategy': runner.strategy_name, 'execution': 'paper_only',
@@ -72,7 +77,7 @@ def build_snapshot(runner, cycle):
             'status': cycle.get('status'),
             'alpha': last_context.get('alpha'), 'alpha2': last_context.get('alpha2'),
             'signal_at': last_context.get('minute'),
-            'open_position': public_trade(opened) if opened else None,
+            'open_position': open_trade,
             'closed_positions': [public_trade(row) for row in closed],
             'ledger_limit': 200, 'closed_trades': count,
             'realized_pnl': float(totals['realized_pnl'] or 0) if known else None,

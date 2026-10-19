@@ -14,10 +14,16 @@ snapshots, state, emails) and users/*/algo_follows/{id}. Existing documents at
 the new id are left untouched. Stop the paper worker/scheduler before applying
 so a live cycle cannot write to the old namespace mid-copy.
 
---delete-old removes the old-id documents only after checking that every one of
-them has a counterpart under the new id (same document ids in every
-subcollection); any missing copy aborts before a single delete. Subcollection
-documents are deleted explicitly because Firestore does not cascade.
+--delete-old removes only the old top-level rows: algo_catalog/{old},
+algo_paper_state/{old} and users/*/algo_follows/{old}. It deletes by path and
+finds follows with one collection-group query, so it reads only the follow
+documents themselves. The old algo_engines/{old}/* history is left in place:
+nothing reads it once the registry uses the new ids, and walking it costs one
+read per document (about 8,500 for the two Zen strategies).
+
+Cost note: --apply streams every engine subcollection and checks each target,
+about 2 reads per document; on the free tier (50,000 reads/day) one dry run
+plus one apply used most of the daily quota on 19 Oct 2026.
 """
 import argparse
 import sys
@@ -25,7 +31,6 @@ from pathlib import Path
 
 RENAMES = {'strategy_01': 'zen_strategy_01', 'strategy_02': 'zen_strategy_02', 'strategy_03': 'ratio_strategy_03'}
 ENGINE_SUBCOLLECTIONS = ('control', 'positions', 'closed', 'signals', 'runs', 'snapshots', 'state', 'emails')
-BATCH = 400
 
 
 def copy_document(src, dst, apply, log):
@@ -41,7 +46,7 @@ def copy_document(src, dst, apply, log):
     return 1
 
 
-def copy_collection(src, dst, apply, log, batch_size=BATCH):
+def copy_collection(src, dst, apply, log, batch_size=400):
     count = 0
     docs = list(src.stream())
     for i in range(0, len(docs), batch_size):
@@ -57,49 +62,27 @@ def copy_collection(src, dst, apply, log, batch_size=BATCH):
     return count
 
 
-def old_references(db, old, new):
-    """Yield (old_ref, new_ref) pairs for every old-id document that exists."""
-    for collection in ('algo_catalog', 'algo_paper_state', 'algo_engines'):
-        ref = db.collection(collection).document(old)
-        if ref.get().exists:
-            yield ref, db.collection(collection).document(new)
-    old_engine = db.collection('algo_engines').document(old)
-    new_engine = db.collection('algo_engines').document(new)
-    for sub in ENGINE_SUBCOLLECTIONS:
-        for doc in old_engine.collection(sub).stream():
-            yield doc.reference, new_engine.collection(sub).document(doc.id)
-    for user in db.collection('users').stream():
-        ref = user.reference.collection('algo_follows').document(old)
-        if ref.get().exists:
-            yield ref, user.reference.collection('algo_follows').document(new)
-
-
 def delete_old(db, log):
-    pairs = []
-    missing = []
-    for old, new in RENAMES.items():
-        for old_ref, new_ref in old_references(db, old, new):
-            pairs.append(old_ref)
-            if not new_ref.get().exists:
-                missing.append((old_ref.path, new_ref.path))
-    if missing:
-        for o, n in missing[:20]:
-            log(f'MISSING copy: {o} -> {n}')
-        raise SystemExit(f'{len(missing)} old documents have no copy under the new id; nothing deleted')
-    log(f'verified {len(pairs)} old documents all have copies; deleting')
-    for i in range(0, len(pairs), BATCH):
-        batch = db.batch()
-        for ref in pairs[i:i + BATCH]:
-            batch.delete(ref)
-        batch.commit()
-        log(f'deleted {min(i + BATCH, len(pairs))} / {len(pairs)}')
-    return len(pairs)
+    """Delete the old-id top-level rows by path; never walk engine subcollections."""
+    refs = []
+    for old in RENAMES:
+        refs.append(db.collection('algo_catalog').document(old))
+        refs.append(db.collection('algo_paper_state').document(old))
+    for doc in db.collection_group('algo_follows').stream():
+        if doc.id in RENAMES:
+            refs.append(doc.reference)
+    batch = db.batch()
+    for ref in refs:
+        batch.delete(ref)
+        log(f'delete {ref.path}')
+    batch.commit()
+    return len(refs)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--apply', action='store_true', help='write the copies; default is a dry run')
-    parser.add_argument('--delete-old', action='store_true', help='delete old-id documents after verifying their copies exist')
+    parser.add_argument('--delete-old', action='store_true', help='delete the old-id catalogue, paper-state and follow rows (engine history is left)')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / 'algos/zen_credit'))
@@ -108,7 +91,7 @@ def main():
     log = print
     if args.delete_old:
         count = delete_old(db, log)
-        print(f'Deleted {count} old-id documents. Remaining catalogue ids: {sorted(d.id for d in db.collection("algo_catalog").stream())}')
+        print(f'Deleted {count} old-id rows (deleting a missing document is a no-op).')
         return
     total = 0
     for old, new in RENAMES.items():

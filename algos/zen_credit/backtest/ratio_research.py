@@ -7,11 +7,15 @@ Run from zen_credit (offline cache from 18 June 2025; downloads nothing):
     ..\\.venv\\Scripts\\python.exe -B -m backtest.ratio_research build      # -> reports/ratio_research/market.pkl
     ..\\.venv\\Scripts\\python.exe -B -m backtest.ratio_research baseline   # pinned rule, ledger + score
     ..\\.venv\\Scripts\\python.exe -B -m backtest.ratio_research grid       # smoothing / gate / persistence grid
+    ..\\.venv\\Scripts\\python.exe -B -m backtest.ratio_research round2     # asymmetric/hysteresis gates, EMA and
+                                                                            # candle smoothing, rank windows, basis
+                                                                            # confirmation, first-cross entry
 
 The simulator mirrors the engine rules of the named module (opening-ATM short strike, 400-point
-hedge, 50% credit target, credit + 45 stop, 14:57 exit on expiry day, settlement at the expiry-day
-last close when quotes are missing, Monday 80% allocation) on candle closes. It is a research tool:
-confirm any candidate with backtest.dhan_replay before pinning it in the strategy module.
+hedge, 50% credit target on the entry day only, credit + 45 stop, 14:57 exit on expiry day,
+settlement at the expiry-day last close when quotes are missing, Monday 80% allocation) on candle
+closes. It is a research tool: confirm any candidate with backtest.dhan_replay before pinning it in
+the strategy module. ``round2`` scores every candidate under both target modes.
 """
 from __future__ import annotations
 
@@ -39,6 +43,8 @@ WIDTH = 400
 STEP = 50.0
 START = pd.Timestamp("2025-10-01", tz=IST)
 END = pd.Timestamp("2026-09-30 23:59", tz=IST)
+PRE_START = pd.Timestamp("2025-07-01", tz=IST)     # pre-window sanity check: no published trades, no fitting
+PRE_END = pd.Timestamp("2025-09-30 23:59", tz=IST)
 FULL_FIELDS = ["open", "high", "low", "close", "volume", "strike", "spot", "iv", "oi"]
 
 
@@ -187,6 +193,104 @@ def rank800(series: pd.Series) -> pd.Series:
     return series.rolling(s3.RANK_WINDOW, min_periods=s3.RANK_MIN_PERIODS).rank(pct=True)
 
 
+def rank_window(series: pd.Series, window: int) -> pd.Series:
+    """Percentile rank over ``window`` observations with the pinned 90% minimum (800 -> 720)."""
+    return series.rolling(window, min_periods=int(round(0.9 * window))).rank(pct=True)
+
+
+def session_ema(series: pd.Series, dates, span: int) -> pd.Series:
+    """Session-local exponential mean, exactly the strategy module's formula."""
+    return s3.ema_smooth(series, dates, span)
+
+
+def session_candle_mean(series: pd.Series, dates, minutes: int) -> pd.Series:
+    """Mean of the last COMPLETED ``minutes``-minute candle (buckets from 09:15), held until the next one
+    completes: a slower, stepwise smoothing in the spirit of a 5-minute chart."""
+    idx = series.index
+    bucket = ((idx.hour * 60 + idx.minute) - (9 * 60 + 15) - 1) // minutes   # decisions 09:16-09:20 -> bucket 0
+    d = np.asarray(dates)
+    frame = pd.DataFrame({"v": series.to_numpy(), "d": d, "b": np.asarray(bucket)})
+    g = frame.groupby(["d", "b"])["v"]
+    means = g.mean().where(g.size() >= minutes)
+    prev = pd.MultiIndex.from_arrays([d, np.asarray(bucket) - 1])
+    return pd.Series(means.reindex(prev).to_numpy(), index=idx)
+
+
+def smooth(skew: pd.Series, dates, kind: str, n: int) -> pd.Series:
+    if kind == "sma":
+        return skew if n <= 1 else session_smooth(skew, dates, n)
+    if kind == "ema":
+        return session_ema(skew, dates, n)
+    if kind == "candle":
+        return session_candle_mean(skew, dates, n)
+    raise ValueError(kind)
+
+
+def hysteresis_gate(skew, dates, tight: float, loose: float, call: bool):
+    """Gate opens when the skew reaches ``tight`` and stays open while it holds ``loose`` (same session)."""
+    s = np.asarray(skew, dtype=float)
+    out = np.zeros(len(s), dtype=bool)
+    open_, prev_d = False, None
+    for i, (v, d) in enumerate(zip(s, dates)):
+        if d != prev_d:
+            open_, prev_d = False, d
+        if not np.isfinite(v):
+            open_ = False
+            continue
+        if call:
+            open_ = (v <= tight) or (open_ and v <= loose)
+        else:
+            open_ = (v >= tight) or (open_ and v >= loose)
+        out[i] = open_
+    return out
+
+
+def basis_points(mkt: "Market") -> np.ndarray:
+    """Parity-implied forward (ATM strike + (C - P) * e^{rT}) minus spot, in index points."""
+    if getattr(mkt, "_basis", None) is not None:
+        return mkt._basis
+    atm = mkt.features["atm"].to_numpy()
+    expiry = [mkt.expiry_of[d] for d in mkt.dates]
+    tyrs = years_to_expiry(mkt.clock, expiry)
+    ce = np.array([mkt.price(i, atm[i], 0) for i in range(mkt.n)])
+    pe = np.array([mkt.price(i, atm[i], 1) for i in range(mkt.n)])
+    mkt._basis = atm + (ce - pe) * np.exp(s3.RISK_FREE_RATE * tyrs) - mkt.close
+    return mkt._basis
+
+
+def first_cross(sig, dates, in_window):
+    """Keep only the first eligible minute of each same-sign signal run within a session."""
+    s = np.where(in_window, np.asarray(sig), 0)
+    out = np.zeros(len(s), dtype=int)
+    prev, prev_d = 0, None
+    for i, (v, d) in enumerate(zip(s, dates)):
+        if v != 0 and (v != prev or d != prev_d):
+            out[i] = v
+        prev, prev_d = v, d
+    return out
+
+
+def build_signal(mkt: "Market", kind="sma", n=15, rank_win=800, cm=s3.SKEW_CALL_MAX, pm=s3.SKEW_PUT_MIN, lo=0.2,
+                 cm_loose=None, pm_loose=None, basis=False, cross=False, persist_n=1):
+    """Candidate entry signal: smoothing -> rank -> (hysteresis) gate -> optional basis / first-cross filters."""
+    f = mkt.features
+    s = smooth(f["skew"], mkt.dates, kind, n)
+    a = rank_window(s, rank_win)
+    sv = s.to_numpy()
+    call_gate = hysteresis_gate(sv, mkt.dates, cm, cm_loose, True) if cm_loose is not None else (sv <= cm)
+    put_gate = hysteresis_gate(sv, mkt.dates, pm, pm_loose, False) if pm_loose is not None else (sv >= pm)
+    av = a.to_numpy()
+    sig = np.where(call_gate & (av < lo), -1, np.where(put_gate & (av > 1 - lo), 1, 0))
+    if basis:
+        b = basis_points(mkt)
+        sig = np.where(((sig == -1) & (b > 0)) | ((sig == 1) & (b < 0)), sig, 0)
+    if persist_n > 1:
+        sig = persist(sig, mkt.dates, persist_n)
+    if cross:
+        sig = first_cross(sig, mkt.dates, mkt.in_window)
+    return sig
+
+
 def gate_signal(skew, alpha, call_max=s3.SKEW_CALL_MAX, put_min=s3.SKEW_PUT_MIN, lo=s3.BEARISH_RANK, hi=s3.BULLISH_RANK):
     """-1 = credit call spread, +1 = credit put spread, 0 = nothing."""
     return np.where((alpha < lo) & (skew <= call_max), -1, np.where((alpha > hi) & (skew >= put_min), 1, 0))
@@ -206,7 +310,9 @@ def persist(sig, dates, n: int):
 
 # --------------------------------------------------------------------------- simulation
 def simulate(mkt: Market, signal, start=START, end=END, target_frac=0.5, stop_points=45.0, max_dte=5, min_dte=1,
-             weekend=False) -> pd.DataFrame:
+             weekend=False, target_entry_day_only=False) -> pd.DataFrame:
+    """``target_entry_day_only``: the credit target is checked only on the entry date; afterwards the position
+    runs to the stop or the expiry-day exit (what the published overnight trades show)."""
     sig = np.asarray(signal)
     if not weekend:
         sig = np.where(mkt.weekday >= 5, 0, sig)
@@ -226,7 +332,7 @@ def simulate(mkt: Market, signal, start=START, end=END, target_frac=0.5, stop_po
             elif np.isfinite(sv):
                 if sv >= pos["stop"]:
                     reason = "stop"
-                elif sv <= pos["target"]:
+                elif sv <= pos["target"] and not (target_entry_day_only and d != pos["entry"].date()):
                     reason = "target"
                 elif d == pos["expiry"] and mkt.exit_time[i]:
                     reason = "time"
@@ -275,9 +381,33 @@ def published_in(start=START, end=END) -> pd.DataFrame:
     return p[(p.entry >= start) & (p.entry <= end)]
 
 
+def score_full(mkt: Market, sig, pub: pd.DataFrame, label="", target_entry_day_only=False) -> dict:
+    """Replay-window score plus the pre-window (Jul-Sep 2025) profile (no published trades there) and the
+    mean absolute P&L gap on matched trades."""
+    t = simulate(mkt, sig, target_entry_day_only=target_entry_day_only)
+    main = score(t, pub, label)
+    closed = t[t.reason != "open"] if len(t) else t
+    gaps = []
+    for r in pub.itertuples():
+        s = 0 if r.side == "CE" else 1
+        day = closed[(closed.entry.dt.date == r.entry.date()) & (closed.side == s)] if len(closed) else closed
+        if len(day):
+            gaps.append(abs(float(day.pnl.iloc[0]) - r.pnl))
+    main["pnl_gap"] = round(float(np.mean(gaps)), 0) if gaps else np.nan
+    main["exit_mix"] = "/".join(str(int((closed.reason == k).sum())) for k in ("target", "stop", "time", "expiry")) if len(closed) else ""
+    pre = simulate(mkt, sig, start=PRE_START, end=PRE_END, target_entry_day_only=target_entry_day_only)
+    pre = pre[pre.reason != "open"] if len(pre) else pre
+    main.update(pre_trades=len(pre), pre_stops=int((pre.reason == "stop").sum()) if len(pre) else 0,
+                pre_pnl=round(float(pre.pnl.sum()), 0) if len(pre) else 0.0)
+    return main
+
+
 def load_market() -> Market:
     path = OUT / "market.pkl"
     if path.exists():
+        import __main__
+        if not hasattr(__main__, "Market"):
+            __main__.Market = Market        # the pickle names the class by the module it was built from
         return pickle.load(open(path, "rb"))
     OUT.mkdir(parents=True, exist_ok=True)
     mkt = Market()
@@ -286,8 +416,9 @@ def load_market() -> Market:
 
 
 def pinned_signal(mkt: Market):
-    f = mkt.features
-    return gate_signal(f["skew_smooth"], rank800(f["skew_smooth"]))
+    """The strategy module's current constants (the pickled ``skew_smooth`` column is the round-1 SMA-15)."""
+    return build_signal(mkt, kind="ema", n=s3.SMOOTH_WINDOW, rank_win=s3.RANK_WINDOW, cm=s3.SKEW_CALL_MAX,
+                        pm=s3.SKEW_PUT_MIN, lo=s3.BEARISH_RANK)
 
 
 def main(argv=None):
@@ -305,7 +436,7 @@ def main(argv=None):
     mkt = load_market()
     pub = published_in()
     if command == "baseline":
-        tr = simulate(mkt, pinned_signal(mkt))
+        tr = simulate(mkt, pinned_signal(mkt), target_entry_day_only=s3.TARGET_ENTRY_DAY_ONLY)
         print(score(tr, pub, "pinned rule"))
         print(tr[["entry", "side", "sell", "credit", "exit", "exit_value", "pnl", "reason"]].to_string())
         return
@@ -324,7 +455,75 @@ def main(argv=None):
         R.to_csv(OUT / "grid.csv", index=False)
         print(R.sort_values(["pub_like", "pnl"], ascending=False).head(30).to_string())
         return
-    raise SystemExit(f"unknown command {command}; use build, baseline or grid")
+    if command == "round2":
+        round2(mkt, pub)
+        return
+    raise SystemExit(f"unknown command {command}; use build, baseline, grid or round2")
+
+
+ROUND2_DEFAULTS = dict(kind="sma", n=15, rank_win=800, cm=s3.SKEW_CALL_MAX, pm=s3.SKEW_PUT_MIN, lo=0.2,
+                       cm_loose=None, pm_loose=None, basis=False, cross=False, persist_n=1)
+
+
+def round2_candidates():
+    """(label, hypothesis, build_signal kwargs) for the second iteration round."""
+    c = [("pinned sma15 -3.0/5.0 r800", "0 baseline", {})]
+    # (1) asymmetric gates and hysteresis
+    for cm, pm in ((-3.0, 4.5), (-2.5, 5.0), (-2.5, 4.5), (-3.5, 4.5), (-2.0, 5.0), (-3.0, 4.0), (-3.5, 5.0), (-3.0, 5.5)):
+        c.append((f"asym sma15 {cm}/{pm}", "1 asymmetric", dict(cm=cm, pm=pm)))
+    for (cm, cml, pm, pml) in ((-3.0, -2.5, 5.0, 4.5), (-3.0, -2.0, 5.0, 4.0), (-3.5, -2.5, 5.5, 4.5), (-3.0, -2.5, 5.0, 5.0),
+                               (-3.0, -3.0, 5.0, 4.5), (-2.5, -2.0, 4.5, 4.0)):
+        c.append((f"hyst sma15 {cm}>{cml}/{pm}>{pml}", "1 hysteresis", dict(cm=cm, cm_loose=cml, pm=pm, pm_loose=pml)))
+    # (2) smoothing
+    for n in (5, 10, 15, 20, 30):
+        c.append((f"ema{n} -3.0/5.0", "2 ema", dict(kind="ema", n=n)))
+    for n in (5, 10, 15):
+        for cm, pm in ((-2.5, 4.5), (-3.0, 4.5), (-2.5, 5.0), (-3.5, 5.0)):
+            c.append((f"ema{n} {cm}/{pm}", "2 ema", dict(kind="ema", n=n, cm=cm, pm=pm)))
+    for n in (5, 10, 20):
+        c.append((f"sma{n} -3.0/5.0", "2 sma", dict(n=n)))
+    for n in (5, 15):
+        for cm, pm in ((-3.0, 5.0), (-2.5, 4.5)):
+            c.append((f"candle{n} {cm}/{pm}", "2 candle", dict(kind="candle", n=n, cm=cm, pm=pm)))
+    # (3) rank window
+    for w in (375, 1125, 1600):
+        for cm, pm in ((-3.0, 5.0), (-2.5, 4.5)):
+            c.append((f"sma15 {cm}/{pm} r{w}", "3 rank window", dict(rank_win=w, cm=cm, pm=pm)))
+    # (4) basis-sign confirmation
+    for cm, pm in ((-3.0, 5.0), (-2.5, 4.5), (-2.5, 5.0), (-3.0, 4.5), (-2.0, 4.5)):
+        c.append((f"basis sma15 {cm}/{pm}", "4 basis", dict(cm=cm, pm=pm, basis=True)))
+    c.append(("basis ema15 -2.5/4.5", "4 basis", dict(kind="ema", n=15, cm=-2.5, pm=4.5, basis=True)))
+    c.append(("basis hyst -3.0>-2.5/5.0>4.5", "4 basis", dict(cm=-3.0, cm_loose=-2.5, pm=5.0, pm_loose=4.5, basis=True)))
+    # (5) first-cross entry
+    for cm, pm in ((-3.0, 5.0), (-2.5, 4.5), (-2.0, 4.5)):
+        c.append((f"cross sma15 {cm}/{pm}", "5 first cross", dict(cm=cm, pm=pm, cross=True)))
+    c.append(("cross sma5 -2.5/4.5", "5 first cross", dict(n=5, cm=-2.5, pm=4.5, cross=True)))
+    c.append(("cross raw -2.0/4.5", "5 first cross", dict(n=1, cm=-2.0, pm=4.5, cross=True)))
+    c.append(("cross ema10 -3.0/5.0", "5 first cross", dict(kind="ema", n=10, cross=True)))
+    return c
+
+
+def round2(mkt: Market, pub: pd.DataFrame):
+    """Second iteration round: five entry hypotheses, each under the pinned exits and under the
+    entry-day-only target (6), written to round2_candidates.csv."""
+    rows = []
+    for label, hyp, kw in round2_candidates():
+        sig = build_signal(mkt, **kw)
+        for t1 in (False, True):
+            r = score_full(mkt, sig, pub, label + (" +T1" if t1 else ""), target_entry_day_only=t1)
+            r.update(hypothesis=hyp, target_entry_day_only=t1, **{k: ("" if v is None else v) for k, v in {**ROUND2_DEFAULTS, **kw}.items()})
+            rows.append(r)
+            print(f"{r['label']:36s} matched {r['matched']:2d}/18 extra {r['extra']:2d} stops {r['stops']} trades {r['trades']:2d} "
+                  f"win {r['win_pct']:5.1f} pnl {r['pnl']:7.0f} gap {r['pnl_gap']:6.0f} exits {r['exit_mix']:11s} "
+                  f"pre {r['pre_trades']}/{r['pre_stops']}/{r['pre_pnl']:.0f}", flush=True)
+    R = pd.DataFrame(rows)
+    R["pub_like"] = R.matched - 0.5 * R.extra - R.stops
+    cols = ["label", "hypothesis", "target_entry_day_only", "matched", "same_strike", "extra", "stops", "trades", "wins", "win_pct",
+            "pnl", "max_dd", "pnl_gap", "exit_mix", "pre_trades", "pre_stops", "pre_pnl", "pub_like",
+            "kind", "n", "rank_win", "cm", "pm", "lo", "cm_loose", "pm_loose", "basis", "cross", "persist_n"]
+    R = R[cols]
+    R.to_csv(OUT / "round2_candidates.csv", index=False)
+    print(R.sort_values(["pub_like", "pnl"], ascending=False).head(40).to_string())
 
 
 if __name__ == "__main__":

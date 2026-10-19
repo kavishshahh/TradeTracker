@@ -32,6 +32,17 @@ def test_exit_priority_and_levels():
     assert evaluate_exit(ist(2026, 9, 30, 9, 20), None, 140.7, 10, due, exp).reason == EXPIRY
 
 
+def test_target_until_limits_the_target_to_the_entry_day():
+    due = ist(2026, 9, 29, 14, 57)
+    exp = date(2026, 9, 29)
+    entry_day = date(2026, 9, 24)
+    assert evaluate_exit(ist(2026, 9, 24, 11, 0), 9.5, 140.7, 10, due, exp, target_until=entry_day).reason == TARGET
+    assert evaluate_exit(ist(2026, 9, 25, 9, 16), 9.5, 140.7, 10, due, exp, target_until=entry_day) is None
+    assert evaluate_exit(ist(2026, 9, 25, 9, 16), 141.0, 140.7, 10, due, exp, target_until=entry_day).reason == STOP_LOSS
+    assert evaluate_exit(ist(2026, 9, 29, 14, 57), 9.5, 140.7, 10, due, exp, target_until=entry_day).reason == TIME_EXIT
+    assert evaluate_exit(ist(2026, 9, 25, 9, 16), 9.5, 140.7, 10, due, exp).reason == TARGET   # default: always
+
+
 def test_signal_thresholds(cfg):
     t = ist(2026, 9, 24, 10, 30)
     assert evaluate_signal(0.81, 0.9, t, cfg) == Signal.BULLISH

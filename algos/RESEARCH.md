@@ -102,8 +102,12 @@ What the published trades show, verified against Dhan minute data:
 - short strike = ATM of the last completed candle (open matches 12/13 checked trades),
   hedge 400 points further OTM (300 in the 2025 backtest rows);
 - published fills within about two points of the candle closes around the entry minute;
-- intraday exits at exactly 50% of the entry credit, scheduled exit 14:57 IST on expiry
-  day, two stops at roughly credit + 40 to 45 points (5% of margin per lot);
+- five intraday exits at exactly 50% of the entry credit, all on the entry day; scheduled
+  exit 14:57 IST on expiry day for every position carried overnight; two stops at roughly
+  credit + 40 to 45 points (5% of margin per lot). The published strikes of 11 of the 12
+  overnight winners traded below 50% of their credit on a later day for 47-603 minutes
+  (9 Dec 2025 09:16 at 0.1 against a 46-point target, 17 Aug 2026 at 4.5 against 67) and
+  were still held, so the target is live on the entry day only;
 - 80% capital on Mondays, 4 lots at 80% and 5 lots at 100% with the 65-unit lot;
 - at every entry the 100-point OTM put IV minus 100-point OTM call IV was at an extreme
   of its 800-minute rank, the sold side being the relatively expensive one. Using a
@@ -112,51 +116,66 @@ What the published trades show, verified against Dhan minute data:
   every put-spread entry.
 
 Rule: own spot-based Black-Scholes IV (6.5% rate, `strategy/implied_vol.py`), skew =
-IV(PE, ATM-100) - IV(CE, ATM+100) averaged over the last 15 minutes of the same session,
-alpha = 800-minute percentile rank of that smoothed skew. Credit CALL spread when the
-smoothed skew <= -3.0 IV points and alpha < 0.2; credit PUT spread when it is >= 5.0 and
-alpha > 0.8; no entries in Saturday/Sunday special sessions. Target 50% of credit, stop 5% of
-normal margin per lot, 14:57 exit on expiry day, one position, 320,000 capital with 80% on
-Mondays from 6 April 2026.
+IV(PE, ATM-100) - IV(CE, ATM+100) smoothed with a session-local exponential mean of span 10
+(restarted each session, unknown for its first 9 minutes), alpha = 800-minute percentile rank
+of that smoothed skew. Credit CALL spread when the smoothed skew <= -3.0 IV points and
+alpha < 0.2; credit PUT spread when it is >= 4.5 and alpha > 0.8; no entries in
+Saturday/Sunday special sessions. Target 50% of credit on the entry day only
+(`target_entry_day_only`), stop 5% of normal margin per lot, 14:57 exit on expiry day, one
+position, 320,000 capital with 80% on Mondays from 6 April 2026.
 
-How the gate was chosen (19 Oct 2025 - 1 Oct 2026, minute simulator with the pinned exits,
+How the rule was chosen. Round 1 (19 Oct 2025 - 1 Oct 2026, minute simulator,
 `reports/ratio_strategy_03_fit/grid_scan.csv`): the raw skew at -2.0/4.5 fired on the
 published day and side for 17/18 entries but produced 42 trades with 13 stops, and no
 entry-minute feature separated the 25 extra trades from the matched ones (best rank AUC
-0.66). Published entries came 20-80 minutes after the raw gate first switched on, and the
-extra trades that stopped out had entered within its first few minutes, so a slower signal
-was tested: 15-minute smoothing with -3.0/5.0 gives 19 trades, 18 winners, 1 stop, 13/18
-same-day matches and entry minutes mostly within 20 minutes of the published ones (for
-example 23 Oct 11:55 exactly, 25 Sep 14:15 vs 14:09). Neighbouring settings (smoothing 5-15,
-call gate -2.5 to -3.5, put gate 4.5 to 5.0) score similarly; the misses are four entries
-whose skew sat just inside the old gate and the provider's own 9 March 2026 loser. An "ATM
-IV elevated" filter was tried earlier and rejected (fails 5/19).
+0.66); a 15-minute simple mean with -3.0/5.0 gave 19 trades, 18 winners, 1 stop and 13/18
+same-day matches, but 15 of its 19 exits were targets against 5 of 18 published and three
+of its trades (27 Oct 2025, 17 Aug and 31 Aug 2026, the last the stop) were re-entries
+after next-morning target exits. An "ATM IV elevated" filter was
+tried and rejected (fails 5/19). Round 2 (`reports/ratio_research/round2_summary.md`,
+`round2_candidates.csv`, `round2_neighbourhood_T1.csv`): asymmetric and hysteresis gates,
+exponential and 5-minute-candle smoothing, 375/1125/1600-minute ranks, basis-sign
+confirmation and first-cross entry were scored against the published list; none beat the
+round-1 rule on matches and extras together (basis sign and hysteresis change nothing,
+the others trade matches for extras). The published exits then showed that the 50% target
+is live on the entry day only; with that exit every variant loses its re-entries and stops,
+and the exponential span-10 mean with -3.0/4.5 matches 14/18 published entries (23 and
+27 Oct 2025 and 18 May 2026 return) with 5 extra trades and 1 stop. Neighbours (spans 8-12,
+simple means 8-10, put gate 4.5-5.0) score 13-14 matched with 4-6 extras and 0-1 stops; a
+-2.5 call gate adds 7-12 extras with 2-4 stops, -3.5 drops to 8-11 matched. The pre-window
+Jul-Sep 2025 (no published trades) gives 2 trades, both winners.
 
 Replay 1 Oct 2025 - 30 Sep 2026 (entries), fixed INR 320,000, gross, Dhan minute closes
-(`reports/ratio_strategy_03_2025-10-01_2026-09-30/`):
+(`reports/ratio_strategy_03_2025-10-01_2026-09-30/`; the round-1 replay is kept in
+`reports/ratio_strategy_03_2025-10-01_2026-09-30_round1_sma15/`):
 
 | Measure | ratio_strategy_03 replay | Published Ratio-Fluxer (same window) |
 |---|---:|---:|
 | Closed trades / win rate | 19 / 94.74% | 18 / 88.9% |
-| Gross realized P&L | INR 404,879 | INR 397,006 (reported) |
-| Return / CAGR equivalent | 126.52% / 126.65% | n/a |
-| Realized max drawdown | 4.07% (INR 13,026) | n/a |
-| Trailing 1m / 3m / 6m | 30.26% / 60.41% / 97.92% | n/a |
-| Exits: target / stop / expiry | 15 / 1 / 3 | 5 target, 2 stop, 11 scheduled |
+| Gross realized P&L | INR 545,680 | INR 397,006 (reported) |
+| Return / CAGR equivalent | 170.53% / 170.71% | n/a |
+| Realized max drawdown | 5.13% (INR 16,429) | n/a |
+| Trailing 1m / 3m / 6m | 32.10% / 65.94% / 118.97% | n/a |
+| Exits: target / stop / scheduled / settled | 4 / 1 / 6 / 8 | 5 target, 2 stop, 11 scheduled |
 
-The replay opened a position on the same day and side as 13 of the 18 published entries
-(11 with the identical short strike) and added 6 trades of its own; the 5 misses are the
-22 Dec 2025 and 18 May 2026 put spreads (smoothed skew below the 5.0 gate), the 17 Nov 2025
-and 10 Aug 2026 call spreads (above the -3.0 gate) and the provider's losing 9 Mar 2026
-call spread. The three "Expiry" exits are positions whose legs left the ATM +/-10 archive
-before 14:57 and were settled at the official NSE close. The earlier unsmoothed gate
-(-2.0/4.5, replayed in `reports/strategy_03_2025-10-01_2026-09-30/`) produced 42 trades,
-69% winners and INR 437,901 with a 28% drawdown. Figures are provisional and exclude costs;
-the gate was tuned on these same published trades, so forward paper results are the test.
+The replay opened a position on the same day and side as 14 of the 18 published entries
+(10 with the identical short strike) and added 5 trades of its own: the 19 Mar (stop)
+and 23 Mar 2026 put spreads, the 20 Apr and 21 May 2026 put spreads and the 29 May 2026 call
+spread. The 4 misses are the 17 Nov 2025 and 10 Aug 2026 call spreads (smoothed skew near
+-2.0), the 22 Dec 2025 put spread (2.5) and the provider's losing 9 Mar 2026 call spread
+(0.6). Held spreads now earn close to the full credit, which is why the P&L exceeds the
+published figure while the mean absolute P&L gap on matched trades fell from 8,448 to about
+5,200. "Expiry" exits are positions whose legs left the ATM +/-10 archive before 14:57 and
+were settled at the official NSE close. The round-1 rule (15-minute simple mean, -3.0/5.0,
+target every day) produced 19 trades, 18 winners and INR 404,879 with 15 target exits; the
+unsmoothed gate (-2.0/4.5, `reports/strategy_03_2025-10-01_2026-09-30/`) 42 trades, 69%
+winners and INR 437,901 with a 28% drawdown. Figures are provisional and exclude costs; the
+rule was tuned on these same published trades, so forward paper results are the test.
 Research harness: `backtest/ratio_research.py` rebuilds the minute dataset from the cache
-(`build`), replays the pinned rule in a tenth of a second (`baseline`) and scans smoothing,
-gate and persistence settings (`grid`, writes `reports/ratio_research/grid.csv`). Use it for
-the next iterations and confirm any candidate with `backtest.dhan_replay` before pinning it.
+(`build`), replays the pinned rule in a tenth of a second (`baseline`), scans smoothing,
+gate and persistence settings (`grid`) and scores the round-2 hypotheses under both target
+modes (`round2`, writes `reports/ratio_research/round2_candidates.csv`). Use it for the next
+iterations and confirm any candidate with `backtest.dhan_replay` before pinning it.
 
 Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28 days from
 18 June 2025, so `--start` minus 21 days must land on one):

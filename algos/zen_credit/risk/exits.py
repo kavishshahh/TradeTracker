@@ -2,7 +2,8 @@
 
 Priority when several conditions hold at the same evaluation:
   1. Stop loss   : spread value >= stop level
-  2. Target      : spread value <= target level
+  2. Target      : spread value <= target level; with ``target_until`` only
+                   up to and including that date (entry-day-only targets)
   3. Time exit   : at TIME_EXIT on the next trading day after entry; a trade
                    entered on its expiry day is squared off at TIME_EXIT the
                    same day. Never later than the expiry day. With
@@ -47,14 +48,14 @@ def time_exit_due(entry_ts: datetime, expiry: date, calendar: TradingCalendar,
 
 
 def evaluate_exit(now: datetime, spread_value: float | None, stop_loss: float, target: float,
-                  exit_due: datetime, expiry: date) -> ExitDecision | None:
+                  exit_due: datetime, expiry: date, target_until: date | None = None) -> ExitDecision | None:
     now = to_ist(now)
     if now.date() > expiry:
         return ExitDecision(EXPIRY, spread_value)
     if spread_value is not None:
         if spread_value >= stop_loss:
             return ExitDecision(STOP_LOSS, spread_value)
-        if spread_value <= target:
+        if spread_value <= target and (target_until is None or now.date() <= target_until):
             return ExitDecision(TARGET, spread_value)
     if now >= exit_due:
         return ExitDecision(TIME_EXIT, spread_value)

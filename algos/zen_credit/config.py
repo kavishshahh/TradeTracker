@@ -80,6 +80,7 @@ class StrategyConfig:
     stop_loss_margin_fraction: float = 0.05    # SL = 5% of normal-day margin per lot
     target_spread_value: float = 10.0          # target when spread value <= 10 points
     target_credit_fraction: float | None = None  # if set, target = entry credit * fraction (overrides points)
+    target_entry_day_only: bool = False        # True: the target is checked on the entry date only
     time_exit: time = time(14, 53)             # next-trading-day square-off time
     time_exit_on_expiry: bool = False          # True: scheduled exit is on the expiry day, not the next session
     max_days_to_expiry: int | None = None      # no new entry when the nearest expiry is further than this
@@ -125,6 +126,7 @@ def load_strategy_config() -> StrategyConfig:
         stop_loss_margin_fraction=_env_float("STOP_LOSS_MARGIN_FRACTION", 0.05),
         target_spread_value=_env_float("TARGET_SPREAD_VALUE", 10.0),
         target_credit_fraction=float(fraction) if fraction else None,
+        target_entry_day_only=_env_bool("TARGET_ENTRY_DAY_ONLY", False),
         time_exit=_env_time("TIME_EXIT", "14:53"),
         time_exit_on_expiry=_env_bool("TIME_EXIT_ON_EXPIRY", False),
         max_days_to_expiry=int(max_dte) if max_dte else None,

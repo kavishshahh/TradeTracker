@@ -91,6 +91,22 @@ def test_panel_recovers_skew_and_matches_between_history_and_snapshots():
     pd.testing.assert_frame_equal(from_snapshots, panel)
 
 
+def test_ema_smooth_is_session_local_and_tolerates_gaps():
+    idx = pd.DatetimeIndex([ist(2026, 9, 24, 9, 16 + k) for k in range(6)] + [ist(2026, 9, 25, 9, 16 + k) for k in range(5)])
+    sessions = idx.date
+    values = pd.Series([1.0, 1.0, np.nan, 3.0, 3.0, 3.0, 2.0, 2.0, 2.0, 2.0, 4.0], index=idx)
+    out = s3.ema_smooth(values, sessions, span=3)
+    w = 0.5                                                 # 2 / (span + 1)
+    # unknown for the first span-1 minutes and at the unknown minute; the state carries across the gap
+    assert out.iloc[:2].isna().all() and np.isnan(out.iloc[2])
+    assert out.iloc[3] == pytest.approx(1.0 + w * (3.0 - 1.0))
+    assert out.iloc[5] == pytest.approx(out.iloc[4] + w * (3.0 - out.iloc[4]))
+    # a new session restarts from its own first value, nothing leaks from the previous day
+    assert out.iloc[6:8].isna().all() and out.iloc[8] == pytest.approx(2.0)
+    assert out.iloc[10] == pytest.approx(2.0 + w * (4.0 - 2.0))
+    assert out.index.equals(idx)
+
+
 def test_indicators_follow_a_skew_regime_change_and_are_causal():
     bars = _bars()
     n = len(bars)
@@ -124,6 +140,8 @@ def test_profile_pins_expiry_style_rules():
     cfg = registry.apply_profile("ratio_strategy_03")
     assert (cfg.bullish_threshold, cfg.bearish_threshold) == (s3.BULLISH_RANK, s3.BEARISH_RANK)
     assert cfg.target_credit_fraction == 0.5 and cfg.time_exit_on_expiry and cfg.time_exit == time(14, 57)
+    assert cfg.target_entry_day_only is True and s3.TARGET_ENTRY_DAY_ONLY
+    assert (s3.SMOOTH_WINDOW, s3.SKEW_CALL_MAX, s3.SKEW_PUT_MIN) == (10, -3.0, 4.5)
     assert cfg.max_days_to_expiry == 5 and not cfg.allow_expiry_day_entry
     assert cfg.strike_reference == "last_bar_open" and cfg.spread_distance == 400
     assert cfg.historical_time_exit_start is None
@@ -145,6 +163,33 @@ def test_fractional_target_and_expiry_day_time_exit():
     assert evaluate_exit(ist(2026, 9, 25, 12, 0), 49.9, plan.stop_loss, plan.target, due, EXPIRY).reason == TARGET
     assert evaluate_exit(ist(2026, 9, 25, 12, 0), 60.0, plan.stop_loss, plan.target, due, EXPIRY) is None
     assert evaluate_exit(ist(2026, 9, 29, 14, 57), 60.0, plan.stop_loss, plan.target, due, EXPIRY).reason == TIME_EXIT
+
+
+def test_target_applies_on_the_entry_day_only_through_the_engine():
+    from data.providers.base import OptionChainSnapshot, OptionQuote
+    from strategy.engine import MarketView, Position
+    from strategy.registry import create_engine
+    cfg = registry.apply_profile("ratio_strategy_03")
+    engine = create_engine("ratio_strategy_03", cfg, HolidaySetCalendar(set()), max_data_age_seconds=None, require_quotes=False)
+    pos = Position(signal_id="x", entry_ts=ist(2026, 9, 24, 11, 0), expiry=EXPIRY, option_type="CE",
+                   sell_strike=24000.0, buy_strike=24400.0, lots=4, lot_size=65, units=260, sell_price=120.0,
+                   buy_price=20.0, net_credit=100.0, stop_loss=145.0, target=50.0, max_loss=None, max_profit=None,
+                   exit_due=ist(2026, 9, 29, 14, 57), spot_at_entry=24000.0, alpha=0.05, alpha2=0.05,
+                   allocated_capital=320000.0)
+
+    def view(now, spread):
+        chain = OptionChainSnapshot("NIFTY", EXPIRY, now, 24000.0)
+        chain.quotes[(24000.0, "CE")] = OptionQuote(24000.0, "CE", spread + 5.0, spread + 4.0, spread + 6.0, None)
+        chain.quotes[(24400.0, "CE")] = OptionQuote(24400.0, "CE", 5.0, 4.0, 6.0, None)
+        return MarketView(now=now, spot_bars=_bars([date(2026, 9, 24)]).iloc[:5], snapshots=None, chain=chain,
+                          expiries=[EXPIRY], lot_size=65, indicators=(0.5, 0.5))
+
+    same_day = engine.evaluate(view(ist(2026, 9, 24, 13, 0), 40.0), pos)
+    assert same_day.action == "exit" and same_day.reason == "Target"
+    next_day = engine.evaluate(view(ist(2026, 9, 25, 9, 16), 40.0), pos)
+    assert next_day.action == "none" and next_day.diagnostics["target_active"] is False
+    assert engine.evaluate(view(ist(2026, 9, 25, 9, 16), 150.0), pos).reason == "Stop loss"
+    assert engine.evaluate(view(ist(2026, 9, 29, 14, 57), 40.0), pos).reason == "Time exit"
 
 
 def test_engine_rejects_expiry_day_and_far_expiry_entries():

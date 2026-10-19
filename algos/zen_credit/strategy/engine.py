@@ -192,11 +192,14 @@ class StrategyEngine:
             chain = None
         # After expiry, a later quote/spot cannot represent the contract's settlement.
         value = self.spread_value(chain, pos) if now.date() <= pos.expiry else None
+        target_until = to_ist(pos.entry_ts).date() if self.cfg.target_entry_day_only else None
         decision: ExitDecision | None = evaluate_exit(now, value, pos.stop_loss if pos.stop_loss is not None
                                                       else math.inf, pos.target if pos.target is not None
-                                                      else -math.inf, pos.exit_due, pos.expiry)
+                                                      else -math.inf, pos.exit_due, pos.expiry, target_until)
         diag = {"spread_value": value, "stop_loss": pos.stop_loss, "target": pos.target,
                 "exit_due": pos.exit_due.isoformat()}
+        if target_until is not None:
+            diag["target_active"] = now.date() <= target_until
         if decision is None:
             return EngineResult("none", "position held", position=pos, diagnostics=diag)
         if decision.reason == "Expiry":

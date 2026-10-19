@@ -57,7 +57,7 @@ def test_strategy02_persists_disabled_target_in_virtual_forward_store(pg_dsn, ca
     import pandas as pd
     from execution.store import row_to_position
     cfg=Config(strategy=StrategyConfig(),data=DataConfig(database_url=pg_dsn),
-        email=EmailConfig(enabled=False),runtime=RuntimeConfig(strategy_name='strategy_02'))
+        email=EmailConfig(enabled=False),runtime=RuntimeConfig(strategy_name='zen_strategy_02'))
     provider=FakeProvider(EXPS);now=ist(2026,9,24,10,30)
     provider.get_spot_bars=lambda asof:pd.DataFrame({'open':[provider.spot],
         'close':[provider.spot]},index=pd.DatetimeIndex([asof-timedelta(minutes=1)]))
@@ -66,7 +66,7 @@ def test_strategy02_persists_disabled_target_in_virtual_forward_store(pg_dsn, ca
     assert run_at(runner,provider,now)['status']=='entry'
     row=runner.store.open_position_row()
     assert row.target is None and row_to_position(row).target is None
-    assert runner.store.get_state('selected_strategy')=='strategy_02'
+    assert runner.store.get_state('selected_strategy')=='zen_strategy_02'
     assert FakeSMTP.sent==[]
 
 
@@ -272,7 +272,7 @@ class MemoryDeploymentStore:
         return self.position
 
 
-def named_runner(calendar, name="strategy_01", store=None, strategy=None):
+def named_runner(calendar, name="zen_strategy_01", store=None, strategy=None):
     cfg = Config(strategy=strategy or StrategyConfig(), data=DataConfig(database_url=""),
                  email=EmailConfig(enabled=False), runtime=RuntimeConfig(strategy_name=name))
     return Runner(cfg, store or MemoryDeploymentStore(), ExplodingProvider(EXPS), calendar,
@@ -284,13 +284,13 @@ def test_selected_service_profile_applies_before_engine_and_preserves_user_capit
     original = StrategyConfig(capital=123000, volume_short_window=7, volume_baseline_window=99,
                               margin_per_lot_override=42000)
     runner = named_runner(calendar, strategy=original)
-    assert runner.cfg.strategy == apply_profile("strategy_01", original)
+    assert runner.cfg.strategy == apply_profile("zen_strategy_01", original)
     assert runner.engine.cfg == runner.cfg.strategy
     assert runner.cfg.strategy.capital == 123000
     assert runner.cfg.strategy.margin_per_lot_override == 42000
     assert original.volume_short_window == 7  # caller's config was not mutated
-    assert runner.strategy_name == "strategy_01"
-    assert runner.health()["strategy"] == "strategy_01"
+    assert runner.strategy_name == "zen_strategy_01"
+    assert runner.health()["strategy"] == "zen_strategy_01"
 
 
 def test_description_service_preserves_original_config(calendar):
@@ -305,7 +305,7 @@ def test_service_provider_receives_selected_profile_underlying(calendar, monkeyp
     from types import SimpleNamespace
     seen = []
     cfg = Config(strategy=StrategyConfig(underlying="OTHER"), data=DataConfig(database_url=""),
-                 email=EmailConfig(enabled=False), runtime=RuntimeConfig(strategy_name="strategy_01"))
+                 email=EmailConfig(enabled=False), runtime=RuntimeConfig(strategy_name="zen_strategy_01"))
     monkeypatch.setattr(main, 'HttpClient', lambda *a, **kw: object())
     import execution.firestore_store as firestore_storage
     monkeypatch.setattr(firestore_storage, 'FirestoreStore', lambda name: SimpleNamespace(holiday_cache_get=None, holiday_cache_set=None))
@@ -328,7 +328,7 @@ def test_service_rejects_unknown_strategy_before_market_requests(calendar):
 
 def test_runtime_reads_named_strategy_and_defaults_to_first(monkeypatch):
     monkeypatch.delenv("STRATEGY_NAME", raising=False)
-    assert RuntimeConfig().strategy_name == "strategy_01"
+    assert RuntimeConfig().strategy_name == "zen_strategy_01"
     monkeypatch.setenv("STRATEGY_NAME", " description ")
     assert RuntimeConfig().strategy_name == "description"
 
@@ -340,11 +340,11 @@ def test_strategy_database_binding_prevents_cross_strategy_state(calendar):
     first = named_runner(calendar, store=store)
     result = first.cycle(ist(2026, 10, 3, 11))
     assert result["status"] == "market_closed"
-    assert store.state["selected_strategy"] == "strategy_01"
+    assert store.state["selected_strategy"] == "zen_strategy_01"
     second = named_runner(calendar, name="description", store=store)
     rejected = second.cycle(ist(2026, 10, 3, 11))
     assert rejected["status"] == "strategy_state_mismatch"
-    assert store.state["selected_strategy"] == "strategy_01"
+    assert store.state["selected_strategy"] == "zen_strategy_01"
     body = summarize_cycle(rejected, second.last_context)
     assert body["strategy"] == "description"
     assert len(json.dumps(body)) < MAX_RESPONSE_BYTES
@@ -359,7 +359,7 @@ def test_named_strategy_refuses_unlabelled_existing_open_position(calendar):
     assert "selected_strategy" not in store.state
 
 
-@pytest.mark.parametrize("name,expected_rows", [("strategy_01", 2), ("strategy_02", 2), ("description", 1)])
+@pytest.mark.parametrize("name,expected_rows", [("zen_strategy_01", 2), ("zen_strategy_02", 2), ("description", 1)])
 def test_service_history_keeps_rollover_inputs_only_for_named_profile(calendar, monkeypatch, name, expected_rows):
     import pandas as pd
     from types import SimpleNamespace

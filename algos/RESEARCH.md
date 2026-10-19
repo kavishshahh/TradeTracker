@@ -6,7 +6,7 @@ It does not place broker orders. Zen Credit's private implementation remains unv
 
 ## Strategy 01 — geometric volume credit spreads
 
-Start with `zen_credit/strategy/strategy_01_geometric_credit.py`: its top comments
+Start with `zen_credit/strategy/zen_strategy_01_geometric_credit.py`: its top comments
 explain the formula, triggers, parameter values, exits and monthly backtest statistics.
 `zen_credit/strategy/registry.py` selects implementations; future strategies get their
 own Python file and registry entry. Shared risk, data and service code stays shared.
@@ -21,14 +21,14 @@ are not modeled. This trial does not reproduce Zen Credit and is not proven supe
 Run this strategy from `zen_credit/`:
 
 ```powershell
-..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy strategy_01 --start 2026-09-28 --end 2026-10-01 --exit-tail-days 0 --offline --output ..\reports\strategy_01_last_week
+..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy zen_strategy_01 --start 2026-09-28 --end 2026-10-01 --exit-tail-days 0 --offline --output ..\reports\zen_strategy_01_last_week
 ```
 
 Each replay writes its trade ledger, win rate, monthly profit/loss, CAGR equivalent
 and trailing returns. A short replay cannot supply 1/3/6 month returns; those are
 reported as unavailable until sufficient history exists.
 
-For virtual forward testing, set `STRATEGY_NAME=strategy_01` in the root `.env`
+For virtual forward testing, set `STRATEGY_NAME=zen_strategy_01` in the root `.env`
 (this is the new service default). Its formula and execution rules are pinned;
 capital and margin estimates remain configurable. Use a **separate DATABASE_URL
 for each deployed strategy**. The service rejects a database bound to another
@@ -43,7 +43,7 @@ strategies. Selected trials and reports remain available for comparison.
 
 ## Strategy 02 — summed return variance
 
-`zen_credit/strategy/strategy_02_variance_credit.py` records candidate
+`zen_credit/strategy/zen_strategy_02_variance_credit.py` records candidate
 `719c7c6bc176871c`. It uses the same price and geometric-volume inputs, divides
 by **CE + PE sample log-return variance over 300 candles**, and disables the
 profit target. Its top comments include all rules, parameters and monthly results.
@@ -64,11 +64,11 @@ or broker liquidation affect performance. Strategy 02 improves gross full-period
 profit and realized drawdown, while later 3/6 month returns and Zen matching are
 worse. It has not established superiority to Zen or reliable live performance.
 
-Use `STRATEGY_NAME=strategy_02` with a separate database for virtual forward
+Use `STRATEGY_NAME=zen_strategy_02` with a separate database for virtual forward
 testing. Strategy 01 remains the default. Historical replay:
 
 ```powershell
-..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy strategy_02 --start 2026-09-28 --end 2026-10-01 --exit-tail-days 0 --offline --output ..\reports\strategy_02_last_week
+..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy zen_strategy_02 --start 2026-09-28 --end 2026-10-01 --exit-tail-days 0 --offline --output ..\reports\zen_strategy_02_last_week
 ```
 
 Fresh last-week replay: three closed trades, **₹7,091.50 loss**, **33.33% wins**;
@@ -89,7 +89,7 @@ These missing prices limit exit reconstruction and the reliability of backtest r
 
 ## Strategy 03 — Ratio-Fluxer style IV-skew expiry credit spreads
 
-`zen_credit/strategy/strategy_03_ratio_fluxer.py` is a structural replica of Stratzy's
+`zen_credit/strategy/ratio_strategy_03_fluxer.py` is a structural replica of Stratzy's
 [Ratio-Fluxer Credit Spread Expiry](https://algos.dhan.co/managers/stratzy/ratio-fluxer-credit-spread-expiry/698075eaf867bf12b20442e5)
 algo, fitted to its 19 published trades (`../ratio-fluxer-past-trades.csv`, 23 Oct 2025 to
 6 Oct 2026). The provider's trigger is private; the module's header comment lists what the
@@ -120,10 +120,10 @@ day, one position, 320,000 capital with 80% on Mondays from 6 April 2026.
 Fit (19 Oct 2025 - 1 Oct 2026, 147 eligible days): the rule fires on the published day and
 side for 18/19 entries, within an hour of 14 entry minutes, and on 39 days overall, so it
 trades about twice as often as the provider. An "ATM IV elevated" filter was tried and
-rejected (fails 5/19). Fit tables: `reports/strategy_03_fit/`.
+rejected (fails 5/19). Fit tables: `reports/ratio_strategy_03_fit/`.
 
 Replay 1 Oct 2025 - 30 Sep 2026 (entries), fixed INR 320,000, gross, Dhan minute closes
-(`reports/strategy_03_2025-10-01_2026-09-30/`):
+(`reports/ratio_strategy_03_2025-10-01_2026-09-30/`):
 
 | Measure | Strategy 03 replay | Published Ratio-Fluxer (same window) |
 |---|---:|---:|
@@ -146,11 +146,11 @@ Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28
 18 June 2025, so `--start` minus 21 days must land on one):
 
 ```powershell
-..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy strategy_03 --start 2025-10-01 --end 2026-09-30 --exit-tail-days 1 --provider-history-rules --offline --output ..\reports\strategy_03_2025-10-01_2026-09-30
+..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy ratio_strategy_03 --start 2025-10-01 --end 2026-09-30 --exit-tail-days 1 --provider-history-rules --offline --output ..\reports\ratio_strategy_03_2025-10-01_2026-09-30
 ```
 
 Live paper trading needs no new data feed: the panel is built from the stored minute chain
-snapshots (LTP) with the same IV solver, so set `STRATEGY_NAME=strategy_03` or enable its
+snapshots (LTP) with the same IV solver, so set `STRATEGY_NAME=ratio_strategy_03` or enable its
 catalogue record (`backend/seed_data/algos_catalog.json`, disabled by default) for the
 shared paper worker. Allow two sessions of snapshots before the 800-minute rank is valid.
 

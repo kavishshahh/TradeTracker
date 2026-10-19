@@ -57,7 +57,7 @@ class FakeDB:
 @pytest.fixture
 def setup():
     db=FakeDB();clock=[datetime(2026,10,7,5,tzinfo=timezone.utc)]
-    def store(name='strategy_01'):return FirestoreStore(name,db,db.run,lambda:clock[0],lease_seconds=30)
+    def store(name='zen_strategy_01'):return FirestoreStore(name,db,db.run,lambda:clock[0],lease_seconds=30)
     return db,clock,store
 
 
@@ -81,7 +81,7 @@ def test_lease_exclusion_expiry_and_stale_writer_fencing(setup):
 
 
 def test_two_strategies_are_independent_and_minutes_idempotent(setup):
-    db,clock,factory=setup;a=factory();b=factory('strategy_02')
+    db,clock,factory=setup;a=factory();b=factory('zen_strategy_02')
     with a.lock(),b.lock():
         assert a.claim_minute(clock[0])
         assert not a.claim_minute(clock[0].astimezone(timezone(timedelta(hours=5,minutes=30))))
@@ -156,9 +156,9 @@ def test_email_retry_queue_and_dashboard_are_strategy_scoped(setup):
         store.close_position(opened.id,ExitEvent('target',clock[0],20,5200,1.625))
         for _ in range(5):store.set_email_status(opened.id,'exit','failed')
         assert store.pending_emails()==[]
-        store.publish_dashboard({'strategy':'strategy_01','realized_pnl':5200})
-    assert db.values['algo_paper_state/strategy_01']['realized_pnl']==5200
-    assert 'algo_paper_state/strategy_02' not in db.values
+        store.publish_dashboard({'strategy':'zen_strategy_01','realized_pnl':5200})
+    assert db.values['algo_paper_state/zen_strategy_01']['realized_pnl']==5200
+    assert 'algo_paper_state/zen_strategy_02' not in db.values
 
 
 def test_runner_entry_duplicate_and_exit_use_firestore_without_postgres(setup, calendar, monkeypatch):
@@ -173,8 +173,8 @@ def test_runner_entry_duplicate_and_exit_use_firestore_without_postgres(setup, c
     provider = FakeProvider([date(2026,9,29),date(2026,10,6)])
     provider.get_spot_bars = lambda asof: pd.DataFrame({'open':[provider.spot],'close':[provider.spot]},index=pd.DatetimeIndex([asof-timedelta(minutes=1)]))
     provider.now = now
-    cfg = Config(strategy=StrategyConfig(),data=DataConfig(database_url=''),email=EmailConfig(enabled=False),runtime=RuntimeConfig(strategy_name='strategy_02'))
-    runner = Runner(cfg,factory('strategy_02'),provider,calendar,EmailNotifier(cfg.email,smtp_factory=FakeSMTP))
+    cfg = Config(strategy=StrategyConfig(),data=DataConfig(database_url=''),email=EmailConfig(enabled=False),runtime=RuntimeConfig(strategy_name='zen_strategy_02'))
+    runner = Runner(cfg,factory('zen_strategy_02'),provider,calendar,EmailNotifier(cfg.email,smtp_factory=FakeSMTP))
     runner.engine.indicators = lambda view: (.1,.1,{})
     monkeypatch.setenv('PAPER_FIREBASE_ENABLED','true')
     assert runner.locked_cycle(now)['status']=='entry'
@@ -189,5 +189,5 @@ def test_runner_entry_duplicate_and_exit_use_firestore_without_postgres(setup, c
     state = build_snapshot(runner,{'status':'exit'})
     assert state['realized_pnl']==-2925 and state['closed_trades']==1
     assert state['open_position'] is None and len(state['closed_positions'])==1
-    assert db.values['algo_paper_state/strategy_02']['realized_pnl']==-2925
+    assert db.values['algo_paper_state/zen_strategy_02']['realized_pnl']==-2925
     assert FakeSMTP.sent==[]

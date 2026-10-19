@@ -3,12 +3,15 @@
 Algo code, reference data and historical reports live in this repository.
 The original checkout is preserved; continue integration work here.
 
-- `zen_credit/strategy/strategy_01_geometric_credit.py`: saved geometric-volume trial.
-- `zen_credit/strategy/strategy_02_variance_credit.py`: saved variance-scaled trial.
-- `zen_credit/strategy/strategy_03_ratio_fluxer.py`: Ratio-Fluxer style IV-skew expiry
+- `zen_credit/strategy/zen_strategy_01_geometric_credit.py`: saved geometric-volume trial.
+- `zen_credit/strategy/zen_strategy_02_variance_credit.py`: saved variance-scaled trial.
+- `zen_credit/strategy/ratio_strategy_03_fluxer.py`: Ratio-Fluxer style IV-skew expiry
   credit spread, fitted to Stratzy's 19 published trades (see `RESEARCH.md`, Strategy 03).
 - `../frontend/`: authenticated Algo Lab dashboard at `/algos`.
 - `../backend/algos_api.py`: Firebase-authenticated catalogue, paper state and follows.
+- Strategy ids carry their origin: `zen_strategy_01`/`zen_strategy_02` (Zen Credit research)
+  and `ratio_strategy_03` (Ratio-Fluxer). Firestore documents created under the former
+  `strategy_0N` ids can be copied with `../backend/migrate_algo_ids.py` (dry run by default).
 - `algo_catalog` in Firestore: verified historical/monthly statistics and strategy descriptions.
 - `data/` and `reports/`: migrated backtest inputs/results; generated caches and reports stay out of Git.
 - `RESEARCH.md`: archived research notes and replay commands. Its historical PostgreSQL references describe the earlier implementation.

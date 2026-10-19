@@ -62,7 +62,7 @@
 # floor(allocation / (2.25 * 400 * lot size)) unless MARGIN_PER_LOT overrides.
 #
 # Thresholds below were chosen on the published entries plus the Dhan history
-# from June 2025; see reports/strategy_03_fit/ for the fit and replay.
+# from June 2025; see reports/ratio_strategy_03_fit/ for the fit and replay.
 
 """Named Ratio-Fluxer style IV-skew credit spread implementation."""
 from __future__ import annotations
@@ -77,11 +77,11 @@ from config import StrategyConfig
 from strategy.implied_vol import implied_vol, years_to_expiry
 from utils.time import IST
 
-STRATEGY_NAME = 'strategy_03'
+STRATEGY_NAME = 'ratio_strategy_03'
 DESCRIPTION = 'Ratio-Fluxer style expiry credit spread; opening ATM, 100-point IV skew rank 800, 50% credit target.'
 PROFIT_TARGET_ENABLED = True
 LIMITATIONS = [
-    'strategy_03 is a structural replica fitted to 19 published Ratio-Fluxer trades; the provider trigger is private and this rule fires about twice as often.',
+    'ratio_strategy_03 is a structural replica fitted to 19 published Ratio-Fluxer trades; the provider trigger is private and this rule fires about twice as often.',
     'Skew uses own spot-based Black-Scholes IV (6.5% rate) of candle closes at ATM and ATM +/-100; a missing wing candle leaves the minute unknown and no trade is forced.',
     'Minute-close execution: bid/ask, intraminute stop/target touches and exact fills are unavailable; the 50% credit target and margin stop are checked once per minute.',
     'Estimated margin (2.25 x width x lot size) sizes positions and sets the stop; it is not historical broker margin or forced liquidation.',

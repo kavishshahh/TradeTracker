@@ -87,7 +87,7 @@ If you prefer the dashboard shown in the screenshot:
 - In Cloudflare, view Worker logs/Cron Events (or use `npx wrangler tail`). Expect
   `paper_cycle_ok`; errors/busy outcomes are logged explicitly, without secrets.
 - In Render logs, look for both strategies' evaluation results.
-- In Firestore, `algo_paper_state/strategy_01` and `strategy_02` should show advancing
+- In Firestore, `algo_paper_state/zen_strategy_01` and `zen_strategy_02` should show advancing
   `last_evaluation`, `data_provider: dhan`, and `execution: paper_only`.
 - In Algo Lab > Paper feed, verify those timestamps and later qualifying entries,
   exits, marked P&L and the paper ledger. The UI polls every 30 seconds.

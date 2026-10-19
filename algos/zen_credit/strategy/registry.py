@@ -4,9 +4,9 @@ from __future__ import annotations
 from config import StrategyConfig
 
 STRATEGIES={'description':'Original supplied-description interpretation',
-            'strategy_01':'Geometric-volume credit spread research candidate',
-            'strategy_02':'Variance-scaled credit spread research candidate',
-            'strategy_03':'Ratio-Fluxer style IV-skew expiry credit spread'}
+            'zen_strategy_01':'Geometric-volume credit spread research candidate',
+            'zen_strategy_02':'Variance-scaled credit spread research candidate',
+            'ratio_strategy_03':'Ratio-Fluxer style IV-skew expiry credit spread'}
 
 
 def strategy_names():
@@ -15,15 +15,15 @@ def strategy_names():
 
 def get_strategy(name='description'):
     if name=='description':return None
-    if name=='strategy_01':
-        from strategy import strategy_01_geometric_credit
-        return strategy_01_geometric_credit
-    if name=='strategy_02':
-        from strategy import strategy_02_variance_credit
-        return strategy_02_variance_credit
-    if name=='strategy_03':
-        from strategy import strategy_03_ratio_fluxer
-        return strategy_03_ratio_fluxer
+    if name=='zen_strategy_01':
+        from strategy import zen_strategy_01_geometric_credit
+        return zen_strategy_01_geometric_credit
+    if name=='zen_strategy_02':
+        from strategy import zen_strategy_02_variance_credit
+        return zen_strategy_02_variance_credit
+    if name=='ratio_strategy_03':
+        from strategy import ratio_strategy_03_fluxer
+        return ratio_strategy_03_fluxer
     raise ValueError(f'Unknown strategy: {name}')
 
 

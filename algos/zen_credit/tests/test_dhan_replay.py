@@ -100,14 +100,14 @@ def test_named_strategy02_disables_target_but_keeps_stop_and_unique_identity(mon
     options.loc[(minutes[2],date(2024,1,4),22000.),'ce_ltp']=300.
     indicators=pd.DataFrame({'alpha':[.1]*4,'alpha2':[.1]*4},index=minutes)
     first=minutes[0].to_pydatetime();positions=[]
-    for name in ('strategy_01','strategy_02'):
+    for name in ('zen_strategy_01','zen_strategy_02'):
         replay=DhanReplay(StrategyConfig(),bars,options,strategy_name=name)
         monkeypatch.setattr(replay,'_indicator_frame',lambda:indicators)
         position=replay.run(end=first).final_position
         positions.append(position)
     assert positions[0].target==10. and positions[1].target is None
     assert positions[0].signal_id!=positions[1].signal_id
-    replay=DhanReplay(StrategyConfig(),bars,options,strategy_name='strategy_02')
+    replay=DhanReplay(StrategyConfig(),bars,options,strategy_name='zen_strategy_02')
     monkeypatch.setattr(replay,'_indicator_frame',lambda:indicators)
     result=replay.run(entry_end=first)
     assert len(result.trades)==1 and result.trades[0].exit_reason=='Stop loss'

@@ -9,7 +9,7 @@ from data.market_calendar import HolidaySetCalendar
 from risk.exits import TARGET, TIME_EXIT, evaluate_exit, time_exit_due
 from risk.position_sizing import build_risk_plan
 from strategy import registry
-from strategy import strategy_03_ratio_fluxer as s3
+from strategy import ratio_strategy_03_fluxer as s3
 from strategy.implied_vol import bs_price, implied_vol, years_to_expiry
 from strategy.signals import Signal, evaluate_signal
 from tests.conftest import ist
@@ -110,7 +110,7 @@ def test_indicators_follow_a_skew_regime_change_and_are_causal():
 
 
 def test_profile_pins_expiry_style_rules():
-    cfg = registry.apply_profile("strategy_03")
+    cfg = registry.apply_profile("ratio_strategy_03")
     assert (cfg.bullish_threshold, cfg.bearish_threshold) == (s3.BULLISH_RANK, s3.BEARISH_RANK)
     assert cfg.target_credit_fraction == 0.5 and cfg.time_exit_on_expiry and cfg.time_exit == time(14, 57)
     assert cfg.max_days_to_expiry == 5 and not cfg.allow_expiry_day_entry
@@ -124,7 +124,7 @@ def test_profile_pins_expiry_style_rules():
 
 # ----------------------------------------------------------------------------- exits / sizing
 def test_fractional_target_and_expiry_day_time_exit():
-    cfg = registry.apply_profile("strategy_03")
+    cfg = registry.apply_profile("ratio_strategy_03")
     plan = build_risk_plan(120.0, 20.0, 400, 65, False, cfg, date(2026, 9, 24))
     assert plan.net_credit == 100.0 and plan.target == 50.0
     assert plan.stop_loss == pytest.approx(100.0 + 0.05 * 2.25 * 400 * 65 / 65)
@@ -139,7 +139,7 @@ def test_fractional_target_and_expiry_day_time_exit():
 def test_engine_rejects_expiry_day_and_far_expiry_entries():
     from data.providers.base import OptionChainSnapshot, OptionQuote
     from strategy.engine import MarketView, StrategyEngine
-    cfg = registry.apply_profile("strategy_03")
+    cfg = registry.apply_profile("ratio_strategy_03")
     calendar = HolidaySetCalendar(set())
     engine = StrategyEngine(cfg, calendar, max_data_age_seconds=None, require_quotes=False)
     bars = _bars([date(2026, 9, 29)])

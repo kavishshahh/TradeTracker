@@ -1,6 +1,6 @@
 """Vectorised Black-Scholes implied volatility for index options (no dividends).
 
-Used by strategy_03 so historical replay (candle closes) and the live service
+Used by ratio_strategy_03 so historical replay (candle closes) and the live service
 (LTP snapshots) derive IV with one formula instead of a vendor IV feed.
 Time to expiry counts calendar time to 15:30 IST on the expiry date, in years.
 Prices below intrinsic or at/below zero have no solution and return NaN.

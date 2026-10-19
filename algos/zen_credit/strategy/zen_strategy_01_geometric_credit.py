@@ -84,7 +84,7 @@
 # returns unavailable in this four-day replay; no short-period CAGR claim.
 # All five standalone trade records match the corresponding reference ledger
 # in entry/exit times, strikes, sizing, signals, fills and realized P&L.
-# Results: reports/strategy_01_last_week/{trades.csv,performance.json,summary.md}.
+# Results: reports/zen_strategy_01_last_week/{trades.csv,performance.json,summary.md}.
 
 """Named geometric-volume credit spread implementation."""
 from __future__ import annotations
@@ -98,7 +98,7 @@ import pandas as pd
 from config import StrategyConfig
 from utils.time import IST
 
-STRATEGY_NAME='strategy_01'
+STRATEGY_NAME='zen_strategy_01'
 DESCRIPTION='Geometric-volume credit spread; opening ATM,800/300 ranks, logSTD150.'
 PANEL_COLUMNS=('spot','reference_open','expiry','atm_strike','ce_ltp','pe_ltp',
                'ce_native_volume','pe_native_volume','ce_volume','pe_volume','ce_return','pe_return')

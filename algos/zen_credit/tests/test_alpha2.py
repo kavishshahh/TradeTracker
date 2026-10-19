@@ -14,7 +14,7 @@ EXP = date(2026, 9, 29)
 
 
 def test_strategy01_native_opening_panel_roll_missing_quote_and_live_volume():
-    from strategy.strategy_01_geometric_credit import panel_from_options,panel_from_snapshots
+    from strategy.zen_strategy_01_geometric_credit import panel_from_options,panel_from_snapshots
     minutes=pd.DatetimeIndex([ist(2026,9,24,10,0),ist(2026,9,24,10,1),
         ist(2026,9,24,10,2),ist(2026,9,24,10,3)])
     bars=pd.DataFrame({'open':[23125.,23160.,23160.,23160.],
@@ -46,7 +46,7 @@ def test_strategy01_native_opening_panel_roll_missing_quote_and_live_volume():
 
 
 def test_strategy01_nearest_expiry_path_stitches_without_cross_contract_return():
-    from strategy.strategy_01_geometric_credit import panel_from_snapshots
+    from strategy.zen_strategy_01_geometric_credit import panel_from_snapshots
     minutes=pd.DatetimeIndex([ist(2026,9,24,15,30),ist(2026,9,25,9,16),ist(2026,9,25,9,17)])
     bars=pd.DataFrame({'open':23150.,'close':23150.},index=minutes-pd.Timedelta(minutes=1))
     rows=[]
@@ -61,7 +61,7 @@ def test_strategy01_nearest_expiry_path_stitches_without_cross_contract_return()
 
 
 def test_strategy01_indicators_match_independent_geometric_log_return_formula():
-    from strategy.strategy_01_geometric_credit import calculate_indicators
+    from strategy.zen_strategy_01_geometric_credit import calculate_indicators
     rng=np.random.default_rng(29);index=pd.date_range(ist(2026,9,24,9,15),periods=1200,freq='min')
     bars=pd.DataFrame({'open':23000+rng.normal(0,10,1200).cumsum(),
         'close':23000+rng.normal(0,10,1200).cumsum()},index=index)
@@ -88,13 +88,13 @@ def test_strategy01_profile_and_registry_preserve_capital_margins_and_identity(c
     from strategy.registry import apply_profile,create_engine,get_strategy
     custom=replace(cfg,capital=120000.,margin_per_lot_override=33000.,margin_to_width_ratio=2.5,
         expiry_day_margin_multiplier=1.5,volume_baseline_window=333,volatility_window=333)
-    profile=apply_profile('strategy_01',custom)
+    profile=apply_profile('zen_strategy_01',custom)
     assert profile.capital==120000. and profile.margin_per_lot_override==33000.
     assert profile.margin_to_width_ratio==2.5 and profile.expiry_day_margin_multiplier==1.5
     assert profile.volume_baseline_window==10 and profile.volatility_window==150 and profile.target_spread_value==10.
     assert profile.historical_time_exit_start==date(2025,7,9) and profile.historical_time_exit_end==date(2026,6,30)
     assert apply_profile('description',custom)==custom and get_strategy('description') is None
-    assert create_engine('strategy_01',custom,HolidaySetCalendar(set())).strategy_name=='strategy_01'
+    assert create_engine('zen_strategy_01',custom,HolidaySetCalendar(set())).strategy_name=='zen_strategy_01'
     assert create_engine('description',custom,HolidaySetCalendar(set())).strategy_name=='description'
 
 

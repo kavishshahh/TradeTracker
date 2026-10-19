@@ -10,12 +10,12 @@ from utils.time import IST
 class CoordinatorTests(unittest.TestCase):
     def test_dashboard_publication_is_logged_only_after_write(self):
         from execution.firebase_paper import publish_paper_snapshot
-        runner = SimpleNamespace(strategy_name='strategy_02', store=SimpleNamespace(publish_dashboard=lambda _: None))
+        runner = SimpleNamespace(strategy_name='zen_strategy_02', store=SimpleNamespace(publish_dashboard=lambda _: None))
         payload = {'last_evaluation': '2026-10-09T09:25:00+05:30', 'updated_at': '2026-10-09T09:25:02+05:30', 'status': 'no_action'}
         with patch.dict('os.environ', {'PAPER_FIREBASE_ENABLED': 'true'}), patch('execution.firebase_paper.build_snapshot', return_value=payload):
             with self.assertLogs('paper.dashboard', level='INFO') as captured:
                 publish_paper_snapshot(runner, {'status': 'no_action'})
-            self.assertIn('paper_dashboard_published strategy=strategy_02', '\n'.join(captured.output))
+            self.assertIn('paper_dashboard_published strategy=zen_strategy_02', '\n'.join(captured.output))
             def failed(_):
                 raise RuntimeError('write failed')
             runner.store.publish_dashboard = failed
@@ -30,25 +30,25 @@ class CoordinatorTests(unittest.TestCase):
         def failed(_):
             raise RuntimeError('private credential must not be logged')
         runners = {
-            'strategy_01': SimpleNamespace(store=SimpleNamespace(open_position_row=lambda: None), locked_cycle=failed),
-            'strategy_02': SimpleNamespace(store=SimpleNamespace(open_position_row=lambda: None), locked_cycle=failed),
+            'zen_strategy_01': SimpleNamespace(store=SimpleNamespace(open_position_row=lambda: None), locked_cycle=failed),
+            'zen_strategy_02': SimpleNamespace(store=SimpleNamespace(open_position_row=lambda: None), locked_cycle=failed),
         }
         with self.assertLogs('paper.worker', level='INFO') as captured:
-            result = run_round(runners, {'strategy_02': {'enabled': True}}, now)
+            result = run_round(runners, {'zen_strategy_02': {'enabled': True}}, now)
         output = '\n'.join(captured.output)
-        self.assertIn('paper_strategy_skipped strategy=strategy_01', output)
+        self.assertIn('paper_strategy_skipped strategy=zen_strategy_01', output)
         self.assertIn('reason=disabled_and_flat', output)
-        self.assertIn('paper_strategy_failed strategy=strategy_02', output)
+        self.assertIn('paper_strategy_failed strategy=zen_strategy_02', output)
         self.assertIn(now.isoformat(), output)
         self.assertIn('duration_s=', output)
         self.assertNotIn('private credential', output)
-        self.assertEqual(result['strategy_02']['status'], 'error')
+        self.assertEqual(result['zen_strategy_02']['status'], 'error')
 
     def test_restarted_disabled_position_exits_and_provider_is_shared(self):
         now = datetime(2026, 10, 7, 10, 30, tzinfo=IST)
         provider = SimpleNamespace(begin_round=lambda: None)
-        docs = [SimpleNamespace(id='strategy_01', to_dict=lambda: {'enabled': False, 'capital': 320000}),
-                SimpleNamespace(id='strategy_02', to_dict=lambda: {'enabled': True, 'capital': 120000})]
+        docs = [SimpleNamespace(id='zen_strategy_01', to_dict=lambda: {'enabled': False, 'capital': 320000}),
+                SimpleNamespace(id='zen_strategy_02', to_dict=lambda: {'enabled': True, 'capital': 120000})]
         db = SimpleNamespace(collection=lambda _: SimpleNamespace(stream=lambda **_: docs))
         seen = []
         def factory(cfg, provider):
@@ -57,7 +57,7 @@ class CoordinatorTests(unittest.TestCase):
                                    locked_cycle=lambda now: {'status': 'exit'})
         coordinator = PaperCoordinator(db, provider, factory)
         result = coordinator.run_once(now)
-        self.assertEqual(result['strategies']['strategy_01']['status'], 'exit')
+        self.assertEqual(result['strategies']['zen_strategy_01']['status'], 'exit')
         # one runner per registered strategy, in registry order; catalogue rows are optional
         self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description'])
         self.assertTrue(all(item[2] == 'dhan' and item[3] is provider for item in seen))

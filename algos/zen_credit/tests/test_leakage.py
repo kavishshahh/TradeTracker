@@ -19,7 +19,7 @@ from tests.synthetic import EXPIRY, synthetic_market
 CAL = HolidaySetCalendar(set())
 
 
-@pytest.mark.parametrize('strategy_name',['strategy_01','strategy_02'])
+@pytest.mark.parametrize('strategy_name',['zen_strategy_01','zen_strategy_02'])
 def test_named_completed_formula_prefix_and_future_quotes_cannot_change_past(strategy_name):
     from strategy.registry import get_strategy
     calculate_indicators=get_strategy(strategy_name).calculate_indicators

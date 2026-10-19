@@ -48,7 +48,7 @@ async def request(app, path, method='GET', user=None, body=None, extra_headers=N
 
 class APIAuthenticationTests(unittest.TestCase):
     def setUp(self):
-        self.db = Database({'algo_catalog/strategy_01': {'name': 'One'}, 'algo_catalog/strategy_02': {'name': 'Two'}})
+        self.db = Database({'algo_catalog/zen_strategy_01': {'name': 'One'}, 'algo_catalog/zen_strategy_02': {'name': 'Two'}})
         self.catalog_keys = set(self.db)
         async def user(authorization: str = Header(None)):
             if authorization not in ('Bearer alice','Bearer bob'): raise HTTPException(401)
@@ -57,30 +57,30 @@ class APIAuthenticationTests(unittest.TestCase):
         self.app.include_router(create_algos_router(self.db, user))
 
     def test_auth_required_for_all_routes(self):
-        for path, method, body in [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/follow/strategy_01','PUT',{'enabled':True})]:
+        for path, method, body in [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]:
             self.assertEqual(asyncio.run(request(self.app,path,method,body=body))[0],401)
         self.assertEqual(set(self.db), self.catalog_keys)
 
     def test_follow_is_user_scoped_idempotent_and_does_not_start_worker(self):
         for _ in range(2):
-            status, _ = asyncio.run(request(self.app,'/algos/follow/strategy_01','PUT','alice',{'enabled':True,'user_id':'bob'}))
+            status, _ = asyncio.run(request(self.app,'/algos/follow/zen_strategy_01','PUT','alice',{'enabled':True,'user_id':'bob'}))
             self.assertEqual(status,200)
-        self.assertEqual(set(self.db),self.catalog_keys | {'users/alice/algo_follows/strategy_01'})
+        self.assertEqual(set(self.db),self.catalog_keys | {'users/alice/algo_follows/zen_strategy_01'})
         _, alice = asyncio.run(request(self.app,'/algos/paper',user='alice'))
         _, bob = asyncio.run(request(self.app,'/algos/paper',user='bob'))
-        self.assertTrue(alice['following']['strategy_01'])
+        self.assertTrue(alice['following']['zen_strategy_01'])
         self.assertEqual(bob['following'],{})
-        self.assertIsNone(alice['strategies']['strategy_01'])
+        self.assertIsNone(alice['strategies']['zen_strategy_01'])
 
     def test_catalogue_is_live_database_data_and_has_no_static_fallback(self):
         _, body = asyncio.run(request(self.app, '/algos/catalog', user='alice'))
         self.assertEqual(len(body['strategies']), 2)
-        self.db['algo_catalog/strategy_03'] = {'name': 'New', 'id': 'spoofed', 'execution': 'live'}
+        self.db['algo_catalog/ratio_strategy_03'] = {'name': 'New', 'id': 'spoofed', 'execution': 'live'}
         _, body = asyncio.run(request(self.app, '/algos/catalog', user='alice'))
-        row = next(item for item in body['strategies'] if item['id'] == 'strategy_03')
+        row = next(item for item in body['strategies'] if item['id'] == 'ratio_strategy_03')
         self.assertEqual(row['execution'], 'paper_only')
-        self.db['algo_catalog/strategy_03']['enabled'] = False
-        self.assertEqual(asyncio.run(request(self.app, '/algos/follow/strategy_03', 'PUT', 'alice', {'enabled': True}))[0], 404)
+        self.db['algo_catalog/ratio_strategy_03']['enabled'] = False
+        self.assertEqual(asyncio.run(request(self.app, '/algos/follow/ratio_strategy_03', 'PUT', 'alice', {'enabled': True}))[0], 404)
         self.db.clear()
         _, body = asyncio.run(request(self.app, '/algos/catalog', user='alice'))
         self.assertEqual(body['strategies'], [])
@@ -116,7 +116,7 @@ class PaperSnapshotTests(unittest.TestCase):
             def closed_positions(self,limit): return []
             def get_state(self,key): return '2026-10-01T14:53:00+05:30'
             def _cursor(self,**kwargs): return Cursor()
-        runner=SimpleNamespace(store=Store(),strategy_name='strategy_02',last_context={},cfg=SimpleNamespace(strategy=SimpleNamespace(capital=320000),data=SimpleNamespace(provider='nse')))
+        runner=SimpleNamespace(store=Store(),strategy_name='zen_strategy_02',last_context={},cfg=SimpleNamespace(strategy=SimpleNamespace(capital=320000),data=SimpleNamespace(provider='nse')))
         state=module.build_snapshot(runner,{'status':'no_action'})
         self.assertEqual(state['realized_pnl'],10000)
         self.assertEqual(state['closed_trades'],250)

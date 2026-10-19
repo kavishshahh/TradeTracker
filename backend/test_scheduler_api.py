@@ -16,7 +16,7 @@ class SchedulerTests(unittest.TestCase):
     def setUp(self):
         self.calls = []
         self.factory_calls = []
-        self.result = {'status': 'ok', 'strategies': {'strategy_01': {'status': 'no_action'}, 'strategy_02': {'status': 'entry'}}}
+        self.result = {'status': 'ok', 'strategies': {'zen_strategy_01': {'status': 'no_action'}, 'zen_strategy_02': {'status': 'entry'}}}
         def factory(db):
             self.factory_calls.append(db)
             return SimpleNamespace(run_once=lambda: self.calls.append(1) or self.result)
@@ -42,7 +42,7 @@ class SchedulerTests(unittest.TestCase):
     def test_busy_and_data_failures_are_visible(self):
         self.result = {'status': 'busy'}
         self.assertEqual(self.call()[0], 409)
-        self.result = {'status': 'error', 'strategies': {'strategy_01': {'status': 'data_error', 'detail': 'private message'}}}
+        self.result = {'status': 'error', 'strategies': {'zen_strategy_01': {'status': 'data_error', 'detail': 'private message'}}}
         status, body = self.call()
         self.assertEqual(status, 503)
         self.assertNotIn('private message', str(body))

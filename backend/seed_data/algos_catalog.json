@@ -1,6 +1,6 @@
 [
   {
-    "id": "strategy_01",
+    "id": "zen_strategy_01",
     "name": "Geometric Credit",
     "version": "01",
     "description": "Price momentum confirmed by geometric option volume and return volatility.",
@@ -300,7 +300,7 @@
     ]
   },
   {
-    "id": "strategy_02",
+    "id": "zen_strategy_02",
     "name": "Variance Credit",
     "version": "02",
     "description": "The same directional framework, scaled by option return variance.",
@@ -600,7 +600,7 @@
     ]
   },
   {
-    "id": "strategy_03",
+    "id": "ratio_strategy_03",
     "name": "Ratio-Fluxer Skew Credit",
     "version": "03",
     "description": "Expiry credit spreads that sell the relatively rich side of the 100-point NIFTY IV skew (spot-based Black-Scholes IV, 800-minute rank), hedged 400 points away.",

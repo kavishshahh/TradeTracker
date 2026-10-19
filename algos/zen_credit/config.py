@@ -187,7 +187,7 @@ class EmailConfig:
 class RuntimeConfig:
     # Named profiles pin their tested formula/risk settings; capital and broker
     # margin remain deployment settings. Use description for the legacy overrides.
-    strategy_name: str = field(default_factory=lambda: _env("STRATEGY_NAME", "strategy_01") or "strategy_01")
+    strategy_name: str = field(default_factory=lambda: _env("STRATEGY_NAME", "zen_strategy_01") or "zen_strategy_01")
     log_level: str = field(default_factory=lambda: _env("LOG_LEVEL", "INFO"))
     log_dir: Path = ROOT_DIR / "logs"
     # Shared secret for POST /run-cycle. Unset means every request is refused.

@@ -78,7 +78,7 @@
 # 2026-10*:         0.00 /   0.000000% / 0
 # *Partial first/last months. Source: reports/provider_research/replication_trials/
 # volatility_definitions/full_autonomous_719c7c6bc176871c_ledger/.
-# Use STRATEGY_NAME=strategy_02 and a separate DATABASE_URL for virtual forward
+# Use STRATEGY_NAME=zen_strategy_02 and a separate DATABASE_URL for virtual forward
 # execution. Live volume is adjacent cumulative snapshot differences, so feed
 # parity with native historical candles is not guaranteed. No broker orders.
 # NAMED IMPLEMENTATION VERIFICATION
@@ -88,7 +88,7 @@
 # +16965.00 INR; combined observed P&L +9873.50 INR,351 held-quote gaps.
 # All four trade records match the same week in the completed reference ledger.
 # No complete 1m/3m/6m window in this short replay; do not annualize its return.
-# Outputs: reports/strategy_02_last_week/{trades.csv,performance.json,summary.md}.
+# Outputs: reports/zen_strategy_02_last_week/{trades.csv,performance.json,summary.md}.
 
 
 """Named variance-scaled credit spread candidate."""
@@ -97,11 +97,11 @@ from dataclasses import replace
 import sys
 import numpy as np
 import pandas as pd
-from strategy import strategy_01_geometric_credit as first
-from strategy.strategy_01_geometric_credit import panel_from_options,panel_from_snapshots
+from strategy import zen_strategy_01_geometric_credit as first
+from strategy.zen_strategy_01_geometric_credit import panel_from_options,panel_from_snapshots
 from utils.time import IST
 
-STRATEGY_NAME='strategy_02'
+STRATEGY_NAME='zen_strategy_02'
 DESCRIPTION='Geometric volume1/10, summed log-return variance300, five-bar lag; target disabled.'
 PROFIT_TARGET_ENABLED=False
 

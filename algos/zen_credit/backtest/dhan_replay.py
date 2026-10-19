@@ -445,7 +445,7 @@ def run_cli():
     parser.add_argument("--end", type=date.fromisoformat, default=date(2025, 1, 1), help="inclusive entry date")
     parser.add_argument("--offline", action="store_true", help="use cache without any network requests")
     parser.add_argument("--strategy", choices=registry.strategy_names(), default="description",
-                        help="named strategy; strategy_01 is the first selected profit trial")
+                        help="named strategy; zen_strategy_01 is the first selected profit trial")
     parser.add_argument("--provider-history-rules", action="store_true",
                         help="use the observed 2025/2026 calendar and dated 15:00 to 14:53 exit schedule")
     parser.add_argument("--slippage-points", type=float, default=0.0, help="assumed adverse points per leg execution")

@@ -153,6 +153,11 @@ before 14:57 and were settled at the official NSE close. The earlier unsmoothed 
 (-2.0/4.5, replayed in `reports/strategy_03_2025-10-01_2026-09-30/`) produced 42 trades,
 69% winners and INR 437,901 with a 28% drawdown. Figures are provisional and exclude costs;
 the gate was tuned on these same published trades, so forward paper results are the test.
+Research harness: `backtest/ratio_research.py` rebuilds the minute dataset from the cache
+(`build`), replays the pinned rule in a tenth of a second (`baseline`) and scans smoothing,
+gate and persistence settings (`grid`, writes `reports/ratio_research/grid.csv`). Use it for
+the next iterations and confirm any candidate with `backtest.dhan_replay` before pinning it.
+
 Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28 days from
 18 June 2025, so `--start` minus 21 days must land on one):
 

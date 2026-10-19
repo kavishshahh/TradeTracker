@@ -580,7 +580,7 @@ def run_cli():
     if args.strategy != "description":
         selected_strategy = registry.get_strategy(args.strategy)
         report["profit_target_enabled"] = getattr(selected_strategy, "PROFIT_TARGET_ENABLED", True)
-        report["limitations"] = [
+        report["limitations"] = getattr(selected_strategy, "LIMITATIONS", None) or [
             f"Selected named research candidate {args.strategy}: {selected_strategy.DESCRIPTION}. Not a verified Zen Credit replica.",
             "Completed index close versus open five observed bars earlier; 800-value alpha rank.",
             "Opening ATM near-expiry path; geometric current/10-bar native volume ratios; volatility definition is pinned by the named module; factors lag five bars; alpha2 rank 300 with 270 valid observations.",

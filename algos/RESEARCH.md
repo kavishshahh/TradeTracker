@@ -87,6 +87,73 @@ strike range. Both exit legs have event OHLC data for only 150 of the 210
 published trades. See `reports/provider_research/replication_trials/held_quote_limits/summary.md`.
 These missing prices limit exit reconstruction and the reliability of backtest results.
 
+## Strategy 03 — Ratio-Fluxer style IV-skew expiry credit spreads
+
+`zen_credit/strategy/strategy_03_ratio_fluxer.py` is a structural replica of Stratzy's
+[Ratio-Fluxer Credit Spread Expiry](https://algos.dhan.co/managers/stratzy/ratio-fluxer-credit-spread-expiry/698075eaf867bf12b20442e5)
+algo, fitted to its 19 published trades (`../ratio-fluxer-past-trades.csv`, 23 Oct 2025 to
+6 Oct 2026). The provider's trigger is private; the module's header comment lists what the
+published trades establish and every pinned rule.
+
+What the published trades show, verified against Dhan minute data:
+
+- nearest weekly expiry; entries 10:16-14:38 IST, never on the expiry date, never more
+  than five days before it (no Wednesday entry in 19 trades);
+- short strike = ATM of the last completed candle (open matches 12/13 checked trades),
+  hedge 400 points further OTM (300 in the 2025 backtest rows);
+- published fills within about two points of the candle closes around the entry minute;
+- intraday exits at exactly 50% of the entry credit, scheduled exit 14:57 IST on expiry
+  day, two stops at roughly credit + 40 to 45 points (5% of margin per lot);
+- 80% capital on Mondays, 4 lots at 80% and 5 lots at 100% with the 65-unit lot;
+- at every entry the 100-point OTM put IV minus 100-point OTM call IV was at an extreme
+  of its 800-minute rank, the sold side being the relatively expensive one. Using a
+  parity-implied forward instead of spot removes the effect, so the futures basis is part
+  of the signal: it was +23 to +84 points at every call-spread entry and -19 to -37 at
+  every put-spread entry.
+
+Rule: own spot-based Black-Scholes IV (6.5% rate, `strategy/implied_vol.py`), skew =
+IV(PE, ATM-100) - IV(CE, ATM+100), alpha = 800-minute percentile rank of skew. Credit CALL
+spread when skew <= -2.0 IV points and alpha < 0.2; credit PUT spread when skew >= 4.5 and
+alpha > 0.8. Target 50% of credit, stop 5% of normal margin per lot, 14:57 exit on expiry
+day, one position, 320,000 capital with 80% on Mondays from 6 April 2026.
+
+Fit (19 Oct 2025 - 1 Oct 2026, 147 eligible days): the rule fires on the published day and
+side for 18/19 entries, within an hour of 14 entry minutes, and on 39 days overall, so it
+trades about twice as often as the provider. An "ATM IV elevated" filter was tried and
+rejected (fails 5/19). Fit tables: `reports/strategy_03_fit/`.
+
+Replay 1 Oct 2025 - 30 Sep 2026 (entries), fixed INR 320,000, gross, Dhan minute closes
+(`reports/strategy_03_2025-10-01_2026-09-30/`):
+
+| Measure | Strategy 03 replay | Published Ratio-Fluxer (same window) |
+|---|---:|---:|
+| Closed trades / win rate | 42 / 69.05% | 18 / 88.9% |
+| Gross realized P&L | INR 437,901 | INR 397,006 (reported) |
+| Return / CAGR equivalent | 136.84% / 136.98% | n/a |
+| Realized max drawdown | 27.97% (INR 89,505) | n/a |
+| Trailing 1m / 3m / 6m | 10.60% / 43.32% / 115.24% | n/a |
+| Exits: target / stop / expiry | 23 / 13 / 6 | 5 target, 2 stop, 11 scheduled |
+
+Of the 18 published entries in the window the replay opened a position on the same day and
+side for 16 (9 with the identical short strike); the misses are 22 Dec 2025 (put skew
+below the 4.5 gate) and 27 Aug 2026 (already holding a different spread). The six
+"Expiry" exits are positions whose legs left the ATM +/-10 archive before 14:57 and were
+settled at the official NSE close; 11 trades have quote gaps, so the figures are
+provisional and exclude costs. Losing months: January and February 2026 (no published
+trades either month).
+
+Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28 days from
+18 June 2025, so `--start` minus 21 days must land on one):
+
+```powershell
+..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy strategy_03 --start 2025-10-01 --end 2026-09-30 --exit-tail-days 1 --provider-history-rules --offline --output ..\reports\strategy_03_2025-10-01_2026-09-30
+```
+
+Live paper trading needs no new data feed: the panel is built from the stored minute chain
+snapshots (LTP) with the same IV solver, so set `STRATEGY_NAME=strategy_03` or enable its
+catalogue record (`backend/seed_data/algos_catalog.json`, disabled by default) for the
+shared paper worker. Allow two sessions of snapshots before the 800-minute rank is valid.
+
 ## Original supplied-description interpretation (`--strategy description`)
 
 The entry code now follows the supplied 800/300 rank formula and 0.8/0.2

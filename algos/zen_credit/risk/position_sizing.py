@@ -8,7 +8,9 @@ All spread values are per unit (points). For SELL leg price S and BUY leg price 
     max_profit     = net_credit * units
     max_loss       = (width - net_credit) * units
     stop_loss      = net_credit + stop_loss_margin_fraction * normal_margin_per_lot / lot_size
-    target         = target_spread_value            (exit when spread value <= target)
+    target         = target_spread_value            (exit when spread value <= target), or
+                     net_credit * (1 - target_credit_fraction) when the fraction is configured
+                     (a 0.5 fraction books half of the maximum profit)
 
 ``normal_margin_per_lot`` is the broker margin of one lot on a non-expiry day.
 The provider's own margins are not reproducible from free data, so it is
@@ -91,10 +93,16 @@ def build_risk_plan(sell_price: float, buy_price: float, width: float, lot_size:
     lots = lots_for_capital(capital, margin)
     units = lots * lot_size
     stop = round_price(credit + cfg.stop_loss_margin_fraction * normal / lot_size)
+    if cfg.target_credit_fraction is not None:
+        if not 0 < cfg.target_credit_fraction < 1:
+            raise ValueError("target_credit_fraction must be in (0, 1)")
+        target = round_price(credit * (1.0 - cfg.target_credit_fraction))
+    else:
+        target = round_price(cfg.target_spread_value)
     return RiskPlan(
         lots=lots, lot_size=lot_size, units=units, net_credit=credit,
         gross_credit=round_money(credit * units), stop_loss=stop,
-        target=round_price(cfg.target_spread_value),
+        target=target,
         max_loss=round_money((width - credit) * units),
         max_profit=round_money(credit * units),
         margin_per_lot=round_money(margin), normal_margin_per_lot=round_money(normal),

@@ -79,7 +79,11 @@ class StrategyConfig:
     # --- risk / exits: measured from the provider trade history ---------------
     stop_loss_margin_fraction: float = 0.05    # SL = 5% of normal-day margin per lot
     target_spread_value: float = 10.0          # target when spread value <= 10 points
+    target_credit_fraction: float | None = None  # if set, target = entry credit * fraction (overrides points)
     time_exit: time = time(14, 53)             # next-trading-day square-off time
+    time_exit_on_expiry: bool = False          # True: scheduled exit is on the expiry day, not the next session
+    max_days_to_expiry: int | None = None      # no new entry when the nearest expiry is further than this
+    allow_expiry_day_entry: bool = True        # False: never open a position on the expiry date itself
     # Optional provider-history replay profile, inferred from timestamp clusters.
     # Empty by default: forward testing always uses the configured time_exit.
     historical_time_exit_start: date | None = None
@@ -101,6 +105,8 @@ class StrategyConfig:
 def load_strategy_config() -> StrategyConfig:
     override = _env("MARGIN_PER_LOT")
     premium = _env("MAX_SHORT_PREMIUM")
+    fraction = _env("TARGET_CREDIT_FRACTION")
+    max_dte = _env("MAX_DAYS_TO_EXPIRY")
     return StrategyConfig(
         alpha_lookback_minutes=_env_int("ALPHA_LOOKBACK_MINUTES", 800),
         alpha2_lookback_minutes=_env_int("ALPHA2_LOOKBACK_MINUTES", 300),
@@ -118,7 +124,11 @@ def load_strategy_config() -> StrategyConfig:
         alpha2_factor_lag_bars=_env_int("ALPHA2_FACTOR_LAG_BARS", _env_int("PRICE_CHANGE_HORIZON_MINUTES", 5)),
         stop_loss_margin_fraction=_env_float("STOP_LOSS_MARGIN_FRACTION", 0.05),
         target_spread_value=_env_float("TARGET_SPREAD_VALUE", 10.0),
+        target_credit_fraction=float(fraction) if fraction else None,
         time_exit=_env_time("TIME_EXIT", "14:53"),
+        time_exit_on_expiry=_env_bool("TIME_EXIT_ON_EXPIRY", False),
+        max_days_to_expiry=int(max_dte) if max_dte else None,
+        allow_expiry_day_entry=_env_bool("ALLOW_EXPIRY_DAY_ENTRY", True),
         capital=_env_float("CAPITAL", 320000.0),
         monday_capital_fraction=_env_float("MONDAY_CAPITAL_FRACTION", 1.0),
         monday_allocation_start=_env_date("MONDAY_ALLOCATION_START", "2026-04-06"),

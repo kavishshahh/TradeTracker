@@ -5,6 +5,8 @@ The original checkout is preserved; continue integration work here.
 
 - `zen_credit/strategy/strategy_01_geometric_credit.py`: saved geometric-volume trial.
 - `zen_credit/strategy/strategy_02_variance_credit.py`: saved variance-scaled trial.
+- `zen_credit/strategy/strategy_03_ratio_fluxer.py`: Ratio-Fluxer style IV-skew expiry
+  credit spread, fitted to Stratzy's 19 published trades (see `RESEARCH.md`, Strategy 03).
 - `../frontend/`: authenticated Algo Lab dashboard at `/algos`.
 - `../backend/algos_api.py`: Firebase-authenticated catalogue, paper state and follows.
 - `algo_catalog` in Firestore: verified historical/monthly statistics and strategy descriptions.

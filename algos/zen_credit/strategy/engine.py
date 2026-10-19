@@ -246,6 +246,11 @@ class StrategyEngine:
             return EngineResult("none", "invalid strike reference", diagnostics=diag)
         diag.update({"strike_reference":self.cfg.strike_reference,"strike_reference_spot":reference_spot})
         expiry = select_expiry(now.date(), view.expiries)
+        days_to_expiry = (expiry - now.date()).days
+        if not self.cfg.allow_expiry_day_entry and days_to_expiry == 0:
+            return EngineResult("none", "no entry on expiry day", diagnostics=diag)
+        if self.cfg.max_days_to_expiry is not None and days_to_expiry > self.cfg.max_days_to_expiry:
+            return EngineResult("none", f"expiry {days_to_expiry} days away exceeds maximum", diagnostics=diag)
         strikes = view.chain.strikes if view.chain is not None else []
         try:
             legs = build_spread(signal, reference_spot, strikes, expiry, self.cfg.spread_distance)

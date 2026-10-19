@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from execution.coordinator import PaperCoordinator
+from strategy.registry import STRATEGIES
 from utils.time import IST
 
 
@@ -57,7 +58,8 @@ class CoordinatorTests(unittest.TestCase):
         coordinator = PaperCoordinator(db, provider, factory)
         result = coordinator.run_once(now)
         self.assertEqual(result['strategies']['strategy_01']['status'], 'exit')
-        self.assertEqual(len(seen), 2)
+        # one runner per registered strategy, in registry order; catalogue rows are optional
+        self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description'])
         self.assertTrue(all(item[2] == 'dhan' and item[3] is provider for item in seen))
         self.assertEqual(seen[1][1], 120000)
         coordinator.lock.acquire()
@@ -66,7 +68,8 @@ class CoordinatorTests(unittest.TestCase):
         finally:
             coordinator.lock.release()
         coordinator.run_once(now)
-        self.assertEqual(len(seen), 2)
+        # one runner per registered strategy, in registry order; catalogue rows are optional
+        self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description'])
 
 
 if __name__ == '__main__': unittest.main()

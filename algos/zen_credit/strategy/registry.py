@@ -5,7 +5,8 @@ from config import StrategyConfig
 
 STRATEGIES={'description':'Original supplied-description interpretation',
             'strategy_01':'Geometric-volume credit spread research candidate',
-            'strategy_02':'Variance-scaled credit spread research candidate'}
+            'strategy_02':'Variance-scaled credit spread research candidate',
+            'strategy_03':'Ratio-Fluxer style IV-skew expiry credit spread'}
 
 
 def strategy_names():
@@ -20,6 +21,9 @@ def get_strategy(name='description'):
     if name=='strategy_02':
         from strategy import strategy_02_variance_credit
         return strategy_02_variance_credit
+    if name=='strategy_03':
+        from strategy import strategy_03_ratio_fluxer
+        return strategy_03_ratio_fluxer
     raise ValueError(f'Unknown strategy: {name}')
 
 

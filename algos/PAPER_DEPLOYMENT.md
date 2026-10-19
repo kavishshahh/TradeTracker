@@ -2,7 +2,7 @@
 
 ## What runs
 
-One continuously running Python background worker runs both saved strategies.
+One continuously running Python background worker runs every registered strategy (`strategy/registry.py`); a strategy only enters when its catalogue record is enabled.
 Every minute it obtains Dhan NIFTY index/option data, evaluates the strategies,
 records virtual entries/exits in Firestore, and publishes each paper account to
 `algo_paper_state`. The existing authenticated backend serves the records to

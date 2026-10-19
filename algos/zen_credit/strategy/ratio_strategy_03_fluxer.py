@@ -42,28 +42,25 @@
 #                     futures basis is part of the signal. With a parity-implied
 #                     forward instead, the entries show no skew extreme at all.
 #   skew            = iv(PE, -2) - iv(CE, +2)          (100-point wings)
+#   skew_s          = mean of skew over the last SMOOTH_WINDOW minutes of the
+#                     SAME session (unknown for the first SMOOTH_WINDOW-1 minutes)
 # Indicators:
-#   alpha  = trailing 800-observation percentile rank of skew (min 720 valid)
-#   gate   = skew <= SKEW_CALL_MAX (calls rich) or skew >= SKEW_PUT_MIN (puts rich)
-#   alpha2 = alpha where the gate holds, otherwise 0.5 (neutral)
+#   alpha  = trailing 800-observation percentile rank of skew_s (min 720 valid)
+#   gate   = skew_s <= SKEW_CALL_MAX (calls rich) or skew_s >= SKEW_PUT_MIN (puts rich)
+#   alpha2 = alpha where the gate holds, otherwise 0.5 (neutral); also neutral on
+#            Saturday/Sunday special sessions (the provider never traded one)
 # Signal (10:15-14:15 IST, flat, nearest expiry 1-5 days away):
 #   credit CALL spread when alpha < BEARISH_RANK and alpha2 < BEARISH_RANK
 #   credit PUT  spread when alpha > BULLISH_RANK and alpha2 > BULLISH_RANK
-# Fit (19 published entries, 147 eligible days 19 Oct 2025 - 1 Oct 2026): the
-# gate holds on the published day and side for 18/19 entries (missed: the
-# 22 Dec 2025 put spread, skew 3.5) and within an hour of 14 entry minutes,
-# while firing on 39 days overall, so expect roughly twice the provider's
-# trade count. An ATM-IV "elevated" filter was tried and rejected (fails 5/19).
-# Spread: sell opening-ATM, buy 400 further OTM, same expiry; credit must be > 0.
-# Exits (checked before entries, one evaluation per minute, no same-cycle
-# re-entry): stop when spread value >= credit + 5% * normal margin / lot size;
-# target when spread value <= 50% of credit; otherwise 14:57 IST on expiry day.
-# Sizing: 80% of capital on Mondays from 6 April 2026, else 100%; lots =
-# floor(allocation / (2.25 * 400 * lot size)) unless MARGIN_PER_LOT overrides.
-#
-# Thresholds below were chosen on the published entries plus the Dhan history
-# from June 2025; see reports/ratio_strategy_03_fit/ for the fit and replay.
-
+# Fit (18 published entries, 19 Oct 2025 - 1 Oct 2026, minute simulator with the
+# exits below): the unsmoothed gate at -2.0/4.5 reproduced 17/18 published
+# entries but added 25 extra trades with 11 stops; smoothing the skew over 15
+# minutes and tightening to -3.0/5.0 gives 19 trades, 18 winners, 1 stop and
+# 13/18 published entries on the same day and side, with entry minutes mostly
+# within 20 minutes of the published ones. The five misses are the four
+# published entries whose skew sat between -3.0 and -2.5 or between 4.5 and 5.0,
+# and the provider's own 9 March 2026 loser. Neighbouring settings (smoothing
+# 5-15, call gate -2.5 to -3.5, put gate 4.5 to 5.0) all score similarly.
 """Named Ratio-Fluxer style IV-skew credit spread implementation."""
 from __future__ import annotations
 
@@ -78,11 +75,11 @@ from strategy.implied_vol import implied_vol, years_to_expiry
 from utils.time import IST
 
 STRATEGY_NAME = 'ratio_strategy_03'
-DESCRIPTION = 'Ratio-Fluxer style expiry credit spread; opening ATM, 100-point IV skew rank 800, 50% credit target.'
+DESCRIPTION = 'Ratio-Fluxer style expiry credit spread; opening ATM, 15-minute smoothed 100-point IV skew rank 800, 50% credit target.'
 PROFIT_TARGET_ENABLED = True
 LIMITATIONS = [
-    'ratio_strategy_03 is a structural replica fitted to 19 published Ratio-Fluxer trades; the provider trigger is private and this rule fires about twice as often.',
-    'Skew uses own spot-based Black-Scholes IV (6.5% rate) of candle closes at ATM and ATM +/-100; a missing wing candle leaves the minute unknown and no trade is forced.',
+    'ratio_strategy_03 is a structural replica fitted to 19 published Ratio-Fluxer trades; the provider trigger is private, and the smoothed-skew gate was tuned on those trades (13/18 same-day matches, about one extra trade in three).',
+    'Skew uses own spot-based Black-Scholes IV (6.5% rate) of candle closes at ATM +/-100, smoothed over 15 session minutes; a missing wing candle leaves the minute unknown and no trade is forced. Saturday/Sunday special sessions never enter.',
     'Minute-close execution: bid/ask, intraminute stop/target touches and exact fills are unavailable; the 50% credit target and margin stop are checked once per minute.',
     'Estimated margin (2.25 x width x lot size) sizes positions and sets the stop; it is not historical broker margin or forced liquidation.',
     'Scheduled exit is 14:57 IST on the expiry day; published 2025 rows exited at 14:59 and used 300-point hedges, which this replay does not reproduce.',
@@ -96,8 +93,9 @@ RANK_WINDOW = 800
 RANK_MIN_PERIODS = 720
 WING_STEPS = 2                 # 2 x 50 = 100 points each side
 RISK_FREE_RATE = 0.065         # flat continuous rate for the spot-based Black-Scholes IV
-SKEW_CALL_MAX = -2.0           # IV points: calls richer than puts -> credit call spread
-SKEW_PUT_MIN = 4.5             # IV points: puts much richer than calls -> credit put spread
+SMOOTH_WINDOW = 15             # session-local trailing mean of the skew, in minutes
+SKEW_CALL_MAX = -3.0           # IV points (smoothed): calls richer than puts -> credit call spread
+SKEW_PUT_MIN = 5.0             # IV points (smoothed): puts much richer than calls -> credit put spread
 BULLISH_RANK = 0.8
 BEARISH_RANK = 0.2
 STRIKE_STEP = 50.0
@@ -143,12 +141,18 @@ def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFram
     selected = panel.copy(); selected.index = selected.index.tz_convert(IST); selected = selected.reindex(clock)
     skew = pd.to_numeric(selected['skew'], errors='coerce')
     atm_iv = pd.to_numeric(selected['iv_ce_atm'], errors='coerce')
-    alpha = skew.rolling(RANK_WINDOW, min_periods=RANK_MIN_PERIODS).rank(method='average', pct=True)
-    gate = (skew <= SKEW_CALL_MAX) | (skew >= SKEW_PUT_MIN)
+    # Session-local smoothing: the mean never spans the overnight gap, and a
+    # missing minute inside the window leaves the smoothed value unknown.
+    session = pd.Series(clock.date, index=clock)
+    skew_s = skew.groupby(session.values).transform(
+        lambda x: x.rolling(SMOOTH_WINDOW, min_periods=SMOOTH_WINDOW).mean())
+    alpha = skew_s.rolling(RANK_WINDOW, min_periods=RANK_MIN_PERIODS).rank(method='average', pct=True)
+    weekend = np.array([d.weekday() >= 5 for d in clock.date])
+    gate = ((skew_s <= SKEW_CALL_MAX) | (skew_s >= SKEW_PUT_MIN)) & ~weekend
     alpha2 = pd.Series(np.where(gate & alpha.notna(), alpha, 0.5), index=clock)
     alpha2 = alpha2.where(alpha.notna())        # unknown alpha stays unknown
-    return pd.DataFrame({'alpha': alpha, 'alpha2': alpha2, 'skew': skew, 'atm_iv': atm_iv,
-                         'gate': gate.astype(float)}, index=clock)
+    return pd.DataFrame({'alpha': alpha, 'alpha2': alpha2, 'skew': skew, 'skew_smooth': skew_s,
+                         'atm_iv': atm_iv, 'gate': gate.astype(float)}, index=clock)
 
 
 def _near_expiries(clock, resolver, quotes):

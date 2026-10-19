@@ -112,36 +112,47 @@ What the published trades show, verified against Dhan minute data:
   every put-spread entry.
 
 Rule: own spot-based Black-Scholes IV (6.5% rate, `strategy/implied_vol.py`), skew =
-IV(PE, ATM-100) - IV(CE, ATM+100), alpha = 800-minute percentile rank of skew. Credit CALL
-spread when skew <= -2.0 IV points and alpha < 0.2; credit PUT spread when skew >= 4.5 and
-alpha > 0.8. Target 50% of credit, stop 5% of normal margin per lot, 14:57 exit on expiry
-day, one position, 320,000 capital with 80% on Mondays from 6 April 2026.
+IV(PE, ATM-100) - IV(CE, ATM+100) averaged over the last 15 minutes of the same session,
+alpha = 800-minute percentile rank of that smoothed skew. Credit CALL spread when the
+smoothed skew <= -3.0 IV points and alpha < 0.2; credit PUT spread when it is >= 5.0 and
+alpha > 0.8; no entries in Saturday/Sunday special sessions. Target 50% of credit, stop 5% of
+normal margin per lot, 14:57 exit on expiry day, one position, 320,000 capital with 80% on
+Mondays from 6 April 2026.
 
-Fit (19 Oct 2025 - 1 Oct 2026, 147 eligible days): the rule fires on the published day and
-side for 18/19 entries, within an hour of 14 entry minutes, and on 39 days overall, so it
-trades about twice as often as the provider. An "ATM IV elevated" filter was tried and
-rejected (fails 5/19). Fit tables: `reports/ratio_strategy_03_fit/`.
+How the gate was chosen (19 Oct 2025 - 1 Oct 2026, minute simulator with the pinned exits,
+`reports/ratio_strategy_03_fit/grid_scan.csv`): the raw skew at -2.0/4.5 fired on the
+published day and side for 17/18 entries but produced 42 trades with 13 stops, and no
+entry-minute feature separated the 25 extra trades from the matched ones (best rank AUC
+0.66). Published entries came 20-80 minutes after the raw gate first switched on, and the
+extra trades that stopped out had entered within its first few minutes, so a slower signal
+was tested: 15-minute smoothing with -3.0/5.0 gives 19 trades, 18 winners, 1 stop, 13/18
+same-day matches and entry minutes mostly within 20 minutes of the published ones (for
+example 23 Oct 11:55 exactly, 25 Sep 14:15 vs 14:09). Neighbouring settings (smoothing 5-15,
+call gate -2.5 to -3.5, put gate 4.5 to 5.0) score similarly; the misses are four entries
+whose skew sat just inside the old gate and the provider's own 9 March 2026 loser. An "ATM
+IV elevated" filter was tried earlier and rejected (fails 5/19).
 
 Replay 1 Oct 2025 - 30 Sep 2026 (entries), fixed INR 320,000, gross, Dhan minute closes
 (`reports/ratio_strategy_03_2025-10-01_2026-09-30/`):
 
-| Measure | Strategy 03 replay | Published Ratio-Fluxer (same window) |
+| Measure | ratio_strategy_03 replay | Published Ratio-Fluxer (same window) |
 |---|---:|---:|
-| Closed trades / win rate | 42 / 69.05% | 18 / 88.9% |
-| Gross realized P&L | INR 437,901 | INR 397,006 (reported) |
-| Return / CAGR equivalent | 136.84% / 136.98% | n/a |
-| Realized max drawdown | 27.97% (INR 89,505) | n/a |
-| Trailing 1m / 3m / 6m | 10.60% / 43.32% / 115.24% | n/a |
-| Exits: target / stop / expiry | 23 / 13 / 6 | 5 target, 2 stop, 11 scheduled |
+| Closed trades / win rate | 19 / 94.74% | 18 / 88.9% |
+| Gross realized P&L | INR 404,879 | INR 397,006 (reported) |
+| Return / CAGR equivalent | 126.52% / 126.65% | n/a |
+| Realized max drawdown | 4.07% (INR 13,026) | n/a |
+| Trailing 1m / 3m / 6m | 30.26% / 60.41% / 97.92% | n/a |
+| Exits: target / stop / expiry | 15 / 1 / 3 | 5 target, 2 stop, 11 scheduled |
 
-Of the 18 published entries in the window the replay opened a position on the same day and
-side for 16 (9 with the identical short strike); the misses are 22 Dec 2025 (put skew
-below the 4.5 gate) and 27 Aug 2026 (already holding a different spread). The six
-"Expiry" exits are positions whose legs left the ATM +/-10 archive before 14:57 and were
-settled at the official NSE close; 11 trades have quote gaps, so the figures are
-provisional and exclude costs. Losing months: January and February 2026 (no published
-trades either month).
-
+The replay opened a position on the same day and side as 13 of the 18 published entries
+(11 with the identical short strike) and added 6 trades of its own; the 5 misses are the
+22 Dec 2025 and 18 May 2026 put spreads (smoothed skew below the 5.0 gate), the 17 Nov 2025
+and 10 Aug 2026 call spreads (above the -3.0 gate) and the provider's losing 9 Mar 2026
+call spread. The three "Expiry" exits are positions whose legs left the ATM +/-10 archive
+before 14:57 and were settled at the official NSE close. The earlier unsmoothed gate
+(-2.0/4.5, replayed in `reports/strategy_03_2025-10-01_2026-09-30/`) produced 42 trades,
+69% winners and INR 437,901 with a 28% drawdown. Figures are provisional and exclude costs;
+the gate was tuned on these same published trades, so forward paper results are the test.
 Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28 days from
 18 June 2025, so `--start` minus 21 days must land on one):
 

@@ -81,6 +81,11 @@ def test_panel_recovers_skew_and_matches_between_history_and_snapshots():
     assert len(valid) > 0.95 * len(panel)
     assert np.allclose(valid["skew"], 3.0, atol=0.05)
     assert np.allclose(valid["iv_ce_atm"], 13.0, atol=0.05)
+    # weekend special sessions never open the gate
+    weekend_bars = _bars([date(2026, 9, 26), date(2026, 9, 27)])   # Saturday, Sunday
+    weekend = s3.calculate_indicators(weekend_bars, s3.panel_from_options(
+        weekend_bars, _options(weekend_bars, s3.SKEW_PUT_MIN + 2), lambda d: [EXPIRY]))
+    assert (weekend["gate"] == 0.0).all()
     snapshots = options.reset_index().assign(spot=np.nan)
     from_snapshots = s3.panel_from_snapshots(bars, snapshots)
     pd.testing.assert_frame_equal(from_snapshots, panel)
@@ -96,13 +101,19 @@ def test_indicators_follow_a_skew_regime_change_and_are_causal():
     ind = s3.calculate_indicators(bars, panel)
     assert list(ind.columns)[:2] == ["alpha", "alpha2"]
     assert ind["alpha"].iloc[:s3.RANK_MIN_PERIODS - 1].isna().all()
-    # the first 100 minutes of the new regime rank below everything in the 800-minute window
-    late = ind.iloc[3 * 375 + 1:3 * 375 + 100]
+    # once the smoothing window is filled, the new regime ranks below everything in the 800-minute window
+    late = ind.iloc[3 * 375 + s3.SMOOTH_WINDOW:3 * 375 + 100]
     assert (late["alpha"] < s3.BEARISH_RANK).all()
     assert (late["alpha2"] < s3.BEARISH_RANK).all()
     assert (late["gate"] == 1.0).all()
-    calm = ind.iloc[s3.RANK_MIN_PERIODS:3 * 375]
-    assert (calm["alpha2"] == 0.5).all()           # gate closed -> neutral alpha2
+    # the regime changes at a session open: the smoothed skew is unknown until the window fills
+    mixing = ind.iloc[3 * 375:3 * 375 + s3.SMOOTH_WINDOW - 1]
+    assert mixing["skew_smooth"].isna().all() and mixing["alpha2"].isna().all()
+    calm = ind.iloc[s3.RANK_MIN_PERIODS:3 * 375].dropna(subset=["alpha"])
+    assert len(calm) > 300 and (calm["alpha2"] == 0.5).all()   # gate closed -> neutral alpha2
+    # the first SMOOTH_WINDOW-1 minutes of each session have no smoothed value
+    first = ind[ind.index.time < time(9, 16 + s3.SMOOTH_WINDOW - 1)]
+    assert first["skew_smooth"].isna().all()
     # causality: truncating the inputs never changes earlier values
     cut = 3 * 375 + 40
     truncated = s3.calculate_indicators(bars.iloc[:cut], panel.iloc[:cut])
@@ -159,3 +170,50 @@ def test_engine_rejects_expiry_day_and_far_expiry_entries():
     assert far.reason.startswith("expiry 6 days away")
     ok = engine.evaluate(view(ist(2026, 9, 24, 11, 0), [EXPIRY]), None)
     assert ok.action == "entry" and ok.position.option_type == "CE" and ok.position.exit_due == ist(2026, 9, 29, 14, 57)
+
+
+# ----------------------------------------------------------------------------- live snapshot shape
+def test_live_snapshot_rows_pick_nearest_stored_expiry_and_roll_after_expiry_day():
+    """Rows shaped like FirestoreStore.load_snapshots: IST minutes, date expiries, both collected
+    expiries per minute, bid/ask/volume columns, far strikes without a last price."""
+    from execution.store import SNAPSHOT_COLUMNS
+    near, nxt = date(2026, 9, 29), date(2026, 10, 6)
+    bars = _bars([date(2026, 9, 28), near, date(2026, 9, 30)])
+    clock = bars.index + pd.Timedelta(minutes=1)
+    close = bars["close"].to_numpy()
+    rows = []
+    rich_calls = s3.SKEW_CALL_MAX - 1.0                  # clearly inside the call gate
+    for expiry, skew in ((near, 3.0), (nxt, rich_calls)):
+        tyrs = years_to_expiry(clock, [expiry] * len(clock))
+        for i, m in enumerate(clock):
+            if m.date() > expiry:
+                continue                                   # an expired contract is no longer collected
+            atm = float(s3.atm_strike(close[i]))
+            for k in range(-15, 16):
+                strike = atm + 50 * k
+                ce = bs_price(close[i], strike, tyrs[i], 0.13, True, rate=s3.RISK_FREE_RATE)
+                pe = bs_price(close[i], strike, tyrs[i], 0.13 + (skew / 100 if k < 0 else 0), False, rate=s3.RISK_FREE_RATE)
+                rows.append({"minute": m, "expiry": expiry, "strike": strike, "spot": close[i],
+                             "ce_ltp": np.nan if k > 8 else float(ce), "pe_ltp": np.nan if k < -8 else float(pe),
+                             "ce_bid": np.nan, "ce_ask": np.nan, "pe_bid": np.nan, "pe_ask": np.nan,
+                             "ce_cum_volume": np.nan, "pe_cum_volume": np.nan})
+    snapshots = pd.DataFrame(rows, columns=SNAPSHOT_COLUMNS)
+    snapshots["minute"] = pd.to_datetime(snapshots.minute, utc=True).dt.tz_convert(IST)
+    snapshots = snapshots.sort_values(["minute", "expiry", "strike"]).reset_index(drop=True)
+    panel = s3.panel_from_snapshots(bars, snapshots)
+    assert panel.index.equals(clock)
+    on_near = panel[panel.index.date <= near].dropna(subset=["skew"])
+    on_next = panel[panel.index.date > near].dropna(subset=["skew"])
+    # 15:30 clock rows have no snapshot; deep-OTM wings minutes before expiry settle below the IV bracket
+    assert len(on_near) >= 2 * 375 - 20 and len(on_next) >= 375 - 1
+    assert panel.loc[panel.index.date == near].between_time("09:16", "15:00")["skew"].notna().all()
+    assert (on_near["expiry"] == near).all() and np.allclose(on_near["skew"], 3.0, atol=0.05)
+    assert (on_next["expiry"] == nxt).all() and np.allclose(on_next["skew"], rich_calls, atol=0.05)
+    ind = s3.calculate_indicators(bars, panel)
+    assert np.isfinite(ind["alpha"].iloc[-1]) and np.isfinite(ind["alpha2"].iloc[-1])
+    # smoothing removes SMOOTH_WINDOW-1 values per session, so the 720-value rank minimum is only
+    # met later in the third session; the first valid minutes rank below every earlier value
+    third = ind[ind.index.date == date(2026, 9, 30)]
+    after_roll = third[third["alpha"].notna()].iloc[:10]
+    assert len(after_roll) == 10
+    assert (after_roll["alpha"] < s3.BEARISH_RANK).all() and (after_roll["alpha2"] < s3.BEARISH_RANK).all()

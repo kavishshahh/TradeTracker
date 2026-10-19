@@ -69,6 +69,20 @@ def write_replay_performance(output,trades,capital,start,end):
     return payload
 
 
+def prepend_index_history(client, bars, start, earliest, calendar, progress=print):
+    """Index-only candles from ``earliest`` up to the option warm-up ``start`` (no option quotes), for
+    strategy indicators that need a longer daily history; 28-day chunks walking back from ``start``."""
+    frames, last = [], start
+    while last > earliest:
+        first = last - timedelta(days=28)
+        progress(f"Index-only history chunk {first} to {last} (end excluded)", flush=True)
+        frames.append(parse_series(client.request("intraday", spot_payload(first, last)), first, last, calendar))
+        last = first
+    extra = pd.concat(frames)[["open", "high", "low", "close", "volume"]].apply(pd.to_numeric)
+    extra = extra[(extra.index < bars.index[0]) & ~extra.index.duplicated(keep="last")]
+    return pd.concat([extra, bars]).sort_index()
+
+
 def load_history(client, start, end, progress=print, calendar=None, expiry_resolver=expiries_for,
                  option_offsets=((1, range(-10, 11)), (2, range(-3, 4)))):
     calendar = calendar or Nifty2024Calendar()
@@ -480,6 +494,9 @@ def run_cli():
     client = DhanHistoryClient(offline=args.offline)
     download(client, start, stop)
     bars, options, conflicts = load_history(client, start, stop, calendar=calendar, expiry_resolver=expiry_resolver)
+    history_days = getattr(registry.get_strategy(args.strategy), "HISTORY_DAYS", 0)
+    if history_days > (args.start - start).days:     # e.g. ratio_strategy_03's 20-session realised volatility
+        bars = prepend_index_history(client, bars, start, args.start - timedelta(days=history_days), calendar)
     options, fixed_audit = supplement_fixed_contracts(client, bars, options, stop, calendar, expiry_resolver, lot_resolver)
     conflicts.to_csv(output / "conflicting_option_records.csv", index=False)
     print(f"Loaded {len(bars):,} index candles and {len(options):,} fixed-contract quote pairs", flush=True)

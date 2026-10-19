@@ -10,12 +10,16 @@ Run from zen_credit (offline cache from 18 June 2025; downloads nothing):
     ..\\.venv\\Scripts\\python.exe -B -m backtest.ratio_research round2     # asymmetric/hysteresis gates, EMA and
                                                                             # candle smoothing, rank windows, basis
                                                                             # confirmation, first-cross entry
+    ..\\.venv\\Scripts\\python.exe -B -m backtest.ratio_research round3     # short-strike rules, put-spread filters
+                                                                            # (realised volatility, DTE, rank, IV)
 
 The simulator mirrors the engine rules of the named module (opening-ATM short strike, 400-point
 hedge, 50% credit target on the entry day only, credit + 45 stop, 14:57 exit on expiry day,
 settlement at the expiry-day last close when quotes are missing, Monday 80% allocation) on candle
 closes. It is a research tool: confirm any candidate with backtest.dhan_replay before pinning it in
-the strategy module. ``round2`` scores every candidate under both target modes.
+the strategy module. ``round2`` scores every candidate under both target modes; ``round3`` uses the
+entry-day target and pairs each published entry with the nearest-in-time simulated trade of its day
+and side (rounds 1-2 used the first, which miscounted the second 8 Dec 2025 strike).
 """
 from __future__ import annotations
 
@@ -270,9 +274,39 @@ def first_cross(sig, dates, in_window):
     return out
 
 
+def regime(mkt: "Market") -> pd.DataFrame:
+    """Round-3 put-filter features per decision minute (all causal): raw skew, the session-local EMA-10 of
+    the put/call wing IV ratio, ATM call IV, index move since the session's first candle open, the trailing
+    10/20/30-session realised volatility of daily closes (annualised %, up to the previous session's close)
+    and the 5-session return (%)."""
+    if getattr(mkt, "_regime", None) is not None:
+        return mkt._regime
+    f = mkt.features
+    expiry = [mkt.expiry_of[d] for d in mkt.dates]
+    tyrs = years_to_expiry(mkt.clock, expiry)
+    atm = f["atm"].to_numpy()
+    up, dn = atm + s3.WING_STEPS * STEP, atm - s3.WING_STEPS * STEP
+    ivc = implied_vol(np.array([mkt.price(i, up[i], 0) for i in range(mkt.n)]), mkt.close, up, tyrs, True, rate=s3.RISK_FREE_RATE)
+    ivp = implied_vol(np.array([mkt.price(i, dn[i], 1) for i in range(mkt.n)]), mkt.close, dn, tyrs, False, rate=s3.RISK_FREE_RATE)
+    first_open = pd.Series(mkt.open).groupby(mkt.dates).transform("first").to_numpy()
+    last_close = pd.Series(mkt.close, index=mkt.dates).groupby(level=0).last()
+    rv = {w: (np.log(last_close).diff().rolling(w).std() * np.sqrt(252) * 100).shift(1) for w in (10, 20, 30)}
+    ret5 = (100 * (last_close / last_close.shift(5) - 1)).shift(1)
+    mkt._regime = pd.DataFrame({
+        "raw": f["skew"].to_numpy(), "ratio_s": s3.ema_smooth(pd.Series(ivp / ivc, index=mkt.clock), mkt.dates, 10).to_numpy(),
+        "iv_atm": f["iv_atm_ce"].to_numpy(), "intraday": mkt.close - first_open,
+        **{f"rv{w}": v.reindex(mkt.dates).to_numpy() for w, v in rv.items()}, "ret5": ret5.reindex(mkt.dates).to_numpy()},
+        index=mkt.clock)
+    return mkt._regime
+
+
 def build_signal(mkt: "Market", kind="sma", n=15, rank_win=800, cm=s3.SKEW_CALL_MAX, pm=s3.SKEW_PUT_MIN, lo=0.2,
-                 cm_loose=None, pm_loose=None, basis=False, cross=False, persist_n=1):
-    """Candidate entry signal: smoothing -> rank -> (hysteresis) gate -> optional basis / first-cross filters."""
+                 cm_loose=None, pm_loose=None, basis=False, cross=False, persist_n=1, put_hi=None, put_max_dte=None,
+                 put_raw_min=None, put_ratio_min=None, put_rv_max=None, put_rv_win=20, put_iv_max=None,
+                 put_intraday_min=None):
+    """Candidate entry signal: smoothing -> rank -> (hysteresis) gate -> optional basis / first-cross filters.
+    ``put_*`` (round 3) restrict credit put spreads only: rank above ``put_hi`` (instead of 1 - lo), days to
+    expiry, raw skew, smoothed wing IV ratio, realised volatility, ATM IV and intraday move (``regime``)."""
     f = mkt.features
     s = smooth(f["skew"], mkt.dates, kind, n)
     a = rank_window(s, rank_win)
@@ -280,7 +314,18 @@ def build_signal(mkt: "Market", kind="sma", n=15, rank_win=800, cm=s3.SKEW_CALL_
     call_gate = hysteresis_gate(sv, mkt.dates, cm, cm_loose, True) if cm_loose is not None else (sv <= cm)
     put_gate = hysteresis_gate(sv, mkt.dates, pm, pm_loose, False) if pm_loose is not None else (sv >= pm)
     av = a.to_numpy()
-    sig = np.where(call_gate & (av < lo), -1, np.where(put_gate & (av > 1 - lo), 1, 0))
+    put_ok = put_gate & (av > (1 - lo if put_hi is None else put_hi))
+    if any(v is not None for v in (put_max_dte, put_raw_min, put_ratio_min, put_rv_max, put_iv_max, put_intraday_min)):
+        g = regime(mkt)
+        with np.errstate(invalid="ignore"):
+            for value, column, upper in ((put_raw_min, "raw", False), (put_ratio_min, "ratio_s", False), (put_rv_max, f"rv{put_rv_win}", True),
+                                         (put_iv_max, "iv_atm", True), (put_intraday_min, "intraday", False)):
+                if value is not None:
+                    x = g[column].to_numpy()
+                    put_ok &= (x <= value) if upper else (x >= value)
+        if put_max_dte is not None:
+            put_ok &= mkt.dte <= put_max_dte
+    sig = np.where(call_gate & (av < lo), -1, np.where(put_ok, 1, 0))
     if basis:
         b = basis_points(mkt)
         sig = np.where(((sig == -1) & (b > 0)) | ((sig == 1) & (b < 0)), sig, 0)
@@ -309,10 +354,48 @@ def persist(sig, dates, n: int):
 
 
 # --------------------------------------------------------------------------- simulation
+STRIKE_REFS = ("open", "close", "next_open", "prev_close", "forward", "delta50")
+
+
+def short_strike(mkt: Market, i: int, side: int, ref: str = "open") -> float:
+    """Short strike at decision minute ``i`` (completed candle [t-1, t)) under one of the round-3 rules:
+    ``open`` = ATM of that candle's open (round 1-2 rule), ``close`` = ATM of its close (the spot at the
+    decision time), ``next_open`` = ATM of the entry-minute candle's open, ``prev_close`` = ATM of the
+    previous candle's close, ``forward`` = ATM of the parity-implied forward, ``delta50`` = strike whose own
+    spot-based Black-Scholes delta is nearest 0.5 in absolute value."""
+    if ref == "open":
+        return mkt.atm(mkt.open[i])
+    if ref == "close":
+        return mkt.atm(mkt.close[i])
+    if ref == "next_open":
+        return mkt.atm(mkt.open[i + 1]) if i + 1 < mkt.n and mkt.dates[i + 1] == mkt.dates[i] else mkt.atm(mkt.close[i])
+    if ref == "prev_close":
+        return mkt.atm(mkt.close[i - 1]) if mkt.dates[i - 1] == mkt.dates[i] else mkt.atm(mkt.open[i])
+    if ref == "forward":
+        return mkt.atm(mkt.close[i] + basis_points(mkt)[i])
+    if ref == "delta50":
+        from math import erf
+        spot = mkt.close[i]
+        t = float(years_to_expiry(mkt.clock[i:i + 1], [mkt.expiry_of[mkt.dates[i]]])[0])
+        base, best = mkt.atm(spot), None
+        for k in np.arange(base - 300, base + 301, STEP):
+            iv = float(implied_vol(mkt.price(i, k, side), spot, k, t, side == 0, rate=s3.RISK_FREE_RATE)) / 100
+            if not np.isfinite(iv):
+                continue
+            d1 = (np.log(spot / k) + (s3.RISK_FREE_RATE + iv * iv / 2) * t) / (iv * np.sqrt(t))
+            call_delta = 0.5 * (1 + erf(d1 / np.sqrt(2)))
+            err = abs((call_delta if side == 0 else 1 - call_delta) - 0.5)
+            if best is None or err < best[0]:
+                best = (err, float(k))
+        return best[1] if best else mkt.atm(spot)
+    raise ValueError(ref)
+
+
 def simulate(mkt: Market, signal, start=START, end=END, target_frac=0.5, stop_points=45.0, max_dte=5, min_dte=1,
-             weekend=False, target_entry_day_only=False) -> pd.DataFrame:
+             weekend=False, target_entry_day_only=False, strike_ref="open") -> pd.DataFrame:
     """``target_entry_day_only``: the credit target is checked only on the entry date; afterwards the position
-    runs to the stop or the expiry-day exit (what the published overnight trades show)."""
+    runs to the stop or the expiry-day exit (what the published overnight trades show). ``strike_ref``: the
+    short-strike rule (``short_strike``)."""
     sig = np.asarray(signal)
     if not weekend:
         sig = np.where(mkt.weekday >= 5, 0, sig)
@@ -343,7 +426,7 @@ def simulate(mkt: Market, signal, start=START, end=END, target_frac=0.5, stop_po
         if i > end_i or sig[i] == 0 or not mkt.in_window[i] or not (min_dte <= mkt.dte[i] <= max_dte):
             continue
         side = 1 if sig[i] > 0 else 0
-        atm = mkt.atm(mkt.open[i])
+        atm = short_strike(mkt, i, side, strike_ref)
         sell, buy = atm, (atm - WIDTH if side == 1 else atm + WIDTH)
         ps, pb = mkt.price(i, sell, side), mkt.price(i, buy, side)
         if not (np.isfinite(ps) and np.isfinite(pb)) or ps - pb <= 0:
@@ -359,15 +442,25 @@ def simulate(mkt: Market, signal, start=START, end=END, target_frac=0.5, stop_po
     return pd.DataFrame(trades)
 
 
+def paired(trades: pd.DataFrame, r):
+    """The simulated trade on the published entry's day and side nearest to it in entry time, or None.
+    (8 Dec 2025 has two published call spreads; rounds 1-2 compared both with the first simulated one.)"""
+    if not len(trades):
+        return None
+    day = trades[(trades.entry.dt.date == r.entry.date()) & (trades.side == (0 if r.side == "CE" else 1))]
+    if not len(day):
+        return None
+    return day.iloc[int(np.argmin(np.abs((day.entry - r.entry).dt.total_seconds().to_numpy())))]
+
+
 def score(trades: pd.DataFrame, published: pd.DataFrame, label="") -> dict:
     t = trades[trades.reason != "open"] if len(trades) else trades
     matched = same = 0
     for r in published.itertuples():
-        s = 0 if r.side == "CE" else 1
-        day = t[(t.entry.dt.date == r.entry.date()) & (t.side == s)] if len(t) else t
-        if len(day):
+        day = paired(t, r)
+        if day is not None:
             matched += 1
-            same += int(day.sell.iloc[0] == r.sell)
+            same += int(day.sell == r.sell)
     pnl = t.pnl.to_numpy() if len(t) else np.array([])
     cum = np.cumsum(pnl) if len(pnl) else np.array([0.0])
     dd = float((cum - np.maximum.accumulate(cum)).min()) if len(pnl) else 0.0
@@ -381,21 +474,21 @@ def published_in(start=START, end=END) -> pd.DataFrame:
     return p[(p.entry >= start) & (p.entry <= end)]
 
 
-def score_full(mkt: Market, sig, pub: pd.DataFrame, label="", target_entry_day_only=False) -> dict:
+def score_full(mkt: Market, sig, pub: pd.DataFrame, label="", target_entry_day_only=False, strike_ref="open") -> dict:
     """Replay-window score plus the pre-window (Jul-Sep 2025) profile (no published trades there) and the
     mean absolute P&L gap on matched trades."""
-    t = simulate(mkt, sig, target_entry_day_only=target_entry_day_only)
+    t = simulate(mkt, sig, target_entry_day_only=target_entry_day_only, strike_ref=strike_ref)
     main = score(t, pub, label)
     closed = t[t.reason != "open"] if len(t) else t
     gaps = []
     for r in pub.itertuples():
-        s = 0 if r.side == "CE" else 1
-        day = closed[(closed.entry.dt.date == r.entry.date()) & (closed.side == s)] if len(closed) else closed
-        if len(day):
-            gaps.append(abs(float(day.pnl.iloc[0]) - r.pnl))
+        day = paired(closed, r)
+        if day is not None:
+            gaps.append(abs(float(day.pnl) - r.pnl))
     main["pnl_gap"] = round(float(np.mean(gaps)), 0) if gaps else np.nan
     main["exit_mix"] = "/".join(str(int((closed.reason == k).sum())) for k in ("target", "stop", "time", "expiry")) if len(closed) else ""
-    pre = simulate(mkt, sig, start=PRE_START, end=PRE_END, target_entry_day_only=target_entry_day_only)
+    pre = simulate(mkt, sig, start=PRE_START, end=PRE_END, target_entry_day_only=target_entry_day_only,
+                   strike_ref=strike_ref)
     pre = pre[pre.reason != "open"] if len(pre) else pre
     main.update(pre_trades=len(pre), pre_stops=int((pre.reason == "stop").sum()) if len(pre) else 0,
                 pre_pnl=round(float(pre.pnl.sum()), 0) if len(pre) else 0.0)
@@ -418,7 +511,7 @@ def load_market() -> Market:
 def pinned_signal(mkt: Market):
     """The strategy module's current constants (the pickled ``skew_smooth`` column is the round-1 SMA-15)."""
     return build_signal(mkt, kind="ema", n=s3.SMOOTH_WINDOW, rank_win=s3.RANK_WINDOW, cm=s3.SKEW_CALL_MAX,
-                        pm=s3.SKEW_PUT_MIN, lo=s3.BEARISH_RANK)
+                        pm=s3.SKEW_PUT_MIN, lo=s3.BEARISH_RANK, put_rv_max=s3.PUT_RV_MAX, put_rv_win=s3.RV_SESSIONS)
 
 
 def main(argv=None):
@@ -458,7 +551,10 @@ def main(argv=None):
     if command == "round2":
         round2(mkt, pub)
         return
-    raise SystemExit(f"unknown command {command}; use build, baseline, grid or round2")
+    if command == "round3":
+        round3(mkt, pub)
+        return
+    raise SystemExit(f"unknown command {command}; use build, baseline, grid, round2 or round3")
 
 
 ROUND2_DEFAULTS = dict(kind="sma", n=15, rank_win=800, cm=s3.SKEW_CALL_MAX, pm=s3.SKEW_PUT_MIN, lo=0.2,
@@ -524,6 +620,86 @@ def round2(mkt: Market, pub: pd.DataFrame):
     R = R[cols]
     R.to_csv(OUT / "round2_candidates.csv", index=False)
     print(R.sort_values(["pub_like", "pnl"], ascending=False).head(40).to_string())
+
+
+
+# --------------------------------------------------------------------------- round 3
+ROUND2_PINNED = dict(kind="ema", n=10, cm=-3.0, pm=4.5)     # round-2 rule, no put filter
+
+
+def published_minute_strikes(mkt: Market, pub: pd.DataFrame) -> pd.DataFrame:
+    """Short strike each rule picks AT the published entry minute (decision on the candle that just
+    completed), next to the published one: separates the strike rule from entry-timing differences."""
+    rows = []
+    for r in pub.itertuples():
+        i = int(mkt.pos[r.entry])
+        side = 0 if r.side == "CE" else 1
+        row = dict(entry=r.entry, side=r.side, published=r.sell, spot_open=mkt.open[i], spot_close=mkt.close[i])
+        for ref in STRIKE_REFS:
+            row[ref] = short_strike(mkt, i, side, ref)
+        for x in (90, 100, 120, 140):        # premium-level rule: the strike whose short premium is nearest x
+            ks = np.arange(mkt.atm(mkt.close[i]) - 500, mkt.atm(mkt.close[i]) + 501, STEP)
+            px = np.array([mkt.price(i, k, side) for k in ks])
+            row[f"premium{x}"] = float(ks[np.nanargmin(np.abs(px - x))]) if np.isfinite(px).any() else np.nan
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def round3_candidates():
+    """(label, hypothesis, build_signal kwargs, strike_ref) for the third iteration round."""
+    c = [("round2 pinned (open ATM)", "0 baseline", {}, "open")]
+    for ref in STRIKE_REFS[1:]:
+        c.append((f"strike {ref}", "1 strike rule", {}, ref))
+    for v in (0.95, 0.98, 0.99, 0.995):
+        c.append((f"put rank > {v}", "2 put filter", dict(put_hi=v), "open"))
+    for v in (3, 4):
+        c.append((f"put dte <= {v}", "2 put filter", dict(put_max_dte=v), "open"))
+    for v in (4.6, 4.8, 5.0):
+        c.append((f"put gate {v}", "2 put filter", dict(pm=v), "open"))
+    for v in (4.9, 5.0):
+        c.append((f"put raw skew >= {v}", "2 put filter", dict(put_raw_min=v), "open"))
+    for v in (1.2, 1.25, 1.3):
+        c.append((f"put wing IV ratio >= {v}", "2 put filter", dict(put_ratio_min=v), "open"))
+    for v in (20, 22, 25):
+        c.append((f"put ATM IV <= {v}", "2 put filter", dict(put_iv_max=v), "open"))
+    for v in (-50, 0):
+        c.append((f"put intraday move >= {v}", "2 put filter", dict(put_intraday_min=v), "open"))
+    for w, vals in ((10, (14, 16, 18, 20)), (20, (13, 14, 16, 17, 18)), (30, (15, 18))):
+        for v in vals:
+            c.append((f"put rv{w} <= {v}", "2 put filter", dict(put_rv_max=v, put_rv_win=w), "open"))
+    c.append(("put rv20 <= 16 + dte <= 4", "2 put filter", dict(put_rv_max=16, put_max_dte=4), "open"))
+    c.append(("put rv20 <= 16, strike close", "1+2", dict(put_rv_max=16), "close"))
+    return c
+
+
+def round3(mkt: Market, pub: pd.DataFrame):
+    """Third iteration round: (1) short-strike rule, at the published minutes and in the simulator;
+    (2) put-spread filters against the Mar-May 2026 extras; neighbourhood of the chosen filter.
+    Writes round3_strikes.csv, round3_candidates.csv and round3_neighbourhood.csv."""
+    S = published_minute_strikes(mkt, pub)
+    S.to_csv(OUT / "round3_strikes.csv", index=False)
+    rules = [c for c in S.columns if c not in ("entry", "side", "published", "spot_open", "spot_close")]
+    print("published-minute strike matches of", len(S), {c: int((S[c] == S.published).sum()) for c in rules})
+    rows = []
+    for label, hyp, kw, ref in round3_candidates():
+        r = score_full(mkt, build_signal(mkt, **{**ROUND2_PINNED, **kw}), pub, label, target_entry_day_only=True, strike_ref=ref)
+        r.update(hypothesis=hyp, strike_ref=ref, filters=" ".join(f"{k}={v}" for k, v in kw.items()))
+        rows.append(r)
+        print(f"{label:30s} matched {r['matched']:2d} strike {r['same_strike']:2d} extra {r['extra']} stops {r['stops']} "
+              f"trades {r['trades']:2d} pnl {r['pnl']:7.0f} gap {r['pnl_gap']:5.0f} exits {r['exit_mix']:9s} "
+              f"pre {r['pre_trades']}/{r['pre_stops']}/{r['pre_pnl']:.0f}", flush=True)
+    cols = ["label", "hypothesis", "strike_ref", "filters", "matched", "same_strike", "extra", "stops", "trades", "wins",
+            "win_pct", "pnl", "max_dd", "pnl_gap", "exit_mix", "pre_trades", "pre_stops", "pre_pnl"]
+    pd.DataFrame(rows)[cols].to_csv(OUT / "round3_candidates.csv", index=False)
+    rows = []
+    for kind, n, cm, pm, rv in itertools.product(("sma", "ema"), (5, 8, 10, 12, 15), (-2.5, -3.0, -3.5), (4.5, 5.0), (None, 16)):
+        r = score_full(mkt, build_signal(mkt, kind=kind, n=n, cm=cm, pm=pm, put_rv_max=rv), pub, "", target_entry_day_only=True)
+        rows.append(dict(kind=kind, n=n, cm=cm, pm=pm, put_rv20_max=rv, **{k: r[k] for k in cols[4:]}))
+    N = pd.DataFrame(rows)
+    N.to_csv(OUT / "round3_neighbourhood.csv", index=False)
+    a, b = N[N.put_rv20_max.isna()].reset_index(drop=True), N[N.put_rv20_max.notna()].reset_index(drop=True)
+    print(f"neighbourhood ({len(a)} settings), filter vs none: matched change {sorted(set(b.matched - a.matched))}, "
+          f"extra change {sorted(set(b.extra - a.extra))}, stop change {sorted(set(b.stops - a.stops))}")
 
 
 if __name__ == "__main__":

@@ -81,11 +81,13 @@ def test_panel_recovers_skew_and_matches_between_history_and_snapshots():
     assert len(valid) > 0.95 * len(panel)
     assert np.allclose(valid["skew"], 3.0, atol=0.05)
     assert np.allclose(valid["iv_ce_atm"], 13.0, atol=0.05)
-    # weekend special sessions never open the gate
+    # weekend special sessions never open the gate (call side: the put side also needs 21 sessions of history)
     weekend_bars = _bars([date(2026, 9, 26), date(2026, 9, 27)])   # Saturday, Sunday
     weekend = s3.calculate_indicators(weekend_bars, s3.panel_from_options(
-        weekend_bars, _options(weekend_bars, s3.SKEW_PUT_MIN + 2), lambda d: [EXPIRY]))
+        weekend_bars, _options(weekend_bars, s3.SKEW_CALL_MAX - 2), lambda d: [EXPIRY]))
     assert (weekend["gate"] == 0.0).all()
+    weekday = s3.calculate_indicators(bars, s3.panel_from_options(bars, _options(bars, s3.SKEW_CALL_MAX - 2), lambda d: [EXPIRY]))
+    assert (weekday["gate"][weekday["skew_smooth"].notna()] == 1.0).all()
     snapshots = options.reset_index().assign(spot=np.nan)
     from_snapshots = s3.panel_from_snapshots(bars, snapshots)
     pd.testing.assert_frame_equal(from_snapshots, panel)
@@ -136,12 +138,62 @@ def test_indicators_follow_a_skew_regime_change_and_are_causal():
     pd.testing.assert_frame_equal(truncated, ind.iloc[:cut])
 
 
+def _daily_bars(daily_returns, first=date(2026, 8, 3)):
+    """Flat sessions (two minutes each) whose session-to-session log returns are ``daily_returns``."""
+    days = [d.date() for d in pd.bdate_range(first, periods=len(daily_returns) + 1)]
+    level = 24000 * np.exp(np.r_[0.0, np.cumsum(daily_returns)])
+    idx = pd.DatetimeIndex([pd.Timestamp(datetime.combine(d, time(9, 15 + k)), tz=IST) for d in days for k in range(2)])
+    close = np.repeat(level, 2)
+    return pd.DataFrame({"open": close, "close": close}, index=idx), days
+
+
+def test_realised_vol_uses_previous_twenty_sessions_only():
+    rng = np.random.default_rng(11)
+    returns = rng.normal(0, 0.01, 25)
+    bars, days = _daily_bars(returns)
+    rv = s3.realised_vol(bars["close"], bars.index.date)
+    by_day = rv.groupby(bars.index.date).agg(["first", "last"])
+    assert (by_day["first"].dropna() == by_day["last"].dropna()).all()          # constant within a session
+    assert by_day["first"].iloc[:s3.RV_SESSIONS + 1].isna().all()                # needs 21 earlier sessions
+    expected = np.std(returns[-1 - s3.RV_SESSIONS:-1], ddof=1) * np.sqrt(252) * 100
+    assert by_day["first"].iloc[-1] == pytest.approx(expected)                  # through the previous close
+    # causality: today's own close never enters today's value
+    moved = bars.copy(); moved.loc[moved.index.date == days[-1], "close"] *= 1.05
+    assert s3.realised_vol(moved["close"], moved.index.date).iloc[-1] == pytest.approx(rv.iloc[-1])
+
+
+def test_put_spreads_need_a_calm_realised_volatility_calls_do_not(monkeypatch):
+    # short sessions: raw skew and a 20-minute rank, so 25 two-minute sessions are enough
+    monkeypatch.setattr(s3, "SMOOTH_WINDOW", 1)
+    monkeypatch.setattr(s3, "RANK_WINDOW", 20)
+    monkeypatch.setattr(s3, "RANK_MIN_PERIODS", 10)
+
+    def run(sigma, skew_sign):
+        rng = np.random.default_rng(5)
+        signs = np.where(np.arange(24) % 2 == 0, 1.0, -1.0)
+        bars, _ = _daily_bars(signs * sigma + rng.normal(0, sigma / 10, 24))
+        clock = bars.index + pd.Timedelta(minutes=1)
+        steps = np.arange(len(clock), dtype=float)
+        panel = pd.DataFrame({"skew": skew_sign * (s3.SKEW_PUT_MIN + 1 + steps / 100),   # always at a rank extreme
+                              "iv_ce_atm": 13.0}, index=clock)
+        return s3.calculate_indicators(bars, panel).iloc[-2:]
+    calm, wild = run(0.003, 1), run(0.015, 1)        # about 5% and 24% annualised
+    assert (calm["rv"] < s3.PUT_RV_MAX).all() and (wild["rv"] > s3.PUT_RV_MAX).all()
+    assert (calm["gate"] == 1.0).all() and (calm["alpha2"] > s3.BULLISH_RANK).all()
+    assert (wild["gate"] == 0.0).all() and (wild["alpha2"] == 0.5).all() and (wild["alpha"] > s3.BULLISH_RANK).all()
+    calls = run(0.015, -1)                            # rich calls trade whatever the realised volatility
+    assert (calls["gate"] == 1.0).all() and (calls["alpha2"] < s3.BEARISH_RANK).all()
+
+
 def test_profile_pins_expiry_style_rules():
     cfg = registry.apply_profile("ratio_strategy_03")
     assert (cfg.bullish_threshold, cfg.bearish_threshold) == (s3.BULLISH_RANK, s3.BEARISH_RANK)
     assert cfg.target_credit_fraction == 0.5 and cfg.time_exit_on_expiry and cfg.time_exit == time(14, 57)
     assert cfg.target_entry_day_only is True and s3.TARGET_ENTRY_DAY_ONLY
     assert (s3.SMOOTH_WINDOW, s3.SKEW_CALL_MAX, s3.SKEW_PUT_MIN) == (10, -3.0, 4.5)
+    assert (s3.RV_SESSIONS, s3.PUT_RV_MAX) == (20, 16.0)
+    from data.providers.dhan import DhanLiveProvider
+    assert DhanLiveProvider.BAR_HISTORY_DAYS >= s3.HISTORY_DAYS >= 35   # 21 sessions plus holidays
     assert cfg.max_days_to_expiry == 5 and not cfg.allow_expiry_day_entry
     assert cfg.strike_reference == "last_bar_open" and cfg.spread_distance == 400
     assert cfg.historical_time_exit_start is None

@@ -13,16 +13,26 @@
 # -----------------------------------
 # * Nearest weekly NIFTY expiry only. Entries 10:16-14:38 IST; never on the
 #   expiry date; never with more than five days to expiry (no Wednesday entry).
-# * Short strike = ATM strike of the last completed one-minute candle (open:
-#   12/13 checked trades; close: 11/13). Hedge 400 points further OTM (300 in
-#   the 2025 backtest rows, 400 in every 2026 trade). Published fills sit within
-#   about two points of the candle closes around the entry minute.
+# * Short strike = ATM strike of the last completed one-minute candle. At the
+#   published entry minutes its close gives 17/18 in-window strikes and its open
+#   15/18; the parity forward 6, the nearest-50-delta strike 10 and any
+#   nearest-premium level at most 7 (round 3). The open is kept: in the replay
+#   it pairs 11/14 matched trades with the published strike, the close 10/14
+#   (it loses 18 May 2026), and the three remaining misses (3 Nov, 8 Dec 2025,
+#   27 Aug 2026) are entry-minute differences that no strike rule fixes. Hedge
+#   400 points further OTM (300 in the 2025 backtest rows, 400 in every 2026
+#   trade). Published fills sit within about two points of the candle closes
+#   around the entry minute.
 # * Direction: 15 credit CALL spreads, 4 credit PUT spreads. At every entry the
 #   100-point OTM put IV minus 100-point OTM call IV ("skew") was at an extreme
 #   of its trailing 800-minute rank: call spreads when the skew was unusually
 #   low or negative (calls rich), put spreads when the skew was unusually high
 #   (puts rich). The sold side is always the relatively expensive side. Three of
 #   the four put entries had a raw skew of 4.5-5.0 IV points, the fourth 2.5.
+# * No put spread in a turbulent market: the realised volatility of the last 20
+#   daily index returns was 8.4-13.6% (annualised) at the four published put
+#   entries; the provider sold no put between 10 Mar and 17 May 2026, after the
+#   March 2026 sell-off, when it was 17.9-27.3%.
 # * Exits: five targets at exactly 50% of the entry credit (0.497-0.512), every
 #   one on the entry day; two stops at roughly credit + 40 to 45 points (5% of
 #   margin per lot); every position carried overnight ran to the scheduled
@@ -55,7 +65,11 @@
 #                     minute whose own skew is unknown (ema_smooth below)
 # Indicators:
 #   alpha  = trailing 800-observation percentile rank of skew_s (min 720 valid)
-#   gate   = skew_s <= SKEW_CALL_MAX (calls rich) or skew_s >= SKEW_PUT_MIN (puts rich)
+#   rv     = annualised % standard deviation of the last RV_SESSIONS session-to-
+#            session log returns of the index's session close, through the
+#            previous session (realised_vol below; unknown -> no put spread)
+#   gate   = skew_s <= SKEW_CALL_MAX (calls rich), or
+#            skew_s >= SKEW_PUT_MIN and rv <= PUT_RV_MAX (puts rich, calm market)
 #   alpha2 = alpha where the gate holds, otherwise 0.5 (neutral); also neutral on
 #            Saturday/Sunday special sessions (the provider never traded one)
 # Signal (10:15-14:15 IST, flat, nearest expiry 1-5 days away):
@@ -87,6 +101,22 @@
 #   basis-sign confirmation and first-cross entry were tested and rejected
 #   (round2_candidates.csv): basis sign and hysteresis change nothing, the
 #   others trade matches for extras.
+#   round 3 (round3_summary.md, round3_candidates.csv, round3_neighbourhood.csv):
+#   four of the five extras were put spreads (19 Mar stop, 23 Mar, 20 Apr,
+#   21 May 2026). The 20-session realised-volatility cap of 16% on put entries
+#   removes 19 Mar, 23 Mar and 20 Apr and no published entry: 16 trades,
+#   16 winners, 0 stops, 14/18 matched (11 with the published strike), 2 extras
+#   (21 May put, 29 May call), INR 484,642, exits 4 target / 6 scheduled /
+#   6 settled. Any cap from 14 to 17 (or a 10-session window at 16-20) gives the
+#   identical trade list; 13 drops 18 May and 13 Jul. On all 60 smoothing/gate
+#   neighbours it never loses a match and removes 1-4 extras and 0-2 stops.
+#   Rejected: put rank > 0.98-0.995 (removes the stop, keeps 3-4 extras); put
+#   gate 4.6-5.0, raw-skew floor, wing IV ratio, ATM IV cap, intraday move
+#   (each keeps the 19 Mar stop or loses a match); the realised-volatility cap
+#   plus "put at most 4 days to expiry" also removes 21 May (15 trades,
+#   1 extra) but rests on that one trade and 4 put entries, so it is not pinned.
+#   The pre-window Jul-Sep 2025 has no put signal, so it cannot test the filter
+#   (2 call trades, 2 winners, unchanged).
 """Named Ratio-Fluxer style IV-skew credit spread implementation."""
 from __future__ import annotations
 
@@ -101,10 +131,11 @@ from strategy.implied_vol import implied_vol, years_to_expiry
 from utils.time import IST
 
 STRATEGY_NAME = 'ratio_strategy_03'
-DESCRIPTION = 'Ratio-Fluxer style expiry credit spread; opening ATM, EMA-10 smoothed 100-point IV skew rank 800, 50% credit target on the entry day only.'
+DESCRIPTION = 'Ratio-Fluxer style expiry credit spread; opening ATM, EMA-10 smoothed 100-point IV skew rank 800, puts only below 16% 20-session realised volatility, 50% credit target on the entry day only.'
 PROFIT_TARGET_ENABLED = True
 LIMITATIONS = [
-    'ratio_strategy_03 is a structural replica fitted to 19 published Ratio-Fluxer trades; the provider trigger is private, and the smoothed-skew gate was tuned on those trades (14/18 same-day matches, about one extra trade in four).',
+    'ratio_strategy_03 is a structural replica fitted to 19 published Ratio-Fluxer trades; the provider trigger is private, and the smoothed-skew gate and the put realised-volatility cap were tuned on those trades (14/18 same-day matches, 2 extra trades in 16).',
+    'Put spreads need 21 completed sessions of index candles for the realised volatility (HISTORY_DAYS); with less history no put spread is opened.',
     'Skew uses own spot-based Black-Scholes IV (6.5% rate) of candle closes at ATM +/-100, smoothed with a session-local exponential mean (span 10); a missing wing candle leaves the minute unknown and no trade is forced. Saturday/Sunday special sessions never enter.',
     'Minute-close execution: bid/ask, intraminute stop/target touches and exact fills are unavailable; the 50% credit target (entry day only, as the published overnight trades show) and the margin stop are checked once per minute.',
     'Estimated margin (2.25 x width x lot size) sizes positions and sets the stop; it is not historical broker margin or forced liquidation.',
@@ -122,6 +153,9 @@ RISK_FREE_RATE = 0.065         # flat continuous rate for the spot-based Black-S
 SMOOTH_WINDOW = 10             # span of the session-local exponential mean of the skew, in minutes
 SKEW_CALL_MAX = -3.0           # IV points (smoothed): calls richer than puts -> credit call spread
 SKEW_PUT_MIN = 4.5             # IV points (smoothed): puts much richer than calls -> credit put spread
+RV_SESSIONS = 20               # realised volatility of the last 20 session-to-session index returns
+PUT_RV_MAX = 16.0              # annualised %: no credit put spread when realised volatility is above this
+HISTORY_DAYS = 45              # calendar days of index candles the realised volatility needs (>= 21 sessions)
 TARGET_ENTRY_DAY_ONLY = True   # the 50% credit target is live on the entry date only
 BULLISH_RANK = 0.8
 BEARISH_RANK = 0.2
@@ -182,6 +216,16 @@ def ema_smooth(values: pd.Series, sessions, span: int = SMOOTH_WINDOW) -> pd.Ser
     return pd.Series(out, index=values.index)
 
 
+def realised_vol(close: pd.Series, sessions, window: int = RV_SESSIONS) -> pd.Series:
+    """Annualised % standard deviation of the last ``window`` session-to-session log returns of the
+    session's last close, through the PREVIOUS session (constant within a session, causal). Unknown until
+    ``window + 1`` earlier sessions exist."""
+    sessions = np.asarray(sessions)
+    last = pd.Series(pd.to_numeric(close, errors='coerce').to_numpy(dtype=float), index=sessions).groupby(level=0).last()
+    rv = (np.log(last).diff().rolling(window, min_periods=window).std(ddof=1) * np.sqrt(252) * 100).shift(1)
+    return pd.Series(rv.reindex(sessions).to_numpy(), index=close.index)
+
+
 def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
     """Completed start-indexed bars + decision-indexed near panel -> alpha/alpha2 frame."""
     bars = _bars(bars); clock = bars.index + pd.Timedelta(minutes=1)
@@ -197,11 +241,14 @@ def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFram
     skew_s = ema_smooth(skew, clock.date, SMOOTH_WINDOW)
     alpha = skew_s.rolling(RANK_WINDOW, min_periods=RANK_MIN_PERIODS).rank(method='average', pct=True)
     weekend = np.array([d.weekday() >= 5 for d in clock.date])
-    gate = ((skew_s <= SKEW_CALL_MAX) | (skew_s >= SKEW_PUT_MIN)) & ~weekend
+    # Put spreads only in a calm market: unknown realised volatility (too little history) blocks them.
+    rv = realised_vol(pd.Series(bars.close.to_numpy(), index=clock), clock.date, RV_SESSIONS)
+    put_gate = (skew_s >= SKEW_PUT_MIN) & (rv <= PUT_RV_MAX)
+    gate = ((skew_s <= SKEW_CALL_MAX) | put_gate) & ~weekend
     alpha2 = pd.Series(np.where(gate & alpha.notna(), alpha, 0.5), index=clock)
     alpha2 = alpha2.where(alpha.notna())        # unknown alpha stays unknown
     return pd.DataFrame({'alpha': alpha, 'alpha2': alpha2, 'skew': skew, 'skew_smooth': skew_s,
-                         'atm_iv': atm_iv, 'gate': gate.astype(float)}, index=clock)
+                         'atm_iv': atm_iv, 'rv': rv, 'gate': gate.astype(float)}, index=clock)
 
 
 def _near_expiries(clock, resolver, quotes):

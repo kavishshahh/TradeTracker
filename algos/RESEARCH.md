@@ -99,7 +99,8 @@ What the published trades show, verified against Dhan minute data:
 
 - nearest weekly expiry; entries 10:16-14:38 IST, never on the expiry date, never more
   than five days before it (no Wednesday entry in 19 trades);
-- short strike = ATM of the last completed candle (open matches 12/13 checked trades),
+- short strike = ATM of the last completed candle (at the published entry minutes its close
+  matches 17/18 in-window strikes and its open 15/18; the replay keeps the open, see round 3),
   hedge 400 points further OTM (300 in the 2025 backtest rows);
 - published fills within about two points of the candle closes around the entry minute;
 - five intraday exits at exactly 50% of the entry credit, all on the entry day; scheduled
@@ -113,14 +114,18 @@ What the published trades show, verified against Dhan minute data:
   of its 800-minute rank, the sold side being the relatively expensive one. Using a
   parity-implied forward instead of spot removes the effect, so the futures basis is part
   of the signal: it was +23 to +84 points at every call-spread entry and -19 to -37 at
-  every put-spread entry.
+  every put-spread entry;
+- the four published put spreads were sold with the 20-session realised volatility of the
+  index at 8.4-13.6% (annualised); none was sold after the March 2026 sell-off while it
+  stood at 17.9-27.3%.
 
 Rule: own spot-based Black-Scholes IV (6.5% rate, `strategy/implied_vol.py`), skew =
 IV(PE, ATM-100) - IV(CE, ATM+100) smoothed with a session-local exponential mean of span 10
 (restarted each session, unknown for its first 9 minutes), alpha = 800-minute percentile rank
 of that smoothed skew. Credit CALL spread when the smoothed skew <= -3.0 IV points and
-alpha < 0.2; credit PUT spread when it is >= 4.5 and alpha > 0.8; no entries in
-Saturday/Sunday special sessions. Target 50% of credit on the entry day only
+alpha < 0.2; credit PUT spread when it is >= 4.5, alpha > 0.8 and the annualised realised
+volatility of the last 20 daily index returns (through the previous session) is at most 16%;
+no entries in Saturday/Sunday special sessions. Target 50% of credit on the entry day only
 (`target_entry_day_only`), stop 5% of normal margin per lot, 14:57 exit on expiry day, one
 position, 320,000 capital with 80% on Mondays from 6 April 2026.
 
@@ -143,29 +148,40 @@ and the exponential span-10 mean with -3.0/4.5 matches 14/18 published entries (
 27 Oct 2025 and 18 May 2026 return) with 5 extra trades and 1 stop. Neighbours (spans 8-12,
 simple means 8-10, put gate 4.5-5.0) score 13-14 matched with 4-6 extras and 0-1 stops; a
 -2.5 call gate adds 7-12 extras with 2-4 stops, -3.5 drops to 8-11 matched. The pre-window
-Jul-Sep 2025 (no published trades) gives 2 trades, both winners.
+Jul-Sep 2025 (no published trades) gives 2 trades, both winners. Round 3
+(`reports/ratio_research/round3_summary.md`, `round3_strikes.csv`, `round3_candidates.csv`,
+`round3_neighbourhood.csv`): no short-strike rule beats the last-candle open in the replay
+(close and entry-minute open pair 10/14 matched trades with the published strike instead of
+11/14; parity forward, nearest-50-delta and premium-level rules are far worse); the three
+remaining strike misses are entry-minute differences. Four of the five round-2 extras were put
+spreads; capping the 20-session realised volatility at 16% for put entries removes 19 Mar
+(the stop), 23 Mar and 20 Apr 2026 and no published entry. Caps of 14-17 (10-session window:
+16-20) give the identical trade list, and on all 60 smoothing/gate neighbours the cap never
+loses a match while removing 1-4 extras and 0-2 stops. Put-rank, put-gate, raw-skew, wing IV
+ratio, ATM IV and intraday-move filters were rejected; "put at most 4 days to expiry" would
+also remove 21 May but rests on that single trade.
 
 Replay 1 Oct 2025 - 30 Sep 2026 (entries), fixed INR 320,000, gross, Dhan minute closes
-(`reports/ratio_strategy_03_2025-10-01_2026-09-30/`; the round-1 replay is kept in
-`reports/ratio_strategy_03_2025-10-01_2026-09-30_round1_sma15/`):
+(`reports/ratio_strategy_03_2025-10-01_2026-09-30/`; the round-1 and round-2 replays are kept in
+`reports/ratio_strategy_03_2025-10-01_2026-09-30_round1_sma15/` and `..._round2_ema10/`):
 
 | Measure | ratio_strategy_03 replay | Published Ratio-Fluxer (same window) |
 |---|---:|---:|
-| Closed trades / win rate | 19 / 94.74% | 18 / 88.9% |
-| Gross realized P&L | INR 545,680 | INR 397,006 (reported) |
-| Return / CAGR equivalent | 170.53% / 170.71% | n/a |
-| Realized max drawdown | 5.13% (INR 16,429) | n/a |
-| Trailing 1m / 3m / 6m | 32.10% / 65.94% / 118.97% | n/a |
-| Exits: target / stop / scheduled / settled | 4 / 1 / 6 / 8 | 5 target, 2 stop, 11 scheduled |
+| Closed trades / win rate | 16 / 100% | 18 / 88.9% |
+| Gross realized P&L | INR 484,642 | INR 397,006 (reported) |
+| Return / CAGR equivalent | 151.45% / 151.61% | n/a |
+| Realized max drawdown | 0.00% | n/a |
+| Trailing 1m / 3m / 6m | 32.10% / 65.94% / 109.36% | n/a |
+| Exits: target / stop / scheduled / settled | 4 / 0 / 6 / 6 | 5 target, 2 stop, 11 scheduled |
 
 The replay opened a position on the same day and side as 14 of the 18 published entries
-(10 with the identical short strike) and added 5 trades of its own: the 19 Mar (stop)
-and 23 Mar 2026 put spreads, the 20 Apr and 21 May 2026 put spreads and the 29 May 2026 call
-spread. The 4 misses are the 17 Nov 2025 and 10 Aug 2026 call spreads (smoothed skew near
--2.0), the 22 Dec 2025 put spread (2.5) and the provider's losing 9 Mar 2026 call spread
-(0.6). Held spreads now earn close to the full credit, which is why the P&L exceeds the
-published figure while the mean absolute P&L gap on matched trades fell from 8,448 to about
-5,200. "Expiry" exits are positions whose legs left the ATM +/-10 archive before 14:57 and
+(11 with the identical short strike) and added 2 trades of its own: the 21 May 2026 put
+spread and the 29 May 2026 call spread (round 2 also had the 19 Mar (stop), 23 Mar and 20 Apr
+2026 put spreads). The 4 misses are the 17 Nov 2025 and 10 Aug 2026 call spreads (smoothed
+skew near -2.0), the 22 Dec 2025 put spread (2.5) and the provider's losing 9 Mar 2026 call
+spread (0.6), so the replay has neither of the provider's two stops. Held spreads earn close
+to the full credit, which is why the P&L exceeds the published figure; the mean absolute P&L
+gap on matched trades is about 4,300 (round 1: 8,400). "Expiry" exits are positions whose legs left the ATM +/-10 archive before 14:57 and
 were settled at the official NSE close. The round-1 rule (15-minute simple mean, -3.0/5.0,
 target every day) produced 19 trades, 18 winners and INR 404,879 with 15 target exits; the
 unsmoothed gate (-2.0/4.5, `reports/strategy_03_2025-10-01_2026-09-30/`) 42 trades, 69%
@@ -174,11 +190,14 @@ rule was tuned on these same published trades, so forward paper results are the 
 Research harness: `backtest/ratio_research.py` rebuilds the minute dataset from the cache
 (`build`), replays the pinned rule in a tenth of a second (`baseline`), scans smoothing,
 gate and persistence settings (`grid`) and scores the round-2 hypotheses under both target
-modes (`round2`, writes `reports/ratio_research/round2_candidates.csv`). Use it for the next
+modes (`round2`, writes `reports/ratio_research/round2_candidates.csv`) and the round-3
+strike rules and put filters (`round3`, writes `round3_*.csv`). Use it for the next
 iterations and confirm any candidate with `backtest.dhan_replay` before pinning it.
 
 Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28 days from
-18 June 2025, so `--start` minus 21 days must land on one):
+18 June 2025, so `--start` minus 21 days must land on one). The realised volatility needs
+45 days of index candles (`HISTORY_DAYS`): the replay adds index-only 28-day chunks before the
+21-day option warm-up.
 
 ```powershell
 ..\.venv\Scripts\python.exe -B -u -m backtest.dhan_replay --strategy ratio_strategy_03 --start 2025-10-01 --end 2026-09-30 --exit-tail-days 1 --provider-history-rules --offline --output ..\reports\ratio_strategy_03_2025-10-01_2026-09-30
@@ -187,7 +206,10 @@ Replay from `zen_credit/` (offline cache from June 2025; chunk boundaries are 28
 Live paper trading needs no new data feed: the panel is built from the stored minute chain
 snapshots (LTP) with the same IV solver, so set `STRATEGY_NAME=ratio_strategy_03` or enable its
 catalogue record (`backend/seed_data/algos_catalog.json`, disabled by default) for the
-shared paper worker. Allow two sessions of snapshots before the 800-minute rank is valid.
+shared paper worker. Allow two sessions of snapshots before the 800-minute rank is valid. The
+realised-volatility put filter needs 21 completed sessions of index candles; the Dhan live
+provider now keeps 45 days of them (`DhanLiveProvider.BAR_HISTORY_DAYS`, fetched from Dhan's
+intraday chart API at start-up), so it needs no warm-up of its own.
 
 ## Original supplied-description interpretation (`--strategy description`)
 

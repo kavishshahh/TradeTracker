@@ -35,6 +35,9 @@ def trade_time(raw):
 class DhanLiveProvider(MarketDataProvider):
     ENDPOINTS = {'/marketfeed/quote', '/charts/intraday'}
     MASTER = 'https://images.dhan.co/api-data/api-scrip-master-detailed.csv'
+    # Index candle history kept for indicators: ratio_strategy_03's 20-session realised volatility needs
+    # at least 21 completed sessions; the minute-based ranks of the other strategies need two sessions.
+    BAR_HISTORY_DAYS = 45
 
     def __init__(self, session=None, clock=now_ist, sleeper=time.sleep):
         self.session = session or requests.Session()
@@ -174,7 +177,7 @@ class DhanLiveProvider(MarketDataProvider):
         if 'bars' in self.cache:
             return complete_bars(self.cache['bars'], as_of)
         # Bootstrap price alpha from Dhan history; overlap updates to catch revisions.
-        start = as_of - timedelta(days=10) if self.bars is None or self.bars.empty else self.bars.index[-1].to_pydatetime() - timedelta(minutes=10)
+        start = as_of - timedelta(days=self.BAR_HISTORY_DAYS) if self.bars is None or self.bars.empty else self.bars.index[-1].to_pydatetime() - timedelta(minutes=10)
         result = self.request('/charts/intraday', {'securityId': '13', 'exchangeSegment': 'IDX_I',
             'instrument': 'INDEX', 'interval': '1', 'oi': False,
             'fromDate': start.strftime('%Y-%m-%d %H:%M:%S'), 'toDate': as_of.strftime('%Y-%m-%d %H:%M:%S')})
@@ -191,7 +194,7 @@ class DhanLiveProvider(MarketDataProvider):
             raise MarketDataError('Invalid Dhan index candle response') from None
         merged = pd.concat([self.bars, frame]) if self.bars is not None else frame
         self.bars = complete_bars(normalize_bars(merged), as_of)
-        self.bars = self.bars[self.bars.index >= as_of - timedelta(days=10)]
+        self.bars = self.bars[self.bars.index >= as_of - timedelta(days=self.BAR_HISTORY_DAYS)]
         if self.bars.empty:
             raise MarketDataError('No completed Dhan index candles')
         self.cache['bars'] = self.bars

@@ -21,6 +21,13 @@ documents themselves. The old algo_engines/{old}/* history is left in place:
 nothing reads it once the registry uses the new ids, and walking it costs one
 read per document (about 8,500 for the two Zen strategies).
 
+--purge-old-history deletes everything under algo_engines/{old} (all eight
+subcollections). It first counts the documents with aggregation queries (about
+one read per 1,000 documents) and prints the cost; add --yes to delete. The
+delete pass lists ids with an empty field mask (one read per document, about
+8,600 in total) and deletes in batches of 500 (one delete per document; the
+free tier allows 20,000 deletes a day). It refuses any id the registry uses.
+
 Cost note: --apply streams every engine subcollection and checks each target,
 about 2 reads per document; on the free tier (50,000 reads/day) one dry run
 plus one apply used most of the daily quota on 19 Oct 2026.
@@ -79,16 +86,65 @@ def delete_old(db, log):
     return len(refs)
 
 
+def count_old_history(db):
+    """Document counts per old engine subcollection via aggregation (cheap reads)."""
+    counts = {}
+    for old in RENAMES:
+        engine = db.collection('algo_engines').document(old)
+        for sub in ENGINE_SUBCOLLECTIONS:
+            result = engine.collection(sub).count().get()
+            counts[(old, sub)] = int(result[0][0].value)
+    return counts
+
+
+def purge_old_history(db, log, batch_size=500):
+    from strategy.registry import STRATEGIES
+    active = set(STRATEGIES)
+    if active & set(RENAMES):
+        raise SystemExit(f'refusing: {sorted(active & set(RENAMES))} is still a registered strategy id')
+    deleted = 0
+    for old in RENAMES:
+        engine = db.collection('algo_engines').document(old)
+        for sub in ENGINE_SUBCOLLECTIONS:
+            # Empty field mask: ids only. Each listed document is still one read.
+            refs = [doc.reference for doc in engine.collection(sub).select([]).stream()]
+            for i in range(0, len(refs), batch_size):
+                batch = db.batch()
+                for ref in refs[i:i + batch_size]:
+                    batch.delete(ref)
+                batch.commit()
+            deleted += len(refs)
+            if refs:
+                log(f'deleted {len(refs)} documents from {engine.path}/{sub}')
+        engine.delete()
+    return deleted
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--apply', action='store_true', help='write the copies; default is a dry run')
     parser.add_argument('--delete-old', action='store_true', help='delete the old-id catalogue, paper-state and follow rows (engine history is left)')
+    parser.add_argument('--purge-old-history', action='store_true', help='count, then (with --yes) delete all algo_engines/{old}/* documents')
+    parser.add_argument('--yes', action='store_true', help='confirm the purge after reviewing the counted cost')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root / 'algos/zen_credit'))
     from execution.firebase_client import get_firestore_client
     db = get_firestore_client()
     log = print
+    if args.purge_old_history:
+        counts = count_old_history(db)
+        total = sum(counts.values())
+        for (old, sub), n in counts.items():
+            if n:
+                log(f'{old}/{sub}: {n}')
+        log(f'{total} old history documents; purge costs about {total} reads and {total} deletes')
+        if not args.yes:
+            log('count only; rerun with --yes to delete')
+            return
+        deleted = purge_old_history(db, log)
+        print(f'Purged {deleted} old history documents.')
+        return
     if args.delete_old:
         count = delete_old(db, log)
         print(f'Deleted {count} old-id rows (deleting a missing document is a no-op).')

@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "A completely free trading journal and performance analytics application.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f4f1e9",
-    theme_color: "#1f6b46",
+    background_color: "#f6f7f9",
+    theme_color: "#0c9b63",
     categories: ["finance", "business", "productivity"],
     lang: "en",
   };

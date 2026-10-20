@@ -1001,8 +1001,8 @@ export default function Dashboard() {
                       dot={(props) => {
                         const { payload } = props;
                         let color = 'var(--positive)';
-                        if (payload?.type === 'current') color = '#A67B32';
-                        if (payload?.type === 'month_start') color = '#687A6D';
+                        if (payload?.type === 'current') color = 'var(--warning)';
+                        if (payload?.type === 'month_start') color = 'var(--muted-foreground)';
                         return <circle {...props} fill={color} r={4} stroke={color} strokeWidth={2} />;
                       }}
                     />

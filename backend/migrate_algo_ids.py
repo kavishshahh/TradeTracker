@@ -25,7 +25,8 @@ read per document (about 8,500 for the two Zen strategies).
 subcollections). It first counts the documents with aggregation queries (about
 one read per 1,000 documents) and prints the cost; add --yes to delete. The
 delete pass lists ids with an empty field mask (one read per document, about
-8,600 in total) and deletes in batches of 500 (one delete per document; the
+8,600 in total) and deletes in batches of 50 (large snapshot documents make a
+batch of 500 fail with "Transaction too big"; one delete per document; the
 free tier allows 20,000 deletes a day). It refuses any id the registry uses.
 
 Cost note: --apply streams every engine subcollection and checks each target,
@@ -97,7 +98,7 @@ def count_old_history(db):
     return counts
 
 
-def purge_old_history(db, log, batch_size=500):
+def purge_old_history(db, log, batch_size=50):
     from strategy.registry import STRATEGIES
     active = set(STRATEGIES)
     if active & set(RENAMES):

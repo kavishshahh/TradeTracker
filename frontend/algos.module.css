@@ -158,6 +158,16 @@
 .cellProfit { background: var(--up-soft); }
 .cellLoss { background: var(--down-soft); }
 .cellToday { box-shadow: inset 0 0 0 1px var(--primary); }
+button.calendarCell { width: 100%; text-align: left; border: 0; font: inherit; }
+button.calendarCell:hover { box-shadow: inset 0 0 0 1px var(--border); }
+.cellSelected, button.cellSelected:hover { box-shadow: inset 0 0 0 2px var(--primary); }
+.cellLines { display: flex; flex-direction: column; gap: 4px; }
+.cellLines b { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 5px; }
+.backtestMark { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-right: 5px; font-size: 9px; font-style: normal; font-weight: 700; color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); border-radius: 3px; vertical-align: 1px; }
+.legend { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 14px 0 0; font-size: 11px; color: var(--muted-foreground); }
+.monthNav { display: flex; align-items: center; gap: 6px; }
+.monthNav button { display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted-foreground); background: var(--card); border: 1px solid var(--border); border-radius: 6px; }
+.monthNav button:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); }
 .aboutText { margin: 0 0 20px; font-size: 13px; line-height: 1.7; }
 .rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 32px; margin: 0; }
 .rules dt { font-size: 12px; font-weight: 500; }

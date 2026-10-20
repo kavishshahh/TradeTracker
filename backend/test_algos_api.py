@@ -57,7 +57,7 @@ class APIAuthenticationTests(unittest.TestCase):
         self.app.include_router(create_algos_router(self.db, user))
 
     def test_auth_required_for_all_routes(self):
-        for path, method, body in [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]:
+        for path, method, body in [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/backtest/zen_strategy_01','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]:
             self.assertEqual(asyncio.run(request(self.app,path,method,body=body))[0],401)
         self.assertEqual(set(self.db), self.catalog_keys)
 
@@ -85,6 +85,14 @@ class APIAuthenticationTests(unittest.TestCase):
         _, body = asyncio.run(request(self.app, '/algos/catalog', user='alice'))
         self.assertEqual(body['strategies'], [])
 
+    def test_backtest_ledger_is_one_document_and_missing_ids_are_404(self):
+        self.db['algo_backtests/zen_strategy_01'] = {'trade_count': 1, 'trades': [{'pnl': 10.0}], 'strategy_id': 'spoofed'}
+        status, body = asyncio.run(request(self.app, '/algos/backtest/zen_strategy_01', user='alice'))
+        self.assertEqual(status, 200)
+        self.assertEqual((body['strategy_id'], body['trade_count'], body['execution']), ('zen_strategy_01', 1, 'paper_only'))
+        self.assertEqual(asyncio.run(request(self.app, '/algos/backtest/zen_strategy_02', user='alice'))[0], 404)
+        self.assertEqual(asyncio.run(request(self.app, '/algos/backtest/Bad.Id', user='alice'))[0], 404)
+
     def test_unknown_strategy_and_unavailable_storage_fail_explicitly(self):
         status, _ = asyncio.run(request(self.app,'/algos/follow/unknown','PUT','alice',{'enabled':True}))
         self.assertEqual(status,404)
@@ -93,6 +101,7 @@ class APIAuthenticationTests(unittest.TestCase):
         app.include_router(create_algos_router(None,user))
         self.assertEqual(asyncio.run(request(app,'/algos/paper'))[0],503)
         self.assertEqual(asyncio.run(request(app,'/algos/catalog'))[0],503)
+        self.assertEqual(asyncio.run(request(app,'/algos/backtest/zen_strategy_01'))[0],503)
 
 
 class PaperSnapshotTests(unittest.TestCase):

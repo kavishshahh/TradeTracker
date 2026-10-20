@@ -1,4 +1,5 @@
 """Authenticated algo catalogue and paper account views; no broker order routes."""
+import re
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -42,6 +43,20 @@ def create_algos_router(db, get_current_user):
             return {'following': subscriptions, 'strategies': states, 'execution': 'paper_only'}
         except Exception:
             raise HTTPException(503, 'Paper account data is unavailable') from None
+
+    @router.get('/backtest/{strategy_id}')
+    async def backtest(strategy_id: str, current_user: str = Depends(get_current_user)):
+        """One strategy's backtest trade ledger: a single document read, fetched on demand by the browser."""
+        require_db()
+        if not re.fullmatch(r'[a-z0-9_]{1,64}', strategy_id):
+            raise HTTPException(404, 'Unknown strategy')
+        try:
+            doc = db.collection('algo_backtests').document(strategy_id).get()
+        except Exception:
+            raise HTTPException(503, 'Backtest ledger is unavailable') from None
+        if not doc.exists:
+            raise HTTPException(404, 'No backtest ledger for this strategy')
+        return {**doc.to_dict(), 'strategy_id': strategy_id, 'execution': 'paper_only'}
 
     @router.put('/follow/{strategy_id}')
     async def follow(strategy_id: str, body: FollowRequest, current_user: str = Depends(get_current_user)):

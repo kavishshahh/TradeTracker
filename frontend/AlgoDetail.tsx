@@ -1,18 +1,19 @@
 'use client';
 
-import { Check, Plus } from 'lucide-react';
-import { useMemo, useState, type MouseEvent } from 'react';
-import { algoState, istDay, istParts, lakhs, money, monthLabel, percent, periodReturn, ruleText, signedPercent, stateLabel, time, type Month, type Paper, type Strategy, type Trade } from './algoData';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { algoState, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, EmptyRow, Pills, PositionTable, tone } from './algoUi';
 import styles from './algos.module.css';
 
-type Tab = 'performance' | 'paper' | 'monthly' | 'rules';
+type Tab = 'performance' | 'trades' | 'monthly' | 'rules';
 type Range = '1m' | '3m' | '6m' | '1y' | 'all';
 const RANGES: { id: Range; label: string; months: number }[] = [{ id: '1m', label: '1M', months: 1 }, { id: '3m', label: '3M', months: 3 }, { id: '6m', label: '6M', months: 6 }, { id: '1y', label: '1Y', months: 12 }, { id: 'all', label: 'All', months: Infinity }];
 
-type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; onFollow: (enabled: boolean) => void; onDownload: () => void };
+type LoadBacktest = (id: string) => Promise<BacktestLedger | null>;
+type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
 
-export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, onFollow, onDownload }: Props) {
+export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, onFollow, onDownload, loadBacktest }: Props) {
   const [tab, setTab] = useState<Tab>('performance');
   const state = algoState(account);
   return <>
@@ -26,9 +27,9 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
       <div className={styles.detailStat}><span>Backtest 3M</span><b className={tone(strategy.metrics.return_3m_pct)}>{signedPercent(strategy.metrics.return_3m_pct)}</b></div>
       <button className={following ? styles.followingButton : styles.followButton} onClick={() => onFollow(!following)} disabled={saving || !paperLoaded} title={following ? 'Click to stop following' : 'Follow this algo’s paper trades'}>{following ? <Check size={15} /> : <Plus size={15} />}{saving ? 'Saving…' : following ? 'Following' : 'Follow'}</button>
     </div>
-    <Pills label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Performance' }, { id: 'paper', label: 'Paper trades' }, { id: 'monthly', label: 'Monthly' }, { id: 'rules', label: 'Rules' }]} />
+    <Pills label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly' }, { id: 'rules', label: 'Rules' }]} />
     {tab === 'performance' && <Performance strategy={strategy} account={account} />}
-    {tab === 'paper' && <PaperTrades strategy={strategy} account={account} onDownload={onDownload} />}
+    {tab === 'trades' && <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} />}
     {tab === 'monthly' && <Monthly strategy={strategy} />}
     {tab === 'rules' && <Rules strategy={strategy} />}
   </>;
@@ -118,52 +119,126 @@ function Performance({ strategy, account }: { strategy: Strategy; account: Paper
   </>;
 }
 
-function PaperTrades({ strategy, account, onDownload }: { strategy: Strategy; account: Paper | null | undefined; onDownload: () => void }) {
+function PastTrades({ strategy, account, onDownload, loadBacktest }: { strategy: Strategy; account: Paper | null | undefined; onDownload: () => void; loadBacktest: LoadBacktest }) {
+  const [ledger, setLedger] = useState<BacktestLedger | null>(null);
+  const [ledgerState, setLedgerState] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  useEffect(() => {
+    let live = true;
+    loadBacktest(strategy.id).then(body => { if (live) { setLedger(body); setLedgerState(body ? 'ready' : 'missing'); } }).catch(() => { if (live) setLedgerState('error'); });
+    return () => { live = false; };
+  }, [strategy.id, loadBacktest]);
+  const trades = useMemo(() => pastTrades(ledger, account), [ledger, account]);
+  const capital = account?.capital ?? strategy.capital;
+  const note = ledgerState === 'missing' ? 'No backtest ledger has been uploaded for this algo, so only forward paper trades appear.'
+    : ledgerState === 'error' ? 'Backtest trades could not be loaded (the API may not have the /algos/backtest route deployed yet); only forward paper trades appear.'
+    : ledger && ledger.trade_count !== strategy.metrics.trade_count ? `The exported backtest ledger has ${ledger.trade_count} trades but the catalogue lists ${strategy.metrics.trade_count}; re-run backend/export_backtest_trades.py after updating the backtest.`
+    : null;
+  return <>
+    {ledgerState === 'loading' ? <div className={styles.card}><EmptyRow>Loading past trades…</EmptyRow></div> : <TradeCalendar trades={trades} capital={capital} note={note} />}
+    <ForwardPositions account={account} onDownload={onDownload} />
+  </>;
+}
+
+function monthRange(first: string, last: string) {
+  const months: string[] = [];
+  let [year, month] = first.split('-').map(Number);
+  const [endYear, endMonth] = last.split('-').map(Number);
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    months.push(`${year}-${String(month).padStart(2, '0')}`);
+    month += 1; if (month > 12) { month = 1; year += 1; }
+  }
+  return months;
+}
+
+const spreadName = (trade: PastTrade) => `NIFTY ${trade.expiry} ${trade.sell}/${trade.buy} ${trade.type}`;
+const dayLabel = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+function TradeCalendar({ trades, capital, note }: { trades: PastTrade[]; capital: number; note: string | null }) {
+  const current = istParts().month;
+  // Every month from the first trade to now, so quiet stretches show up as empty months.
+  const months = useMemo(() => monthRange(trades[0]?.day.slice(0, 7) || current, current), [trades, current]);
+  const lastTraded = trades.at(-1)?.day.slice(0, 7) || current;
+  const [month, setMonth] = useState(lastTraded);
+  const [day, setDay] = useState<string | null>(null);
+  const index = Math.max(0, months.indexOf(month));
+  const inMonth = trades.filter(trade => trade.day.startsWith(month));
+  const byDay = inMonth.reduce<Record<string, { backtest: number; paper: number; b: number; p: number }>>((total, trade) => {
+    const cell = total[trade.day] ??= { backtest: 0, paper: 0, b: 0, p: 0 };
+    if (trade.source === 'backtest') { cell.backtest += trade.pnl ?? 0; cell.b += 1; } else { cell.paper += trade.pnl ?? 0; cell.p += 1; }
+    return total;
+  }, {});
+  const sum = (source: PastTrade['source']) => inMonth.filter(trade => trade.source === source).reduce((total, trade) => total + (trade.pnl ?? 0), 0);
+  const backtestCount = inMonth.filter(trade => trade.source === 'backtest').length, paperCount = inMonth.length - backtestCount;
+  const [year, monthIndex] = month.split('-').map(Number);
+  const days = new Date(Date.UTC(year, monthIndex, 0)).getUTCDate();
+  const lead = (new Date(Date.UTC(year, monthIndex - 1, 1)).getUTCDay() + 6) % 7;
+  const today = istParts().day;
+  const listed = day ? inMonth.filter(trade => trade.day === day) : inMonth;
+  const go = (next: number) => { setMonth(months[Math.min(months.length - 1, Math.max(0, next))]); setDay(null); };
+  return <div className={styles.card}>
+    <div className={styles.chartHead}>
+      <div>
+        <h3>Past trades</h3>
+        <p className={styles.caption}>
+          {backtestCount ? <>Backtest <b className={tone(sum('backtest'))}>{money(sum('backtest'))}</b> ({backtestCount}) </> : null}
+          {paperCount ? <>{backtestCount ? '· ' : ''}Paper <b className={tone(sum('paper'))}>{money(sum('paper'))}</b> ({paperCount})</> : null}
+          {!inMonth.length && 'No trades closed this month'}
+        </p>
+      </div>
+      <div className={styles.monthNav}>
+        <button onClick={() => go(index - 1)} disabled={index === 0} aria-label="Previous month"><ChevronLeft size={15} /></button>
+        <select className={styles.select} value={month} onChange={event => { setMonth(event.target.value); setDay(null); }} aria-label="Calendar month">{[...months].reverse().map(option => <option key={option} value={option}>{monthLabel(option, 'long')}{trades.some(trade => trade.day.startsWith(option)) ? '' : ' · no trades'}</option>)}</select>
+        <button onClick={() => go(index + 1)} disabled={index === months.length - 1} aria-label="Next month"><ChevronRight size={15} /></button>
+      </div>
+    </div>
+    <div className={styles.calendar}>
+      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(name => <span key={name} className={styles.calendarDay}>{name}</span>)}
+      {Array.from({ length: lead }, (_, offset) => <span key={`lead-${offset}`} />)}
+      {Array.from({ length: days }, (_, offset) => {
+        const date = `${month}-${String(offset + 1).padStart(2, '0')}`;
+        const cell = byDay[date];
+        const net = cell ? cell.backtest + cell.paper : 0;
+        const className = [styles.calendarCell, cell ? (net < 0 ? styles.cellLoss : styles.cellProfit) : '', date === today ? styles.cellToday : '', date === day ? styles.cellSelected : ''].join(' ');
+        const body = <><span>{offset + 1}</span>{cell && <span className={styles.cellLines}>
+          {cell.b > 0 && <b className={tone(cell.backtest)}><i className={styles.backtestMark} title="Backtest">B</i>{money(cell.backtest)}<small>{signedPercent(cell.backtest / capital * 100)}</small></b>}
+          {cell.p > 0 && <b className={tone(cell.paper)}>{money(cell.paper)}<small>{signedPercent(cell.paper / capital * 100)}</small></b>}
+        </span>}</>;
+        return cell ? <button key={date} className={className} onClick={() => setDay(value => value === date ? null : date)} aria-pressed={date === day} title={`${cell.b + cell.p} trade${cell.b + cell.p > 1 ? 's' : ''} closed`}>{body}</button> : <div key={date} className={className}>{body}</div>;
+      })}
+    </div>
+    <p className={styles.legend}><i className={styles.backtestMark}>B</i> Backtest: simulated on historical data · Unmarked: forward paper trade · Returns on {money(capital)} model capital, by exit date (IST).</p>
+    {note && <p className={styles.caption}>{note}</p>}
+    {listed.length > 0 && <>
+      <div className={styles.subHead}><h3>{day ? `Trades closed on ${dayLabel(day)}` : `Trades closed in ${monthLabel(month, 'long')}`}</h3>{day && <button className={styles.linkButton} onClick={() => setDay(null)}>Show whole month</button>}</div>
+      <div className={styles.tableCard}><div className={styles.tableScroll}><table className={styles.table}>
+        <thead><tr><th>Exit</th><th>Spread</th><th>Entry</th><th className={styles.num}>Lots</th><th>Exit reason</th><th className={styles.num}>P&L</th></tr></thead>
+        <tbody>{listed.map(trade => <tr key={trade.key}>
+          <td>{trade.source === 'backtest' && <i className={styles.backtestMark} title="Backtest">B</i>}{time(trade.exit)}</td>
+          <td><b>{spreadName(trade)}</b></td>
+          <td className={styles.muted}>{time(trade.entry)}</td>
+          <td className={styles.num}>{trade.lots}</td>
+          <td className={styles.muted}>{trade.reason || '—'}</td>
+          <td className={`${styles.num} ${tone(trade.pnl)}`}>{money(trade.pnl)}</td>
+        </tr>)}</tbody>
+      </table></div></div>
+    </>}
+  </div>;
+}
+
+function ForwardPositions({ account, onDownload }: { account: Paper | null | undefined; onDownload: () => void }) {
   const [filter, setFilter] = useState<'all' | 'profit' | 'loss'>('all');
-  if (!account) return <div className={styles.card}><EmptyRow>No paper trades yet. Entries and exits appear here once the paper worker records them.</EmptyRow></div>;
+  if (!account) return <div className={styles.card}><h3 className={styles.cardTitle}>Forward paper trades</h3><EmptyRow>No paper trades yet. Entries and exits appear here once the paper worker records them.</EmptyRow></div>;
   const closed = account.closed_positions || [];
   const profits = closed.filter(trade => trade.pnl != null && trade.pnl > 0);
   const losses = closed.filter(trade => trade.pnl != null && trade.pnl < 0);
   const visible: Trade[] = filter === 'profit' ? profits : filter === 'loss' ? losses : closed;
   return <>
-    <PaperCalendar account={account} capital={account.capital ?? strategy.capital} />
-    <div className={styles.sectionHead}><h2>Open</h2><span className={styles.muted}>{account.valuation_ts ? `Marked ${time(account.valuation_ts)}` : 'Awaiting quotes'}</span></div>
+    <div className={styles.sectionHead}><h2>Forward paper · open</h2><span className={styles.muted}>{account.valuation_ts ? `Marked ${time(account.valuation_ts)}` : 'Awaiting quotes'}</span></div>
     {account.open_position ? <PositionTable trades={[account.open_position]} open totalPnl={account.unrealized_pnl} /> : <div className={styles.tableCard}><EmptyRow>No open paper position.</EmptyRow></div>}
-    <div className={styles.sectionHead}><h2>Closed</h2><Pills label="Filter closed positions" value={filter} onChange={setFilter} items={[{ id: 'all', label: 'All', count: closed.length }, { id: 'profit', label: 'In profit', count: profits.length }, { id: 'loss', label: 'In loss', count: losses.length }]} /><button className={styles.outlineButton} onClick={onDownload} disabled={!closed.length}>Download CSV</button></div>
+    <div className={styles.sectionHead}><h2>Forward paper · closed legs</h2><Pills label="Filter closed positions" value={filter} onChange={setFilter} items={[{ id: 'all', label: 'All', count: closed.length }, { id: 'profit', label: 'In profit', count: profits.length }, { id: 'loss', label: 'In loss', count: losses.length }]} /><button className={styles.outlineButton} onClick={onDownload} disabled={!closed.length}>Download CSV</button></div>
     {visible.length ? <PositionTable trades={visible} /> : <div className={styles.tableCard}><EmptyRow>{filter === 'all' ? 'No closed paper positions yet.' : `No closed positions ${filter === 'profit' ? 'in profit' : 'in loss'}.`}</EmptyRow></div>}
     <p className={styles.caption}>Realized P&L across the full paper ledger: <b className={tone(account.realized_pnl)}>{money(account.realized_pnl)}</b>. Showing the latest {closed.length} closed trades (maximum {account.ledger_limit}); legs without a quote show —.</p>
   </>;
-}
-
-function PaperCalendar({ account, capital }: { account: Paper; capital: number }) {
-  const closed = account.closed_positions || [];
-  const options = useMemo(() => [...new Set([istParts().month, ...closed.map(trade => istDay(trade.exit_ts).slice(0, 7)).filter(Boolean)])].sort().reverse(), [closed]);
-  const [month, setMonth] = useState(options[0]);
-  const byDay = closed.reduce<Record<string, { pnl: number; count: number }>>((total, trade) => {
-    const day = istDay(trade.exit_ts);
-    if (day.startsWith(month)) total[day] = { pnl: (total[day]?.pnl ?? 0) + (trade.pnl ?? 0), count: (total[day]?.count ?? 0) + 1 };
-    return total;
-  }, {});
-  const monthPnl = Object.values(byDay).reduce((total, day) => total + day.pnl, 0);
-  const [year, monthIndex] = month.split('-').map(Number);
-  const days = new Date(Date.UTC(year, monthIndex, 0)).getUTCDate();
-  const lead = (new Date(Date.UTC(year, monthIndex - 1, 1)).getUTCDay() + 6) % 7;
-  const today = istParts().day;
-  return <div className={styles.card}>
-    <div className={styles.chartHead}>
-      <div><h3>Paper P&L calendar</h3><p className={styles.caption}>By exit date · {Object.keys(byDay).length ? <>month total <b className={tone(monthPnl)}>{money(monthPnl)}</b></> : 'no exits this month'}</p></div>
-      <select className={styles.select} value={month} onChange={event => setMonth(event.target.value)} aria-label="Calendar month">{options.map(option => <option key={option} value={option}>{monthLabel(option, 'long')}</option>)}</select>
-    </div>
-    <div className={styles.calendar}>
-      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => <span key={day} className={styles.calendarDay}>{day}</span>)}
-      {Array.from({ length: lead }, (_, index) => <span key={`lead-${index}`} />)}
-      {Array.from({ length: days }, (_, index) => {
-        const day = `${month}-${String(index + 1).padStart(2, '0')}`;
-        const result = byDay[day];
-        return <div key={day} className={`${styles.calendarCell} ${result ? (result.pnl < 0 ? styles.cellLoss : styles.cellProfit) : ''} ${day === today ? styles.cellToday : ''}`} title={result ? `${result.count} exit${result.count > 1 ? 's' : ''}` : undefined}><span>{index + 1}</span>{result && <b className={tone(result.pnl)}>{money(result.pnl)}<small>{signedPercent(result.pnl / capital * 100)}</small></b>}</div>;
-      })}
-    </div>
-  </div>;
 }
 
 function Monthly({ strategy }: { strategy: Strategy }) {

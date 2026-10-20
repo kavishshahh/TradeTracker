@@ -2,9 +2,9 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertCircle, ArrowLeft, ChevronRight, Eye, EyeOff, RefreshCw, Search, ShieldCheck } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AlgoDetail from './AlgoDetail';
-import { algoState, clock, isStale, ledgerFills, marketOpen, money, openPnl, scanMessage, stateLabel, time, todayRealized, type Paper, type PaperResponse, type Strategy, type Trade } from './algoData';
+import { algoState, clock, isStale, ledgerFills, marketOpen, money, openPnl, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, EmptyRow, Pills, PositionTable, tone } from './algoUi';
 import styles from './algos.module.css';
 
@@ -45,32 +45,62 @@ export default function AlgoDashboard() {
     window.history.pushState(null, '', window.location.pathname + (query ? `?${query}` : ''));
   }, []);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const authed = useCallback(async (path: string, signal?: AbortSignal) => {
+    const token = await currentUser!.getIdToken();
+    return fetch(`${apiBase}${path}`, { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });
+  }, [currentUser]);
+
+  // Catalogue metadata and backtest metrics change only when a strategy is re-published: load once per page load or Refresh.
+  const loadCatalog = useCallback(async (signal?: AbortSignal) => {
+    const response = await authed('/algos/catalog', signal);
+    if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign in again.' : 'Strategy catalogue unavailable. Please retry.');
+    const body = await response.json() as { strategies: Strategy[] };
+    if (!signal?.aborted) setCatalog(body.strategies);
+  }, [authed]);
+
+  // The paper feed is the only live data, so it is the only request on the 30-second poll.
+  const loadPaper = useCallback(async (signal?: AbortSignal) => {
+    const response = await authed('/algos/paper', signal);
+    if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign in again.' : 'Paper feed unavailable. Your historical results are still available.');
+    const body = await response.json() as PaperResponse;
+    if (!signal?.aborted) { setPaper(body); setError(''); setLoadedAt(new Date().toISOString()); }
+  }, [authed]);
+
+  const run = useCallback(async (task: () => Promise<unknown>, signal?: AbortSignal) => {
     if (!currentUser) return;
     setLoading(true);
-    try {
-      const token = await currentUser.getIdToken();
-      const catalogueResponse = await fetch(`${apiBase}/algos/catalog`, { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });
-      if (!catalogueResponse.ok) throw new Error(catalogueResponse.status === 401 ? 'Your session has expired. Sign in again.' : 'Strategy catalogue unavailable. Please retry.');
-      const catalogueBody = await catalogueResponse.json() as { strategies: Strategy[] };
-      if (!signal?.aborted) setCatalog(catalogueBody.strategies);
-      const response = await fetch(`${apiBase}/algos/paper`, { headers: { Authorization: `Bearer ${token}` }, signal, cache: 'no-store' });
-      if (!response.ok) throw new Error(response.status === 401 ? 'Your session has expired. Sign in again.' : 'Paper feed unavailable. Your historical results are still available.');
-      const body = await response.json() as PaperResponse;
-      if (!signal?.aborted) { setPaper(body); setError(''); setLoadedAt(new Date().toISOString()); }
-    } catch (err) {
-      if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Unable to load paper feed.');
-    } finally { if (!signal?.aborted) setLoading(false); }
+    try { await task(); }
+    catch (err) { if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Unable to load algo data.'); }
+    finally { if (!signal?.aborted) setLoading(false); }
   }, [currentUser]);
+
+  // Backtest ledgers are fetched when an algo's Past trades tab first opens and kept for this page load.
+  const backtests = useRef(new Map<string, Promise<BacktestLedger | null>>());
+  const loadBacktest = useCallback((id: string) => {
+    let pending = backtests.current.get(id);
+    if (!pending) {
+      pending = authed(`/algos/backtest/${encodeURIComponent(id)}`).then(async response => {
+        // Only the route's own 404 means "no ledger"; a generic 404 means the API predates the route.
+        if (response.status === 404 && /^No backtest ledger/.test((await response.json().catch(() => ({})) as { detail?: string }).detail || '')) return null;
+        if (!response.ok) throw new Error('Backtest ledger unavailable');
+        return await response.json() as BacktestLedger;
+      });
+      pending.catch(() => backtests.current.delete(id));
+      backtests.current.set(id, pending);
+    }
+    return pending;
+  }, [authed]);
+
+  const refresh = useCallback(() => { backtests.current.clear(); return run(() => Promise.all([loadCatalog(), loadPaper()])); }, [run, loadCatalog, loadPaper]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
-    const timer = window.setInterval(() => void load(controller.signal), 30_000);
+    void run(() => Promise.all([loadCatalog(controller.signal), loadPaper(controller.signal)]), controller.signal);
+    const timer = window.setInterval(() => void run(() => loadPaper(controller.signal), controller.signal), 30_000);
     // Re-render once a minute so market-hours and staleness labels advance without extra API calls.
     const clockTimer = window.setInterval(() => setTick(value => value + 1), 60_000);
     return () => { controller.abort(); window.clearInterval(timer); window.clearInterval(clockTimer); };
-  }, [load]);
+  }, [run, loadCatalog, loadPaper]);
 
   async function follow(id: string, enabled: boolean) {
     if (!currentUser || saving || !paper) return;
@@ -79,7 +109,7 @@ export default function AlgoDashboard() {
       const token = await currentUser.getIdToken();
       const response = await fetch(`${apiBase}/algos/follow/${id}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
       if (!response.ok) throw new Error('Could not save your selection. Please retry.');
-      await load();
+      await loadPaper();
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save your selection.'); }
     finally { setSaving(false); }
   }
@@ -98,8 +128,8 @@ export default function AlgoDashboard() {
   const openCount = catalog.filter(item => paper?.strategies[item.id]?.open_position).length * 2;
 
   let main;
-  if (!catalog.length) main = <div className={styles.card}><EmptyRow>{loading ? 'Loading strategies…' : error || 'No strategies are listed in the catalogue yet.'}</EmptyRow>{!loading && <button className={styles.outlineButton} onClick={() => void load()}>Refresh catalogue</button>}</div>;
-  else if (algoId) main = detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} onFollow={enabled => void follow(detail.id, enabled)} onDownload={() => downloadLedger(detail.id)} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>;
+  if (!catalog.length) main = <div className={styles.card}><EmptyRow>{loading ? 'Loading strategies…' : error || 'No strategies are listed in the catalogue yet.'}</EmptyRow>{!loading && <button className={styles.outlineButton} onClick={() => void refresh()}>Refresh catalogue</button>}</div>;
+  else if (algoId) main = detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} onFollow={enabled => void follow(detail.id, enabled)} onDownload={() => downloadLedger(detail.id)} loadBacktest={loadBacktest} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>;
   else if (view === 'positions') main = <PositionsView catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
   else if (view === 'orders') main = <OrdersView catalog={catalog} paper={paper} />;
   else main = <MyAlgos catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
@@ -115,10 +145,10 @@ export default function AlgoDashboard() {
       </nav>}
       <div className={styles.tabMeta}>
         <span className={styles.market}><i className={marketOpen() ? styles.marketOpen : ''} />Market {marketOpen() ? 'open' : 'closed'}</span>
-        <button className={styles.refresh} onClick={() => void load()} disabled={loading} title={loadedAt ? `Updated ${clock(loadedAt)}` : undefined}><RefreshCw size={14} className={loading ? styles.spin : ''} />{loading ? 'Refreshing' : 'Refresh'}</button>
+        <button className={styles.refresh} onClick={() => void refresh()} disabled={loading} title={loadedAt ? `Updated ${clock(loadedAt)}` : undefined}><RefreshCw size={14} className={loading ? styles.spin : ''} />{loading ? 'Refreshing' : 'Refresh'}</button>
       </div>
     </div>
-    {error && <div className={styles.notice} role="status"><AlertCircle size={16} />{error}<button onClick={() => void load()}>Retry</button></div>}
+    {error && <div className={styles.notice} role="status"><AlertCircle size={16} />{error}<button onClick={() => void refresh()}>Retry</button></div>}
     <div className={styles.content}>{main}</div>
     <footer className={styles.disclaimer}><ShieldCheck size={15} /><p>Positions, orders and P&L come from shared paper model accounts, not your brokerage account. Backtests are gross historical simulations. Following an algo saves your selection; it never places orders. All times IST.</p></footer>
   </section>;

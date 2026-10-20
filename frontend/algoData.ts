@@ -90,3 +90,15 @@ export function ledgerFills(catalog: Strategy[], paper: PaperResponse | null): F
   }
   return fills.sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
 }
+
+/** Backtest ledger exported by backend/export_backtest_trades.py (closed trades only). */
+export type BacktestTrade = { entry: string; exit: string; type: string; expiry: string; sell: number; buy: number; units: number; lots: number; credit: number | null; pnl: number | null; reason: string | null };
+export type BacktestLedger = { strategy_id: string; source: string; capital: number | null; generated_at: string; trade_count: number; total_pnl: number; trades: BacktestTrade[] };
+
+/** One closed trade on the past-trades calendar; `backtest` trades are simulated, `paper` trades are forward tests. */
+export type PastTrade = { key: string; source: 'backtest' | 'paper'; entry: string; exit: string; day: string; type: string; expiry: string; sell: number; buy: number; lots: number; pnl: number | null; reason: string | null };
+export function pastTrades(ledger: BacktestLedger | null, account: Paper | null | undefined): PastTrade[] {
+  const backtest = (ledger?.trades || []).map((trade, index): PastTrade => ({ key: `b${index}`, source: 'backtest', entry: trade.entry, exit: trade.exit, day: istDay(trade.exit), type: trade.type, expiry: trade.expiry, sell: trade.sell, buy: trade.buy, lots: trade.lots, pnl: trade.pnl, reason: trade.reason }));
+  const paper = (account?.closed_positions || []).filter(trade => trade.exit_ts).map((trade): PastTrade => ({ key: `p${trade.signal_id}`, source: 'paper', entry: trade.entry_ts, exit: trade.exit_ts!, day: istDay(trade.exit_ts), type: trade.option_type, expiry: trade.expiry, sell: trade.sell_strike, buy: trade.buy_strike, lots: trade.lots, pnl: trade.pnl, reason: trade.exit_reason }));
+  return [...backtest, ...paper].sort((a, b) => Date.parse(a.exit) - Date.parse(b.exit));
+}

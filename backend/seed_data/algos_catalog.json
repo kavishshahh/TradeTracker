@@ -805,7 +805,7 @@
     ],
     "execution": "paper_only",
     "limitations": "Gross historical simulation on Dhan minute closes; missing option quotes, estimated margin and excluded costs make results provisional. Gate and put filter tuned on 19 published Ratio-Fluxer trades (14 of 18 reproduced on the same day and side, 2 extra trades); the provider's private trigger is not recovered.",
-    "enabled": false,
+    "enabled": true,
     "order": 2,
     "schema_version": 1,
     "rules": [

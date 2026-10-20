@@ -2,7 +2,7 @@
 
 Run from the repo root after a new backtest:
   algos/.venv/Scripts/python.exe backend/export_backtest_trades.py           # dry run: prints what would be written
-  algos/.venv/Scripts/python.exe backend/export_backtest_trades.py --apply   # replaces the three documents
+  algos/.venv/Scripts/python.exe backend/export_backtest_trades.py --apply   # replaces every document
   algos/.venv/Scripts/python.exe backend/export_backtest_trades.py --apply ratio_strategy_03   # only the named ones
 One document per strategy (one write each). GET /algos/backtest/{id} reads one document when an algo's
 Past trades tab opens; the 30-second paper poll never touches this collection.
@@ -20,6 +20,7 @@ LEDGERS = {
     'zen_strategy_01': 'provider_research/replication_trials/bulk/full_autonomous_732629f0bd6093de_ledger/trades.csv',
     'zen_strategy_02': 'provider_research/replication_trials/volatility_definitions/full_autonomous_719c7c6bc176871c_ledger/trades.csv',
     'ratio_strategy_03': 'ratio_strategy_03_2023-10-04_2026-09-30/trades.csv',
+    'ratio_strategy_04': 'ratio_strategy_04_2023-10-04_2026-09-30/trades.csv',
 }
 
 

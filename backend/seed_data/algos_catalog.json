@@ -1,8 +1,8 @@
 [
   {
     "id": "zen_strategy_01",
-    "name": "Geometric Credit",
-    "version": "01",
+    "name": "Zen Geometric Credit",
+    "version": "Z1",
     "description": "Price momentum confirmed by geometric option volume and return volatility.",
     "underlying": "NIFTY 50",
     "category": "Overnight credit spread",
@@ -301,8 +301,8 @@
   },
   {
     "id": "zen_strategy_02",
-    "name": "Variance Credit",
-    "version": "02",
+    "name": "Zen Variance Credit",
+    "version": "Z2",
     "description": "The same directional framework, scaled by option return variance.",
     "underlying": "NIFTY 50",
     "category": "Overnight credit spread",
@@ -602,7 +602,7 @@
   {
     "id": "ratio_strategy_03",
     "name": "Ratio-Fluxer Skew Credit",
-    "version": "03",
+    "version": "R3",
     "description": "Expiry credit spreads that sell the relatively rich side of the 100-point NIFTY IV skew (spot-based Black-Scholes IV, session-local EMA-10, 800-minute rank), hedged 400 points away; put spreads only while the 20-session realised volatility is at most 16%; the 50% credit target applies on the entry day only, then the position runs to the 14:57 expiry-day exit or the stop.",
     "underlying": "NIFTY 50",
     "category": "Expiry credit spread",

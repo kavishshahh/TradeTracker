@@ -81,6 +81,8 @@ class StrategyConfig:
     target_spread_value: float = 10.0          # target when spread value <= 10 points
     target_credit_fraction: float | None = None  # if set, target = entry credit * fraction (overrides points)
     target_entry_day_only: bool = False        # True: the target is checked on the entry date only
+    stop_grace_minutes: int = 0                # >0: the stop is ignored this long after entry (hard stop still applies)
+    hard_stop_margin_fraction: float | None = None  # always-on stop at credit + this fraction of normal margin per lot
     time_exit: time = time(14, 53)             # next-trading-day square-off time
     time_exit_on_expiry: bool = False          # True: scheduled exit is on the expiry day, not the next session
     max_days_to_expiry: int | None = None      # no new entry when the nearest expiry is further than this

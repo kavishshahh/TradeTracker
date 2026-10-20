@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import math
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
@@ -186,6 +186,19 @@ class StrategyEngine:
             return self._evaluate_exit(view, position, now)
         return self._evaluate_entry(view, now)
 
+    def _active_stop(self, pos: Position, now: datetime) -> float:
+        """The stop in force at ``now``: during ``stop_grace_minutes`` after entry only the hard stop (credit +
+        hard_stop_margin_fraction of normal margin per lot, scaled from the normal stop's distance) applies."""
+        if pos.stop_loss is None:
+            return math.inf
+        grace = self.cfg.stop_grace_minutes
+        if not grace or to_ist(now) - to_ist(pos.entry_ts) >= timedelta(minutes=grace):
+            return pos.stop_loss
+        hard = self.cfg.hard_stop_margin_fraction
+        if hard is None or pos.net_credit is None or not self.cfg.stop_loss_margin_fraction:
+            return math.inf
+        return pos.net_credit + (pos.stop_loss - pos.net_credit) * hard / self.cfg.stop_loss_margin_fraction
+
     def _evaluate_exit(self, view: MarketView, pos: Position, now: datetime) -> EngineResult:
         chain = view.position_chain or view.chain
         if chain is not None and self._stale(chain.timestamp, now):
@@ -193,11 +206,13 @@ class StrategyEngine:
         # After expiry, a later quote/spot cannot represent the contract's settlement.
         value = self.spread_value(chain, pos) if now.date() <= pos.expiry else None
         target_until = to_ist(pos.entry_ts).date() if self.cfg.target_entry_day_only else None
-        decision: ExitDecision | None = evaluate_exit(now, value, pos.stop_loss if pos.stop_loss is not None
-                                                      else math.inf, pos.target if pos.target is not None
+        stop_level = self._active_stop(pos, now)
+        decision: ExitDecision | None = evaluate_exit(now, value, stop_level, pos.target if pos.target is not None
                                                       else -math.inf, pos.exit_due, pos.expiry, target_until)
         diag = {"spread_value": value, "stop_loss": pos.stop_loss, "target": pos.target,
                 "exit_due": pos.exit_due.isoformat()}
+        if stop_level != (pos.stop_loss if pos.stop_loss is not None else math.inf):
+            diag["stop_in_grace"] = stop_level if math.isfinite(stop_level) else None
         if target_until is not None:
             diag["target_active"] = now.date() <= target_until
         if decision is None:

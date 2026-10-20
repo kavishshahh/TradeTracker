@@ -3,7 +3,8 @@
 Run from the repo root after a new backtest:
   algos/.venv/Scripts/python.exe backend/export_backtest_trades.py           # dry run: prints what would be written
   algos/.venv/Scripts/python.exe backend/export_backtest_trades.py --apply   # replaces the three documents
-One document per strategy (3 writes per run). GET /algos/backtest/{id} reads one document when an algo's
+  algos/.venv/Scripts/python.exe backend/export_backtest_trades.py --apply ratio_strategy_03   # only the named ones
+One document per strategy (one write each). GET /algos/backtest/{id} reads one document when an algo's
 Past trades tab opens; the 30-second paper poll never touches this collection.
 Only closed trades are exported; a position still open at the end of the replay is skipped.
 """
@@ -18,7 +19,7 @@ REPORTS = ROOT / 'algos/reports'
 LEDGERS = {
     'zen_strategy_01': 'provider_research/replication_trials/bulk/full_autonomous_732629f0bd6093de_ledger/trades.csv',
     'zen_strategy_02': 'provider_research/replication_trials/volatility_definitions/full_autonomous_719c7c6bc176871c_ledger/trades.csv',
-    'ratio_strategy_03': 'ratio_strategy_03_2025-10-01_2026-09-30/trades.csv',
+    'ratio_strategy_03': 'ratio_strategy_03_2023-10-04_2026-09-30/trades.csv',
 }
 
 
@@ -43,7 +44,11 @@ def ledger(strategy_id, relative):
 
 def main():
     apply = '--apply' in sys.argv[1:]
-    bodies = [ledger(strategy_id, relative) for strategy_id, relative in LEDGERS.items()]
+    selected = [arg for arg in sys.argv[1:] if not arg.startswith('--')] or list(LEDGERS)
+    unknown = set(selected) - set(LEDGERS)
+    if unknown:
+        sys.exit('Unknown strategies: ' + ', '.join(sorted(unknown)))
+    bodies = [ledger(strategy_id, LEDGERS[strategy_id]) for strategy_id in selected]
     for body in bodies:
         print(body['strategy_id'], body['trade_count'], 'closed trades,', body['open_skipped'], 'open skipped, P&L', body['total_pnl'])
     if not apply:

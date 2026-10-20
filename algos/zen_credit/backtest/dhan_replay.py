@@ -470,8 +470,8 @@ def run_cli():
     args = parser.parse_args()
     if args.provider_history_rules:
         from backtest import provider_calendar
-        if not date(2025,7,9) <= args.start <= args.end <= date(2026,10,1):
-            parser.error("Provider history profile supports July 9 2025 through October 1 2026")
+        if not date(2023,10,1) <= args.start <= args.end <= date(2026,10,1):
+            parser.error("Provider history profile supports October 1 2023 through October 1 2026")
         calendar, expiry_resolver, lot_resolver, sources = (
             provider_calendar.ProviderCalendar(), provider_calendar.expiries_for,
             provider_calendar.lot_size, provider_calendar.SOURCES)

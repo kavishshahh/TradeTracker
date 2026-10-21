@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / 'algos/reports'
 # The ledgers whose totals the catalogue metrics were taken from (see algos/RESEARCH.md).
 LEDGERS = {
-    'zen_strategy_01': 'provider_research/replication_trials/bulk/full_autonomous_732629f0bd6093de_ledger/trades.csv',
-    'zen_strategy_02': 'provider_research/replication_trials/volatility_definitions/full_autonomous_719c7c6bc176871c_ledger/trades.csv',
+    'zen_strategy_01': 'zen_strategy_01_2023-10-04_2026-09-30/trades.csv',
+    'zen_strategy_02': 'zen_strategy_02_2023-10-04_2026-09-30/trades.csv',
     'ratio_strategy_03': 'ratio_strategy_03_2023-10-04_2026-09-30/trades.csv',
     'ratio_strategy_04': 'ratio_strategy_04_2023-10-04_2026-09-30/trades.csv',
 }

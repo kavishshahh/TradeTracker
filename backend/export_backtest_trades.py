@@ -21,6 +21,8 @@ LEDGERS = {
     'zen_strategy_02': 'zen_strategy_02_2023-10-04_2026-09-30/trades.csv',
     'ratio_strategy_03': 'ratio_strategy_03_2023-10-04_2026-09-30/trades.csv',
     'ratio_strategy_04': 'ratio_strategy_04_2023-10-04_2026-09-30/trades.csv',
+    'zen_strategy_05': 'zen_strategy_05_2023-10-04_2026-09-30/trades.csv',
+    'zen_strategy_06': 'zen_strategy_06_2023-10-04_2026-09-30/trades.csv',
 }
 
 

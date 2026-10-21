@@ -267,7 +267,17 @@ class Runner:
         finally:
             self._lock.release()
 
+    def _restore_cooldown(self) -> None:
+        """After a restart, rebuild the post-stop cooldown from the last closed trade (one read, once)."""
+        if getattr(self, "_cooldown_restored", False) or not self.cfg.strategy.stop_cooldown_sessions:
+            return
+        self._cooldown_restored = True
+        last = self.store.closed_positions(limit=1)
+        if last and last[0].exit_ts is not None:
+            self.engine.note_exit(last[0].exit_ts, last[0].exit_reason)
+
     def _evaluate(self, now: datetime, minute: datetime) -> dict:
+        self._restore_cooldown()
         open_row = self.store.open_position_row()
         position = row_to_position(open_row) if open_row else None
         chains = {}

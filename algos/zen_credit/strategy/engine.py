@@ -19,7 +19,7 @@ from config import StrategyConfig
 from data.providers.base import ExpirySettlement, OptionChainSnapshot
 from strategy.alpha import calculate_alpha, observed_price_change
 from strategy.alpha2 import build_atm_panel, calculate_alpha2
-from risk.exits import ExitDecision, evaluate_exit, time_exit_due
+from risk.exits import STOP_LOSS, ExitDecision, evaluate_exit, time_exit_due
 from risk.position_sizing import RiskPlan, allocated_capital, build_risk_plan, spread_pnl
 from strategy.signals import Signal, evaluate_signal, in_signal_window
 from strategy.spreads import SpreadLegs, build_spread, select_expiry
@@ -180,10 +180,26 @@ class StrategyEngine:
         return round_price(s - b)
 
     # ---------------------------------------------------------------- evaluation
+    # Set after a stop-loss exit when stop_cooldown_sessions > 0: first date entries are allowed again.
+    cooldown_until: date | None = None
+
+    def note_exit(self, exit_ts: datetime, reason: str | None) -> None:
+        """Start the post-stop cooldown (also used by the live runner to restore it after a restart)."""
+        sessions = self.cfg.stop_cooldown_sessions
+        if not sessions or reason != STOP_LOSS:
+            return
+        day = to_ist(exit_ts).date()
+        for _ in range(sessions + 1):
+            day = self.calendar.next_trading_day(day)
+        self.cooldown_until = day
+
     def evaluate(self, view: MarketView, position: Position | None) -> EngineResult:
         now = to_ist(view.now)
         if position is not None:
-            return self._evaluate_exit(view, position, now)
+            result = self._evaluate_exit(view, position, now)
+            if result.action == "exit" and result.exit is not None:
+                self.note_exit(result.exit.exit_ts, result.exit.reason)
+            return result
         return self._evaluate_entry(view, now)
 
     def _active_stop(self, pos: Position, now: datetime) -> float:
@@ -247,6 +263,8 @@ class StrategyEngine:
             return EngineResult("none", "not a trading day")
         if not in_signal_window(now, self.cfg):
             return EngineResult("none", "outside signal window")
+        if self.cooldown_until is not None and now.date() < self.cooldown_until:
+            return EngineResult("none", f"cooldown after stop until {self.cooldown_until.isoformat()}")
         problems = self.data_problems(view) if self.require_quotes else []
         if not self.require_quotes and (view.spot_bars is None or view.spot_bars.empty):
             problems = ["no spot bars"]

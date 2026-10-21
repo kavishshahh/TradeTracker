@@ -7,7 +7,9 @@ STRATEGIES={'description':'Original supplied-description interpretation',
             'zen_strategy_01':'Geometric-volume credit spread research candidate',
             'zen_strategy_02':'Variance-scaled credit spread research candidate',
             'ratio_strategy_03':'Ratio-Fluxer style IV-skew expiry credit spread',
-            'ratio_strategy_04':'ratio_strategy_03 with drawdown-tuned execution'}
+            'ratio_strategy_04':'ratio_strategy_03 with drawdown-tuned execution',
+            'zen_strategy_05':'zen_strategy_01 with drawdown-capped risk rules',
+            'zen_strategy_06':'zen_strategy_02 with drawdown-capped risk rules'}
 
 
 def strategy_names():
@@ -28,6 +30,12 @@ def get_strategy(name='description'):
     if name=='ratio_strategy_04':
         from strategy import ratio_strategy_04_fluxer_tuned
         return ratio_strategy_04_fluxer_tuned
+    if name=='zen_strategy_05':
+        from strategy import zen_strategy_05_geometric_capped
+        return zen_strategy_05_geometric_capped
+    if name=='zen_strategy_06':
+        from strategy import zen_strategy_06_variance_capped
+        return zen_strategy_06_variance_capped
     raise ValueError(f'Unknown strategy: {name}')
 
 

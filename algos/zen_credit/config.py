@@ -83,6 +83,8 @@ class StrategyConfig:
     target_entry_day_only: bool = False        # True: the target is checked on the entry date only
     stop_grace_minutes: int = 0                # >0: the stop is ignored this long after entry (hard stop still applies)
     hard_stop_margin_fraction: float | None = None  # always-on stop at credit + this fraction of normal margin per lot
+    max_loss_fraction: float | None = None     # cap lots so a stop-loss exit loses at most this fraction of capital
+    stop_cooldown_sessions: int = 0            # >0: after a stop, no entries for the rest of that session and this many more
     time_exit: time = time(14, 53)             # next-trading-day square-off time
     time_exit_on_expiry: bool = False          # True: scheduled exit is on the expiry day, not the next session
     max_days_to_expiry: int | None = None      # no new entry when the nearest expiry is further than this

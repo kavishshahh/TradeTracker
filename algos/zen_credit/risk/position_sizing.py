@@ -91,8 +91,13 @@ def build_risk_plan(sell_price: float, buy_price: float, width: float, lot_size:
     margin = margin_per_lot(width, lot_size, is_expiry_day, cfg)
     capital = allocated_capital(entry_date, cfg)
     lots = lots_for_capital(capital, margin)
-    units = lots * lot_size
     stop = round_price(credit + cfg.stop_loss_margin_fraction * normal / lot_size)
+    if cfg.max_loss_fraction is not None:
+        # A stop exit loses (stop - credit) points per unit; keep that within the fraction of model capital.
+        stop_points = stop - credit
+        if stop_points > 0:
+            lots = min(lots, int(math.floor(cfg.capital * cfg.max_loss_fraction / (stop_points * lot_size))))
+    units = lots * lot_size
     if cfg.target_credit_fraction is not None:
         if not 0 < cfg.target_credit_fraction < 1:
             raise ValueError("target_credit_fraction must be in (0, 1)")

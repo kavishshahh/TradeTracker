@@ -565,7 +565,7 @@
     ],
     "execution": "paper_only",
     "limitations": "Gross 3-year historical simulation (4 Oct 2023 - 30 Sep 2026, fixed INR 320,000). The formula was chosen on Jul 2025 - Oct 2026 data, so only Oct 2023 - Jun 2025 is out of sample. Missing option quotes (positions settled at the official NSE close when legs left the archive), estimated margin and excluded costs make results provisional; costs weigh more here because it trades about 160-220 times a year. Not a recovered Zen Credit replica.",
-    "enabled": true,
+    "enabled": false,
     "order": 0,
     "schema_version": 1,
     "rules": [
@@ -1165,7 +1165,7 @@
     ],
     "execution": "paper_only",
     "limitations": "Gross 3-year historical simulation (4 Oct 2023 - 30 Sep 2026, fixed INR 320,000). The formula was chosen on Jul 2025 - Oct 2026 data, so only Oct 2023 - Jun 2025 is out of sample. Missing option quotes (positions settled at the official NSE close when legs left the archive), estimated margin and excluded costs make results provisional; costs weigh more here because it trades about 160-220 times a year. Not a recovered Zen Credit replica.",
-    "enabled": true,
+    "enabled": false,
     "order": 1,
     "schema_version": 1,
     "rules": [

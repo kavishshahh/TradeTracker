@@ -74,6 +74,12 @@ still apply. All evaluations and stops are minute-based.
 
 ## History, outages and credentials
 
+- Chain snapshot history is held once per process (`SnapshotHistory`), shared by every
+  strategy, as one compact frame covering `SNAPSHOT_HISTORY_DAYS`. A cold start streams
+  that window from Firestore once; afterwards each minute's rows enter the cache from the
+  process's own saves, so steady-state cycles read no snapshot documents. The dashboard's
+  closed ledger is re-read only after a position closes. This keeps a 512MB instance
+  well under its limit and the free-tier read quota intact across restarts.
 - Price alpha is bootstrapped using completed Dhan index candles. Alpha2 builds
   same-contract minute option-price/volume history in Firestore. On a new account,
   allow multiple trading sessions for all rolling inputs to become valid. Missing

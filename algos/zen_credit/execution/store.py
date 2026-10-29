@@ -117,6 +117,10 @@ CREATE TABLE IF NOT EXISTS zc_state (
 
 SNAPSHOT_COLUMNS = ["minute", "expiry", "strike", "spot", "ce_ltp", "pe_ltp", "ce_bid", "ce_ask",
                     "pe_bid", "pe_ask", "ce_cum_volume", "pe_cum_volume"]
+# Calendar days of chain history kept in memory and loaded on a cold start. The
+# longest minute-based window is the 800-minute rank (about two sessions), so six
+# calendar days still covers a long weekend. Every reader uses this one window.
+SNAPSHOT_HISTORY_DAYS = 6
 
 
 @dataclass

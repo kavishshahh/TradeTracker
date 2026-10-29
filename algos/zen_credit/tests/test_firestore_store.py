@@ -191,3 +191,43 @@ def test_runner_entry_duplicate_and_exit_use_firestore_without_postgres(setup, c
     assert state['open_position'] is None and len(state['closed_positions'])==1
     assert db.values['algo_paper_state/zen_strategy_02']['realized_pnl']==-2925
     assert FakeSMTP.sent==[]
+
+
+def counting_streams(monkeypatch):
+    streams=[];original=Query.stream
+    monkeypatch.setattr(Query,'stream',lambda self,**kw:(streams.append(self.path),original(self,**kw))[1])
+    return streams
+
+
+def test_history_is_shared_across_strategies_and_steady_state_reads_nothing(setup,monkeypatch):
+    from execution.firestore_store import SnapshotHistory
+    db,clock,_=setup;streams=counting_streams(monkeypatch);shared=SnapshotHistory()
+    a=FirestoreStore('zen_strategy_01',db,db.run,lambda:clock[0],lease_seconds=30,history=shared)
+    b=FirestoreStore('zen_strategy_02',db,db.run,lambda:clock[0],lease_seconds=30,history=shared)
+    a.save_snapshot_rows([row(clock[0]-timedelta(minutes=2),23000,120)])   # b was enabled later
+    a.save_snapshot_rows([row(clock[0],23000,110)]);b.save_snapshot_rows([row(clock[0],23000,110)])
+    since=clock[0]-timedelta(minutes=3)
+    assert len(a.load_snapshots(since))==2                                   # cold start streams a once
+    assert len(b.load_snapshots(since))==2                                   # b inherits a's older row
+    assert streams==['algo_engines/zen_strategy_01/snapshots','algo_engines/zen_strategy_02/snapshots']
+    clock[0]+=timedelta(minutes=1)
+    a.save_snapshot_rows([row(clock[0],23000,100)])
+    assert len(a.load_snapshots(since))==3 and len(b.load_snapshots(since))==3
+    assert len(streams)==2                                                   # the save fed the cache: no reads
+    frame=b.history.frame
+    assert frame.minute.is_monotonic_increasing and frame.ce_ltp.tolist()==[120,110,100]
+    assert str(frame.minute.dtype).startswith('datetime64') and frame.expiry.iloc[0]==date(2026,10,13)
+    assert len(a.load_snapshots(clock[0]-timedelta(minutes=1)))==2          # pruned to the window
+
+
+def test_dashboard_inputs_reread_ledger_only_after_a_close(setup,monkeypatch):
+    db,clock,factory=setup;store=factory();streams=counting_streams(monkeypatch)
+    ledger='algo_engines/zen_strategy_01/closed'
+    with store.lock():
+        opened=store.insert_position(position(),'bearish')
+        first=store.dashboard_inputs();assert first[0].signal_id=='test' and first[3]==[]
+        store.dashboard_inputs();assert streams.count(ledger)==1
+        store.close_position(opened.id,ExitEvent('target',clock[0],20,5200,1.625))
+        held,totals,mark,closed=store.dashboard_inputs()
+        assert held is None and mark is None and totals['closed_trades']==1 and len(closed)==1
+        store.dashboard_inputs();assert streams.count(ledger)==2

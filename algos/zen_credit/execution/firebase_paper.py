@@ -31,38 +31,37 @@ def public_trade(row):
 
 def build_snapshot(runner, cycle):
     store = runner.store
-    opened = store.open_position_row()
-    closed = store.closed_positions(limit=200)
     mtm = None
     mark_time = None
     quote = None
-    if hasattr(store, 'paper_totals_and_mark'):
-        totals, quote = store.paper_totals_and_mark(opened)
-        if quote:
-            mtm = (opened.entry_spread_price - (quote['sell'] - quote['buy'])) * opened.units
-            mark_time = quote['minute'].isoformat()
+    if hasattr(store, 'dashboard_inputs'):
+        # One runtime read, mark from the shared chain cache, ledger re-read only after a close.
+        opened, totals, quote, closed = store.dashboard_inputs(limit=200)
     else:
-        # Legacy adapter retained for isolated PostgreSQL regression fixtures.
-        with store._cursor(dict_rows=True) as cur:
-            cur.execute("SELECT COUNT(*) AS closed_trades, COUNT(*) FILTER (WHERE pnl>0) AS winners, "
-                        "COUNT(*) FILTER (WHERE pnl IS NULL) AS unknown_pnl, SUM(pnl) AS realized_pnl "
-                        "FROM zc_positions WHERE status='closed'")
-            totals = dict(cur.fetchone())
-            mtm = None
-            mark_time = None
-            if opened is not None:
-                side = 'ce_ltp' if opened.option_type == 'CE' else 'pe_ltp'
-                cur.execute(f"SELECT s.minute, s.{side} AS sell, b.{side} AS buy "
-                            "FROM zc_option_snapshots s JOIN zc_option_snapshots b "
-                            "ON s.minute=b.minute AND s.expiry=b.expiry "
-                            "WHERE s.expiry=%s AND s.strike=%s AND b.strike=%s "
-                            f"AND s.{side} IS NOT NULL AND b.{side} IS NOT NULL "
-                            "AND s.minute<=%s ORDER BY s.minute DESC LIMIT 1",
-                            (opened.expiry, opened.sell_strike, opened.buy_strike, datetime.now().astimezone()))
-                quote = cur.fetchone()
-                if quote:
-                    mtm = (opened.entry_spread_price - (quote['sell'] - quote['buy'])) * opened.units
-                    mark_time = quote['minute'].isoformat()
+        opened = store.open_position_row()
+        closed = store.closed_positions(limit=200)
+        if hasattr(store, 'paper_totals_and_mark'):
+            totals, quote = store.paper_totals_and_mark(opened)
+        else:
+            # Legacy adapter retained for isolated PostgreSQL regression fixtures.
+            with store._cursor(dict_rows=True) as cur:
+                cur.execute("SELECT COUNT(*) AS closed_trades, COUNT(*) FILTER (WHERE pnl>0) AS winners, "
+                            "COUNT(*) FILTER (WHERE pnl IS NULL) AS unknown_pnl, SUM(pnl) AS realized_pnl "
+                            "FROM zc_positions WHERE status='closed'")
+                totals = dict(cur.fetchone())
+                if opened is not None:
+                    side = 'ce_ltp' if opened.option_type == 'CE' else 'pe_ltp'
+                    cur.execute(f"SELECT s.minute, s.{side} AS sell, b.{side} AS buy "
+                                "FROM zc_option_snapshots s JOIN zc_option_snapshots b "
+                                "ON s.minute=b.minute AND s.expiry=b.expiry "
+                                "WHERE s.expiry=%s AND s.strike=%s AND b.strike=%s "
+                                f"AND s.{side} IS NOT NULL AND b.{side} IS NOT NULL "
+                                "AND s.minute<=%s ORDER BY s.minute DESC LIMIT 1",
+                                (opened.expiry, opened.sell_strike, opened.buy_strike, datetime.now().astimezone()))
+                    quote = cur.fetchone()
+    if quote:
+        mtm = (opened.entry_spread_price - (quote['sell'] - quote['buy'])) * opened.units
+        mark_time = quote['minute'].isoformat()
     count = totals['closed_trades']
     open_trade = public_trade(opened) if opened else None
     if open_trade and quote:

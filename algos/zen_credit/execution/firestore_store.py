@@ -12,7 +12,7 @@ import json
 import math
 import uuid
 import pandas as pd
-from execution.store import PositionRecord, StoreUnavailable, SNAPSHOT_COLUMNS, _aware
+from execution.store import PositionRecord, StoreUnavailable, SNAPSHOT_COLUMNS, SNAPSHOT_HISTORY_DAYS, _aware
 from utils.time import IST
 
 
@@ -28,8 +28,42 @@ def clean(value):
     return value
 
 
+class SnapshotHistory:
+    """One compact in-process copy of the chain history, shared by every strategy store.
+
+    Every enabled strategy writes the same per-minute chain rows to its own
+    namespace, so one typed DataFrame serves all of them. A cold start streams
+    the window once (plus one bounded gap query per namespace); afterwards new
+    minutes arrive through this process's own saves, so the steady state needs
+    no snapshot reads at all. Readers must treat ``frame`` as read-only.
+    """
+    KEY = ['minute', 'expiry', 'strike']
+
+    def __init__(self):
+        self.frame = pd.DataFrame(columns=SNAPSHOT_COLUMNS)
+        self.loaded_since = None
+
+    def earliest(self): return None if self.frame.empty else self.frame.minute.iloc[0].to_pydatetime()
+    def latest(self): return None if self.frame.empty else self.frame.minute.iloc[-1].to_pydatetime()
+
+    def prune(self, since):
+        if not self.frame.empty and self.earliest() < since:
+            self.frame = self.frame.loc[self.frame.minute >= since].reset_index(drop=True)
+
+    def add(self, rows):
+        if not rows: return
+        incoming = pd.DataFrame(rows, columns=SNAPSHOT_COLUMNS)
+        incoming['minute'] = pd.to_datetime(incoming.minute, utc=True).dt.tz_convert(IST)
+        incoming['expiry'] = pd.to_datetime(incoming.expiry.astype(str)).dt.date
+        for column in SNAPSHOT_COLUMNS[2:]: incoming[column] = pd.to_numeric(incoming[column], errors='coerce')
+        merged = incoming if self.frame.empty else pd.concat([self.frame, incoming], ignore_index=True)
+        # Cached rows win: Firestore keeps the first row stored for a minute/strike.
+        merged = merged.drop_duplicates(self.KEY, keep='first')
+        self.frame = merged.sort_values(self.KEY).reset_index(drop=True)
+
+
 class FirestoreStore:
-    def __init__(self, strategy_name, client=None, transaction_runner=None, now=None, lease_seconds=300):
+    def __init__(self, strategy_name, client=None, transaction_runner=None, now=None, lease_seconds=300, history=None):
         if not strategy_name or '/' in strategy_name: raise ValueError('Invalid strategy namespace')
         if client is None:
             from execution.firebase_client import get_firestore_client
@@ -42,8 +76,9 @@ class FirestoreStore:
         self._owner = None
         self._now = now or (lambda: datetime.now(timezone.utc))
         self.lease_seconds = lease_seconds
-        self._snapshot_cache = {}
-        self._history_loaded_since = None
+        self.history = history or SnapshotHistory()
+        self._history_warm = False
+        self._closed_cache = None
         if transaction_runner is None:
             from google.cloud.firestore import transactional
             transaction_runner = lambda fn: transactional(fn)(client.transaction(max_attempts=5))
@@ -142,37 +177,49 @@ class FirestoreStore:
             grouped.setdefault(key, {'minute':minute,'rows':{}})['rows'][f"{row['expiry']}_{row['strike']}"] = row
         def save(tx):
             existing = {key:self._get(self.root.collection('snapshots').document(key), tx) for key in grouped}
-            changed = {}; count = 0
+            changed = {}; added = []
             for key, incoming in grouped.items():
                 document = existing[key] or {'minute':incoming['minute'],'rows':{}}
                 for row_key, row in incoming['rows'].items():
-                    if row_key not in document['rows']: document['rows'][row_key] = row; count += 1
+                    if row_key not in document['rows']: document['rows'][row_key] = row; added.append(row)
                 if len(json.dumps(document, default=str).encode()) > 750_000:
                     raise ValueError('Snapshot minute exceeds safe Firestore document size')
                 changed[key] = document
             for key, document in changed.items(): tx.set(self.root.collection('snapshots').document(key), document)
-            return count, changed
-        count, changed = self._write(save)
-        self._snapshot_cache.update(changed)
-        return count
+            return added
+        added = self._write(save)
+        self.history.add(added)
+        return len(added)
+
+    def _load_snapshot_range(self, start, end=None):
+        query = self.root.collection('snapshots').where('minute','>=',start)
+        if end is not None: query = query.where('minute','<',end)
+        docs = self._stream(query.order_by('minute'))
+        self.history.add([row for snap in docs for row in snap.to_dict()['rows'].values()])
 
     def load_snapshots(self, since):
+        """Chain rows since ``since`` as one shared frame (see SnapshotHistory).
+
+        Cold start: stream the window from this namespace. Later calls read
+        nothing while the current minute is already cached by a save in this
+        process; only a minute with no save yet costs one incremental query.
+        """
         since = clean(since)
-        self._snapshot_cache = {key:doc for key,doc in self._snapshot_cache.items() if doc['minute'] >= since}
-        # Load all required history on cold start, then only the latest minute onward.
-        # Keep the last minute inclusive because its second expiry may arrive later.
-        cursor = since if self._history_loaded_since is None or since < self._history_loaded_since else max(
-            (doc['minute'] for doc in self._snapshot_cache.values()), default=since)
-        query = self.root.collection('snapshots').where('minute','>=',cursor).order_by('minute')
-        for snap in self._stream(query): self._snapshot_cache[snap.id] = snap.to_dict()
-        self._history_loaded_since = since
-        rows = [row for doc in self._snapshot_cache.values() for row in doc['rows'].values()]
-        frame = pd.DataFrame(rows, columns=SNAPSHOT_COLUMNS)
-        if not frame.empty:
-            frame['minute'] = pd.to_datetime(frame.minute,utc=True).dt.tz_convert(IST)
-            frame['expiry'] = pd.to_datetime(frame.expiry).dt.date
-            frame = frame.sort_values(['minute','expiry','strike']).reset_index(drop=True)
-        return frame
+        history = self.history
+        history.prune(since)
+        current = clean(self._now()).replace(second=0, microsecond=0)
+        if history.loaded_since is None or since < history.loaded_since - timedelta(hours=1):
+            self._load_snapshot_range(since)
+        else:
+            if not self._history_warm:
+                # Another namespace seeded the cache; fill any older gap from this one.
+                earliest = history.earliest()
+                if earliest is None or earliest > since: self._load_snapshot_range(since, earliest)
+            latest = history.latest()
+            if latest is None or latest < current: self._load_snapshot_range(latest or since)
+        self._history_warm = True
+        history.loaded_since = since
+        return history.frame
 
     def prune_snapshots(self, older_than_days=10):
         # Optional maintenance; bounded cache retention is already applied on reads.
@@ -264,22 +311,38 @@ class FirestoreStore:
                 result.append((kind,row))
         return result
 
+    TOTALS = {'closed_trades':0,'winners':0,'unknown_pnl':0,'realized_pnl':0.0}
+
+    def _mark(self, opened):
+        if opened is None: return None
+        frame = self.load_snapshots(self._now() - timedelta(days=SNAPSHOT_HISTORY_DAYS))
+        if frame.empty: return None
+        side = 'ce_ltp' if opened.option_type=='CE' else 'pe_ltp'
+        selected = frame.loc[(frame.expiry==opened.expiry)&(frame.minute<=self._now())]
+        sold = selected.loc[selected.strike==opened.sell_strike,['minute',side]]
+        bought = selected.loc[selected.strike==opened.buy_strike,['minute',side]]
+        paired = sold.merge(bought,on='minute',suffixes=('_sell','_buy')).dropna()
+        if paired.empty: return None
+        quote = paired.sort_values('minute').iloc[-1]
+        return {'minute':quote.minute,'sell':float(quote[f'{side}_sell']),'buy':float(quote[f'{side}_buy'])}
+
     def paper_totals_and_mark(self, opened):
         runtime = self._get(self.runtime) or {}
-        totals = runtime.get('stats',{'closed_trades':0,'winners':0,'unknown_pnl':0,'realized_pnl':0.0})
-        mark = None
-        if opened:
-            frame = self.load_snapshots(self._now() - timedelta(days=10))
-            side = 'ce_ltp' if opened.option_type=='CE' else 'pe_ltp'
-            if not frame.empty:
-                selected = frame.loc[(frame.expiry==opened.expiry)&(frame.minute<=self._now())]
-                sold = selected.loc[selected.strike==opened.sell_strike,['minute',side]]
-                bought = selected.loc[selected.strike==opened.buy_strike,['minute',side]]
-                paired = sold.merge(bought,on='minute',suffixes=('_sell','_buy')).dropna()
-                if not paired.empty:
-                    quote = paired.sort_values('minute').iloc[-1]
-                    mark = {'minute':quote.minute,'sell':float(quote[f'{side}_sell']),'buy':float(quote[f'{side}_buy'])}
-        return totals,mark
+        return runtime.get('stats', dict(self.TOTALS)), self._mark(opened)
+
+    def dashboard_inputs(self, limit=200):
+        """Open row, totals, mark and closed ledger for the dashboard, with few reads.
+
+        The closed ledger changes only when a position closes, which bumps
+        ``closed_trades``; it is re-read only then instead of every minute.
+        """
+        runtime = self._get(self.runtime) or {}
+        row_id = runtime.get('open_id')
+        opened = self._record(self._get(self.root.collection('positions').document(str(row_id)))) if row_id is not None else None
+        totals = runtime.get('stats', dict(self.TOTALS))
+        if self._closed_cache is None or self._closed_cache[0] != (totals['closed_trades'], limit):
+            self._closed_cache = ((totals['closed_trades'], limit), self.closed_positions(limit))
+        return opened, totals, self._mark(opened), list(self._closed_cache[1])
 
     def publish_dashboard(self, payload):
         ref = self.client.collection('algo_paper_state').document(self.strategy_name)

@@ -32,7 +32,8 @@ from data.providers.base import MarketDataError, MarketDataProvider
 from data.providers.http import HttpClient
 from data.providers.nse import NSEMarketDataProvider
 from data.providers.yahoo import YahooSpotSource
-from execution.store import PositionRecord, Store, StoreUnavailable, is_db_error, row_to_position
+from execution.store import (PositionRecord, Store, StoreUnavailable, SNAPSHOT_HISTORY_DAYS, is_db_error,
+                             row_to_position)
 from notifications.email import EmailNotifier
 from strategy.alpha2 import nearest_strike
 from strategy.engine import MarketView, StrategyEngine
@@ -43,7 +44,6 @@ from utils.time import minute_bucket, now_ist, to_ist
 log = logging.getLogger("paper.runner")
 
 SNAPSHOT_STRIKES_EACH_SIDE = 15
-SNAPSHOT_HISTORY_DAYS = 6
 HTTP_OK_STATUSES = {"entry", "exit", "no_action", "duplicate", "duplicate_signal", "market_closed"}
 MAX_RESPONSE_BYTES = 2048
 MAX_REASON_CHARS = 200
@@ -162,13 +162,16 @@ class Runner:
         self.cycles = 0
         self.last_context: dict = {}
         self._lock = threading.Lock()
+        self._namespace_bound = False
 
     @classmethod
-    def from_config(cls, cfg: Config = CONFIG, provider=None) -> "Runner":
+    def from_config(cls, cfg: Config = CONFIG, provider=None, history=None) -> "Runner":
+        """``history``: a SnapshotHistory shared by every runner in the process (see PaperCoordinator)."""
         cfg = replace(cfg, strategy=apply_profile(cfg.runtime.strategy_name, cfg.strategy))
         http = HttpClient(cfg.data.request_timeout, cfg.data.max_retries, nse_base_url=cfg.data.nse_base_url)
         from execution.firestore_store import FirestoreStore
-        store = FirestoreStore(cfg.runtime.strategy_name)
+        store = (FirestoreStore(cfg.runtime.strategy_name, history=history) if history is not None
+                 else FirestoreStore(cfg.runtime.strategy_name))
         if provider is None:
             if cfg.data.provider == "dhan":
                 from data.providers.dhan import DhanLiveProvider
@@ -198,16 +201,19 @@ class Runner:
         minute = minute_bucket(now)
         self.cycles += 1
         self.last_context = {"minute": minute.isoformat(), "strategy": self.strategy_name}
-        # Each strategy has its own Firestore namespace and minute ledger.
-        bound_strategy = self.store.get_state("selected_strategy")
-        if bound_strategy and bound_strategy != self.strategy_name:
-            return {"status": "strategy_state_mismatch", "strategy": self.strategy_name,
-                    "reason": "Firestore namespace belongs to another strategy"}
-        if bound_strategy is None:
-            if self.strategy_name != "description" and self.store.open_position_row() is not None:
+        # Each strategy has its own Firestore namespace and minute ledger. The
+        # binding never changes once verified, so it is read once per process.
+        if not self._namespace_bound:
+            bound_strategy = self.store.get_state("selected_strategy")
+            if bound_strategy and bound_strategy != self.strategy_name:
                 return {"status": "strategy_state_mismatch", "strategy": self.strategy_name,
-                        "reason": "Unlabelled open position exists; review this strategy namespace"}
-            self.store.set_state("selected_strategy", self.strategy_name)
+                        "reason": "Firestore namespace belongs to another strategy"}
+            if bound_strategy is None:
+                if self.strategy_name != "description" and self.store.open_position_row() is not None:
+                    return {"status": "strategy_state_mismatch", "strategy": self.strategy_name,
+                            "reason": "Unlabelled open position exists; review this strategy namespace"}
+                self.store.set_state("selected_strategy", self.strategy_name)
+            self._namespace_bound = True
         self.store.set_state("last_evaluation", now.isoformat())
         # ---- session gate: before any market-data request ----
         try:
@@ -302,7 +308,7 @@ class Runner:
             log.info("paper_data_start strategy=%s minute=%s stage=option_quotes expiry=%s", self.strategy_name, minute.isoformat(), nearest)
             chain = self.provider.get_option_chain(nearest)
             chains[nearest] = chain
-            self._collect_history(now, minute, chains, expiries)
+            self._collect_history(now, minute, chains, expiries, open_row)
             lot_size = self.provider.get_lot_size(nearest)
             log.info("paper_data_start strategy=%s minute=%s stage=index_candles", self.strategy_name, minute.isoformat())
             bars = self.provider.get_spot_bars(now)
@@ -346,31 +352,32 @@ class Runner:
             result = {"status": "no_action", "detail": res.reason}
         # History collection and SMTP cannot prevent the exit decision/persistence.
         if position is not None:
-            self._collect_history(now, minute, chains, expiries)
+            self._collect_history(now, minute, chains, expiries, open_row)
         try:
             self._flush_pending_emails()
         except Exception:
             log.exception("pending_email_flush_failed")
         return result
 
-    def _save_chain_history(self, chain, minute: datetime, now: datetime) -> None:
+    def _chain_history_rows(self, chain, minute: datetime, now: datetime, held) -> list[dict]:
         if (self.engine._stale(chain.timestamp, now) or chain.expiry < now.date()
                 or not chain.strikes):
-            return
+            return []
         atm = nearest_strike(chain.spot, chain.strikes)
         ks = sorted(chain.strikes, key=lambda k: abs(k - atm))[:2 * SNAPSHOT_STRIKES_EACH_SIDE + 1]
         # Preserve both held legs for marked P&L even after a large index move.
-        held = self.store.open_position_row()
         if held is not None and str(held.expiry) == chain.expiry.isoformat():
             ks = sorted(set(ks) | {float(held.sell_strike), float(held.buy_strike)})
-        self.store.save_snapshot_rows(chain.to_rows(minute, ks))
+        return chain.to_rows(minute, ks)
 
     def _collect_history(self, now: datetime, minute: datetime, chains: dict,
-                         expiries=None) -> None:
+                         expiries=None, held: PositionRecord | None = None) -> None:
         """Collect the nearest TWO expiries so rollover retains an already warmed series.
 
-        Each expiry is stored separately. Secondary data is best effort; entry
-        still requires the primary chain, and exit requires only its own contract.
+        Both expiries share one minute document, so they are saved in one
+        transaction. ``held`` is the open row the caller already read, so no
+        extra lookup is needed. Secondary data is best effort; entry still
+        requires the primary chain, and exit requires only its own contract.
         """
         try:
             listed = expiries if expiries is not None else self.provider.get_expiries()
@@ -380,17 +387,20 @@ class Runner:
                 raise
             log.warning("history_expiry_lookup_failed: %s", type(exc).__name__)
             return
+        rows: list[dict] = []
         for expiry in upcoming:
             try:
                 chain = chains.get(expiry)
                 if chain is None:
                     chain = self.provider.get_option_chain(expiry)
                     chains[expiry] = chain
-                self._save_chain_history(chain, minute, now)
+                rows.extend(self._chain_history_rows(chain, minute, now, held))
             except Exception as exc:
                 if is_db_error(exc):
                     raise
                 log.warning("history_collection_failed for %s: %s", expiry, type(exc).__name__)
+        if rows:
+            self.store.save_snapshot_rows(rows)
 
     # ------------------------------------------------------------------ status
     def status(self) -> dict:

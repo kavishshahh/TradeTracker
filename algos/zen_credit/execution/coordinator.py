@@ -5,6 +5,7 @@ import logging
 import time
 from config import CONFIG
 from data.providers.dhan import DhanLiveProvider
+from execution.firestore_store import SnapshotHistory
 from main import Runner, configure_paper_logging
 from paper_worker import run_round
 from strategy.registry import STRATEGIES
@@ -18,7 +19,12 @@ class PaperCoordinator:
         configure_paper_logging()
         self.db = db
         self.provider = provider or DhanLiveProvider()
-        self.runner_factory = runner_factory or Runner.from_config
+        # One chain-history cache for the whole process: every strategy stores
+        # the same rows, so holding a copy per runner multiplied memory by the
+        # strategy count and each restart re-read the window once per strategy.
+        self.history = SnapshotHistory()
+        self.runner_factory = runner_factory or (
+            lambda cfg, provider: Runner.from_config(cfg, provider=provider, history=self.history))
         self.runners = {}
         self.lock = threading.Lock()
 

@@ -54,7 +54,8 @@ class APIAuthenticationTests(unittest.TestCase):
             if authorization not in ('Bearer alice','Bearer bob'): raise HTTPException(401)
             return authorization.split()[1]
         self.app = FastAPI()
-        self.app.include_router(create_algos_router(self.db, user))
+        # catalog_ttl=0: these tests change the catalogue between requests and expect to see it at once.
+        self.app.include_router(create_algos_router(self.db, user, catalog_ttl=0))
 
     def test_auth_required_for_all_routes(self):
         for path, method, body in [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/backtest/zen_strategy_01','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]:
@@ -92,6 +93,34 @@ class APIAuthenticationTests(unittest.TestCase):
         self.assertEqual((body['strategy_id'], body['trade_count'], body['execution']), ('zen_strategy_01', 1, 'paper_only'))
         self.assertEqual(asyncio.run(request(self.app, '/algos/backtest/zen_strategy_02', user='alice'))[0], 404)
         self.assertEqual(asyncio.run(request(self.app, '/algos/backtest/Bad.Id', user='alice'))[0], 404)
+
+    def test_catalogue_is_cached_per_process_and_paper_poll_does_not_restream_it(self):
+        clock=[0.0];streams=[]
+        class Counting(Database):
+            def collection(self,name):
+                streams.append(name);return Database.collection(self,name)
+        db=Counting(self.db)
+        async def user(authorization: str = Header(None)): return 'alice'
+        app=FastAPI();app.include_router(create_algos_router(db,user,catalog_ttl=60,clock=lambda:clock[0]))
+        for _ in range(3): self.assertEqual(asyncio.run(request(app,'/algos/paper',user='alice'))[0],200)
+        asyncio.run(request(app,'/algos/catalog',user='alice'))
+        self.assertEqual(streams.count('algo_catalog'),1)                 # one stream serves every poll
+        self.assertEqual(streams.count('algo_paper_state'),6)             # one state read per strategy per poll
+        clock[0]=61.0
+        asyncio.run(request(app,'/algos/catalog',user='alice'))
+        self.assertEqual(streams.count('algo_catalog'),2)                 # refreshed after the TTL
+
+    def test_unavailable_storage_is_logged_with_the_error_type(self):
+        class Broken:
+            def collection(self,name):
+                class Exploding:
+                    def stream(self): raise RuntimeError('quota')
+                return Exploding()
+        async def user(): return 'alice'
+        app=FastAPI();app.include_router(create_algos_router(Broken(),user,catalog_ttl=0))
+        with self.assertLogs('algos_api',level='WARNING') as captured:
+            self.assertEqual(asyncio.run(request(app,'/algos/catalog'))[0],503)
+        self.assertIn('algos_api_unavailable route=catalog error=RuntimeError',' '.join(captured.output))
 
     def test_unknown_strategy_and_unavailable_storage_fail_explicitly(self):
         status, _ = asyncio.run(request(self.app,'/algos/follow/unknown','PUT','alice',{'enabled':True}))

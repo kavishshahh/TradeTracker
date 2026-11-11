@@ -26,10 +26,14 @@ class DhanHistoryClient:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.offline = offline
         values = {**dotenv_values(BACKEND_ENV), **os.environ}
-        self._headers = {"access-token": values.get("DHAN_ACCESS_TOKEN", ""),
-                         "client-id": values.get("DHAN_CLIENT_ID", ""), "Content-Type": "application/json"}
-        if not offline and not all(self._headers.values()):
-            raise RuntimeError("Save DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in backend/.env")
+        self._auth = None
+        if not offline:
+            from data.providers.dhan_auth import DhanAuthError, shared_source
+            try:
+                self._auth = shared_source(values)   # fixed token, or TOTP renewal (DHAN_PIN + DHAN_TOTP_SECRET)
+            except DhanAuthError as exc:
+                raise RuntimeError(f"{exc} in backend/.env") from None
+        self._headers = {"client-id": self._auth.client_id if self._auth else "", "Content-Type": "application/json"}
         self.session = requests.Session()
         self._last_request = 0.0
         self.downloaded = self.cached = 0
@@ -48,13 +52,18 @@ class DhanHistoryClient:
             return result["response"]
         if self.offline:
             raise RuntimeError(f"Missing offline cache: {endpoint} {payload['fromDate']}")
+        reauthorised = False
         for attempt in range(5):
             with self._rate_lock:
                 time.sleep(max(0, 0.27 - (time.monotonic() - DhanHistoryClient._last_global_request)))
                 DhanHistoryClient._last_global_request = time.monotonic()
             try:
+                token = self._auth.token()
                 response = self.session.post("https://api.dhan.co/v2" + self.ENDPOINTS[endpoint],
-                                             headers=self._headers, json=payload, timeout=60)
+                                             headers={**self._headers, "access-token": token}, json=payload, timeout=60)
+                if response.status_code in (401, 403) and not reauthorised and self._auth.rejected(token):
+                    reauthorised = True         # renewable token: retry once with a freshly generated one
+                    continue
             except requests.RequestException:
                 if attempt == 4:
                     raise RuntimeError("Dhan historical request failed after retries") from None

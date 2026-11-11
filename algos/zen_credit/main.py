@@ -88,7 +88,7 @@ def summarize_cycle(result: dict, context: dict | None = None) -> dict:
 
 
 # --------------------------------------------------------------------------- logging
-_SECRET_ENV = ("SMTP_PASSWORD", "CRON_TOKEN", "API_SECRET", "SMTP_USERNAME", "DATABASE_URL", "DHAN_ACCESS_TOKEN", "DHAN_CLIENT_ID", "FIREBASE_SERVICE_ACCOUNT_JSON")
+_SECRET_ENV = ("SMTP_PASSWORD", "CRON_TOKEN", "API_SECRET", "SMTP_USERNAME", "DATABASE_URL", "DHAN_ACCESS_TOKEN", "DHAN_CLIENT_ID", "DHAN_PIN", "DHAN_TOTP_SECRET", "FIREBASE_SERVICE_ACCOUNT_JSON")
 _RESERVED = set(vars(logging.makeLogRecord({})).keys()) | {"message", "asctime"}
 _PATTERNS = [re.compile(r"(password|passwd|secret|token|authorization|cookie)(\s*[=:]\s*)([^\s,;&]+)", re.I),
              re.compile(r"(postgres(?:ql)?://)[^\s@/]+@", re.I)]

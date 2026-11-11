@@ -13,6 +13,7 @@ import pandas as pd
 import requests
 
 from data.providers.base import MarketDataError, MarketDataProvider, OptionChainSnapshot, OptionQuote
+from data.providers.dhan_auth import DhanAuthError, shared_source
 from strategy.bars import complete_bars, normalize_bars
 from utils.time import IST, now_ist
 
@@ -39,13 +40,15 @@ class DhanLiveProvider(MarketDataProvider):
     # at least 21 completed sessions; the minute-based ranks of the other strategies need two sessions.
     BAR_HISTORY_DAYS = 45
 
-    def __init__(self, session=None, clock=now_ist, sleeper=time.sleep):
+    def __init__(self, session=None, clock=now_ist, sleeper=time.sleep, auth=None):
         self.session = session or requests.Session()
         self.clock, self.sleep = clock, sleeper
-        self.headers = {'access-token': os.getenv('DHAN_ACCESS_TOKEN', ''),
-                        'client-id': os.getenv('DHAN_CLIENT_ID', ''), 'Content-Type': 'application/json'}
-        if not self.headers['access-token'] or not self.headers['client-id']:
-            raise MarketDataError('Set DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN in backend/.env')
+        # A fixed DHAN_ACCESS_TOKEN, or DHAN_PIN + DHAN_TOTP_SECRET to renew 24-hour tokens automatically.
+        try:
+            self.auth = auth or shared_source()
+        except DhanAuthError as exc:
+            raise MarketDataError(f'{exc} in backend/.env') from None
+        self.headers = {'client-id': self.auth.client_id, 'Content-Type': 'application/json'}
         self.contracts = None
         self.master_date = None
         self.cache = {}
@@ -58,14 +61,24 @@ class DhanLiveProvider(MarketDataProvider):
     def request(self, endpoint, payload):
         if endpoint not in self.ENDPOINTS:
             raise ValueError('Only read-only Dhan data endpoints are allowed')
+        reauthorised = False
         for attempt in range(3):
             self.sleep(max(0, 1.1 - (time.monotonic() - self.last_request)))
             self.last_request = time.monotonic()
             try:
+                token = self.auth.token()
+            except DhanAuthError as exc:
+                raise MarketDataError(str(exc)) from None
+            try:
                 response = self.session.post('https://api.dhan.co/v2' + endpoint,
-                                             headers=self.headers, json=payload, timeout=15)
+                                             headers={**self.headers, 'access-token': token}, json=payload, timeout=15)
                 if response.status_code in (401, 403):
-                    raise MarketDataError('Dhan authentication/data entitlement rejected; update backend token')
+                    if not reauthorised and self.auth.rejected(token):
+                        reauthorised = True     # renewable token: generate a fresh one and retry once
+                        continue
+                    raise MarketDataError('Dhan authentication/data entitlement rejected; update backend token'
+                                          if not self.auth.automatic else
+                                          'Dhan rejected a freshly generated token; check the Data API subscription')
                 if response.status_code == 429 or response.status_code >= 500:
                     if attempt < 2:
                         self.sleep(2 ** attempt)

@@ -24,12 +24,27 @@ The duplicate `algos/.env.example` was removed. `backend/env.example` is only a
 template, not a third runtime environment. The worker and historical client now
 load `backend/.env`; hosting environment variables take precedence.
 
-Only these new credentials are needed for Dhan:
+Dhan credentials, in one of two modes:
 
 ```dotenv
 DHAN_CLIENT_ID=your_client_id
+# Automatic (recommended): the worker generates and renews its own 24-hour token.
+DHAN_PIN=your_6_digit_dhan_pin
+DHAN_TOTP_SECRET=base32_setup_key_from_dhan_totp_setup
+# Manual: a token pasted from Dhan Web, which expires after 24 hours.
 DHAN_ACCESS_TOKEN=your_access_token
 ```
+
+Automatic mode (`data/providers/dhan_auth.py`): set up TOTP once under Dhan Web > DhanHQ Trading
+APIs > Setup TOTP, and save the base32 key shown next to the QR code as `DHAN_TOTP_SECRET` (the same
+key your authenticator app uses). The worker calls Dhan's `POST https://auth.dhan.co/app/generateAccessToken`
+when it has no token, 30 minutes before expiry, and once after Dhan rejects a token. A failed
+generation pauses further attempts for 15 minutes, so a wrong PIN or key cannot hammer the login and
+lock the account; the error then appears in the paper status as a data error. The PIN and key give
+full account login, so keep them only in the hosting provider's secret environment variables. Orders
+also require Dhan's static-IP whitelist, and the worker has no order code at all. Generating a token on
+another machine (for example a local research replay with the same credentials) may invalidate the
+worker's token; the worker then regenerates on its next rejected request.
 
 Keep the existing Firebase service-account credential in the backend environment:
 `FIREBASE_SERVICE_ACCOUNT_JSON` (or its existing local service-account file path).

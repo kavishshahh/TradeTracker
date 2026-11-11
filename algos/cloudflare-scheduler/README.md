@@ -31,7 +31,9 @@ Keep existing Firebase environment variables. Add these server-only values:
 
 ```dotenv
 DHAN_CLIENT_ID=your_existing_client_id
-DHAN_ACCESS_TOKEN=your_current_token
+DHAN_PIN=your_6_digit_dhan_pin              # with DHAN_TOTP_SECRET: tokens renew automatically
+DHAN_TOTP_SECRET=base32_totp_setup_key      # see ../PAPER_DEPLOYMENT.md
+# DHAN_ACCESS_TOKEN=your_current_token      # manual alternative; expires every 24 hours
 PAPER_SCHEDULER_TOKEN=the_shared_secret_saved_in_backend_env
 ```
 

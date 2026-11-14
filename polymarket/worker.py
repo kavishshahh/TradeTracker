@@ -18,6 +18,8 @@ import argparse
 import asyncio
 import json
 import logging
+import os
+import signal
 import sys
 import time
 from pathlib import Path
@@ -25,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from feed import BookFeed, Books, SpotFeed          # noqa: E402
+from lease import Lease                              # noqa: E402
 from pmq import api                                  # noqa: E402
 from pmq.broker import execute                       # noqa: E402
 from pmq.core import Context, Snapshot               # noqa: E402
@@ -84,8 +87,11 @@ class LiveData:
 
 
 class Worker:
-    def __init__(self, db, bankroll=BANKROLL):
+    def __init__(self, db, bankroll=BANKROLL, lease=None):
         self.db = db
+        self.lease = lease            # None in --dry runs
+        self.lost_lease = False
+        self.stopping = False         # loops also check this: on Python 3.11 a cancel can be swallowed
         self.strategies = [cls() for cls in REGISTRY.values()]
         self.accounts = {s.name: Account(db, s, bankroll) for s in self.strategies}
         self.books = Books()
@@ -166,7 +172,7 @@ class Worker:
 
     async def decide_loop(self):
         by_name = {s.name: s for s in self.strategies}
-        while True:
+        while not self.stopping:
             try:
                 await asyncio.wait_for(self.books.event.wait(), 1)
             except asyncio.TimeoutError:
@@ -191,7 +197,7 @@ class Worker:
                 if getattr(s, "time_driven", False):
                     for cid in self.universe[s.name]:
                         todo[(s.name, cid)] = None
-            if not todo or not self.feed_ok():
+            if not todo or not self.feed_ok() or (self.lease and not self.lease.fresh()):
                 continue
             changed = set()
             for name, cid in todo:
@@ -275,6 +281,16 @@ class Worker:
     async def heartbeat_loop(self):
         while True:
             await asyncio.sleep(HEARTBEAT_EVERY)
+            if self.lease:
+                try:
+                    if not await asyncio.to_thread(self.lease.renew):
+                        # Another worker took over (we stalled past the lease TTL). Our in-memory accounts
+                        # are now out of date: stop without saving so we cannot overwrite the new holder.
+                        log.error("lease lost to %s; stopping without saving", self.lease.holder)
+                        self.lost_lease = True
+                        return
+                except Exception as exc:       # cannot reach Firestore: trading pauses once the lease goes stale
+                    log.warning("lease_renew_failed error=%s", type(exc).__name__)
             for name in self.accounts:
                 try:
                     await self.save(name)
@@ -288,18 +304,37 @@ class Worker:
 
     async def run(self, seconds=None):
         tasks = [asyncio.create_task(c) for c in (self.spot.run(), self.universe_loop(), self.decide_loop(),
-                                                  self.settle_loop(), self.heartbeat_loop())]
+                                                  self.settle_loop())]
+        heartbeat = asyncio.create_task(self.heartbeat_loop())     # returns only when the lease is lost
+        stop = asyncio.Event()
+        try:                                   # hosts stop a service with SIGTERM; finish cleanly on it
+            asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, stop.set)
+        except (NotImplementedError, AttributeError, ValueError):
+            pass                               # Windows: Ctrl+C (KeyboardInterrupt) is the stop signal
+        waiters = [asyncio.create_task(stop.wait()), heartbeat, asyncio.ensure_future(asyncio.gather(*tasks))]
+        if seconds:
+            waiters.append(asyncio.create_task(asyncio.sleep(seconds)))
         try:
-            if seconds:
-                await asyncio.sleep(seconds)
-            else:
-                await asyncio.gather(*tasks)
+            await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
         finally:
-            for t in tasks + self.feed.tasks:
+            self.stopping = True
+            self.feed.stopping = True
+            everything = tasks + [heartbeat] + waiters + self.feed.tasks
+            for t in everything:
                 t.cancel()
-            await asyncio.gather(*tasks, *self.feed.tasks, return_exceptions=True)
-            for name in self.accounts:
-                await self.safe_save(name)
+            # Never wait without limit for tasks to finish: state is saved from memory either way.
+            _, stuck = await asyncio.wait(everything, timeout=10)
+            if stuck:
+                log.warning("%d task(s) did not stop within 10s; saving anyway", len(stuck))
+            if not self.lost_lease:
+                for name in self.accounts:
+                    await self.safe_save(name)
+                if self.lease:
+                    try:
+                        await asyncio.to_thread(self.lease.release)
+                        log.info("stopped cleanly; lease released")
+                    except Exception as exc:
+                        log.warning("lease_release_failed error=%s", type(exc).__name__)
 
 
 def main():
@@ -309,15 +344,41 @@ def main():
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     db = MemoryDb() if a.dry else firestore_client()
-    worker = Worker(db)
+    lease = None
+    if not a.dry:
+        # Wait until no other worker is trading these accounts, and only then load them.
+        lease = Lease(db)
+        waited = False
+        try:
+            while not lease.acquire():
+                if not waited:
+                    log.info("another worker (%s) is running; waiting for it to stop. This copy trades nothing meanwhile.", lease.holder)
+                    waited = True
+                time.sleep(10)
+        except KeyboardInterrupt:
+            return
+        log.info("lease acquired as %s", lease.owner)
+    worker = Worker(db, lease=lease)
+    loop = asyncio.new_event_loop()
+    main_task = loop.create_task(worker.run(a.seconds))
     try:
-        asyncio.run(worker.run(a.seconds))
+        loop.run_until_complete(main_task)
     except KeyboardInterrupt:
-        pass
+        # Ctrl+C: cancel the run so its shutdown (final save, lease release) still happens.
+        main_task.cancel()
+        try:
+            loop.run_until_complete(asyncio.wait([main_task], timeout=60))
+        except KeyboardInterrupt:
+            pass
     if a.dry:
         for path, doc in db.docs.items():
             keep = ("cash", "equity", "candidates", "watching", "evaluations", "signals", "skipped", "last_skip", "last_error")
             print(path, json.dumps({k: doc.get(k) for k in keep})[:1400])
+    # State is saved and the lease released inside run(). Do not wait for a network call still stuck
+    # in a background thread (Python 3.11 would wait without limit): exit now.
+    logging.shutdown()
+    sys.stdout.flush()
+    os._exit(0)
 
 
 if __name__ == "__main__":

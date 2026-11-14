@@ -4,6 +4,7 @@
   poly_paper_trades/{id}        every paper buy and every settlement, one document each, kept forever
   poly_catalog/{strategy}       backtest summary (written by seed.py)
   feature_access/polymarket_algos   {emails: [...]} - who may see the section (written by seed.py)
+  poly_worker/lease             which worker process currently trades the accounts (lease.py)
 """
 from dataclasses import asdict
 from datetime import datetime, timezone

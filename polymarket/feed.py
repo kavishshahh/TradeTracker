@@ -85,6 +85,7 @@ class BookFeed:
         self.tokens = []
         self.tasks = []
         self.connected = 0
+        self.stopping = False
 
     async def set_tokens(self, tokens):
         tokens = sorted(set(tokens))
@@ -99,14 +100,14 @@ class BookFeed:
 
     async def _run(self, tokens):
         delay = 1
-        while True:
+        while not self.stopping:
             try:
                 async with websockets.connect(POLY_WS, max_size=None, ping_interval=None, open_timeout=20) as ws:
                     await ws.send(json.dumps({"assets_ids": tokens, "type": "market"}))
                     self.connected += 1
                     delay = 1
                     try:
-                        while True:
+                        while not self.stopping:
                             try:
                                 raw = await asyncio.wait_for(ws.recv(), 10)
                             except asyncio.TimeoutError:

@@ -40,8 +40,38 @@ python -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.tx
 .venv\Scripts\python.exe -u worker.py --dry --seconds 60    # test run, writes nothing
 ```
 
-It uses the Firebase service account already in `backend/.env`. It is one long-running process,
-so it needs a machine that stays on. Run only one copy at a time.
+Locally it uses the Firebase service account already in `backend/.env`; on a host, set
+`FIREBASE_SERVICE_ACCOUNT_JSON` instead. It is one long-running process, so it needs a machine
+that stays on.
+
+Only one copy trades at a time. The running copy holds a lease in Firestore (`poly_worker/lease`),
+renewed with each heartbeat. Any other copy logs "another worker ... is running" and waits. A
+clean stop (Ctrl+C, or SIGTERM from a host) saves the accounts and releases the lease, so a
+waiting copy takes over within about 10 seconds. If a copy dies without stopping cleanly, the
+lease expires after 5 minutes.
+
+## Running on Render (background worker)
+
+Create a Background Worker from this repository with:
+
+| Setting | Value |
+|---|---|
+| Language | Python 3 |
+| Branch | `main` |
+| Root Directory | `polymarket` |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `python -u worker.py` |
+| Instance type | Starter (0.5 CPU, 512 MB) |
+
+Environment variables:
+
+- `PYTHON_VERSION` = `3.11.9` (the version the worker is tested on)
+- `FIREBASE_SERVICE_ACCOUNT_JSON` = the same value the backend service uses (secret)
+
+With Root Directory set, only changes inside `polymarket/` redeploy the worker. During a
+redeploy Render starts the new instance before stopping the old one; the new one waits on the
+lease until the old one has saved and stepped down. Stop the copy on your PC once the Render one
+shows "lease acquired" in its logs, or the PC copy keeps the lease and Render waits.
 
 How it reacts:
 

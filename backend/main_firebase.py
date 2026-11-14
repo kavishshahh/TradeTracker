@@ -126,6 +126,9 @@ from algos_api import create_algos_router
 app.include_router(create_algos_router(db, get_current_user))
 from algos_scheduler_api import create_scheduler_router
 app.include_router(create_scheduler_router(db))
+# Private Polymarket paper algos; visibility is granted per email in Firestore (feature_access/polymarket_algos).
+from poly_api import create_poly_router
+app.include_router(create_poly_router(db, get_current_user))
 
 # Pydantic models
 class Trade(BaseModel):

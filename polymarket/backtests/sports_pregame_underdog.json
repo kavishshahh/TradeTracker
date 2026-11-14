@@ -1,0 +1,27 @@
+{
+ "strategy": "sports_pregame_underdog",
+ "train": {
+  "n": 564,
+  "win_rate": 0.299645390070922,
+  "avg_price": 0.28838652482269506,
+  "roi_per_bet": 0.002103783866522886,
+  "t_stat": 0.03016605573620788,
+  "total_pnl": 2.305966150000005,
+  "bets_per_day": 4.675400484967644,
+  "avg_hold_hours": 7.400416666666667,
+  "fees_paid": 29.46685
+ },
+ "test": {
+  "n": 1150,
+  "win_rate": 0.32608695652173914,
+  "avg_price": 0.2756521739130435,
+  "roi_per_bet": 0.2502228507018693,
+  "t_stat": 4.1653731825487785,
+  "total_pnl": 321.0756419,
+  "bets_per_day": 25.870910509718907,
+  "avg_hold_hours": 7.3500709353884055,
+  "fees_paid": 58.95645
+ },
+ "note": "Experimental: about zero in the tuning period, so the held-out result may be luck. Live version trades moneyline markets only.",
+ "source": "Jun-Nov 2026 resolved markets, taker fills, fees, 1c half-spread"
+}

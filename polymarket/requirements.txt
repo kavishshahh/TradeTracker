@@ -1,0 +1,6 @@
+requests>=2.31
+websockets>=12
+numpy>=1.26
+pandas>=2.2
+firebase-admin>=6.4
+python-dotenv>=1.0

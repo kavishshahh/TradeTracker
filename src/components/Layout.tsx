@@ -3,11 +3,12 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { trackNavigation, trackUserEngagement } from '@/lib/analytics';
-import { Activity, BarChart3, BookOpen, Calculator, Calendar, ChevronLeft, List, LogOut, Menu, Moon, Plus, Sun, TrendingUp, User, X } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, Calculator, Calendar, CandlestickChart, ChevronLeft, List, LogOut, Menu, Moon, Plus, Sun, TrendingUp, User, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { usePolyAccess } from '../../polymarket/frontend/usePolyAccess';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,6 +26,9 @@ const navigation = [
   { name: 'Qty Calculator', href: '/qty-calculator', icon: Calculator },
 ];
 
+// Shown only to accounts granted in Firestore (feature_access/polymarket_algos); hidden for everyone else.
+const polymarketItem = { name: 'Polymarket Algos', href: '/poly-algos', icon: CandlestickChart };
+
 function BrandMark() {
   return (
     <span className="app-brand-mark" aria-hidden="true">
@@ -39,7 +43,8 @@ export default function Layout({ children }: LayoutProps) {
   const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const previousPathnameRef = useRef(pathname);
-  const activePage = navigation.find((item) => item.href === pathname)?.name || 'TradeBud';
+  const items = usePolyAccess() === true ? [...navigation.slice(0, 2), polymarketItem, ...navigation.slice(2)] : navigation;
+  const activePage = items.find((item) => item.href === pathname)?.name || 'TradeBud';
 
   useEffect(() => {
     setSidebarOpen(window.innerWidth >= 900);
@@ -77,7 +82,7 @@ export default function Layout({ children }: LayoutProps) {
 
         {sidebarOpen && <p className="nav-label">WORKSPACE</p>}
         <nav className="app-nav" aria-label="Workspace navigation">
-          {navigation.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (

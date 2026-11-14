@@ -1,0 +1,27 @@
+{
+ "strategy": "crypto_fair_value",
+ "train": {
+  "n": 362,
+  "win_rate": 0.6464088397790055,
+  "avg_price": 0.46292817679558007,
+  "roi_per_bet": 0.2839404942418274,
+  "t_stat": 5.098014489665486,
+  "total_pnl": 303.6612829999999,
+  "bets_per_day": 2.8171170702155406,
+  "avg_hold_hours": 157.88777777777779,
+  "fees_paid": 30.428599999999996
+ },
+ "test": {
+  "n": 327,
+  "win_rate": 0.8165137614678899,
+  "avg_price": 0.5530412844036696,
+  "roi_per_bet": 0.4397537883485537,
+  "t_stat": 9.641709120455067,
+  "total_pnl": 409.71042775,
+  "bets_per_day": 7.403686277284466,
+  "avg_hold_hours": 167.85727617164454,
+  "fees_paid": 26.808759999999996
+ },
+ "note": "Main candidate: positive in both periods.",
+ "source": "Jun-Nov 2026 resolved markets, taker fills, fees, 1c half-spread"
+}

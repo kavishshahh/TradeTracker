@@ -1,0 +1,324 @@
+"""Feed-driven Polymarket paper trader. Paper only: no wallet, key or order-placement code.
+
+  .venv\\Scripts\\python.exe -u worker.py                 # run until Ctrl+C, state in Firestore
+  .venv\\Scripts\\python.exe -u worker.py --dry --seconds 60   # in-memory test run, no Firestore writes
+
+How it reacts:
+  * Only markets near a trade are streamed: every few minutes the full market list (which carries
+    each market's current quotes) is scanned, and live feeds are opened just for the shortlist
+    plus the positions held. Far-away markets cost nothing.
+  * Polymarket order-book WebSocket -> a change in a watched market's best price re-evaluates it at once.
+  * Binance price WebSocket         -> a price move re-evaluates every watched crypto market.
+  * Fills are simulated against the live ask ladder (real fees, 5-share minimum) and saved immediately.
+What is not a feed (no stream exists for it), so it is refreshed on a timer:
+  * the list of open markets and the shortlist (every 3 min), hourly candles for the volatility
+    estimate (10 min), and whether held markets have resolved (every 2 min).
+"""
+import argparse
+import asyncio
+import json
+import logging
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from feed import BookFeed, Books, SpotFeed          # noqa: E402
+from pmq import api                                  # noqa: E402
+from pmq.broker import execute                       # noqa: E402
+from pmq.core import Context, Snapshot               # noqa: E402
+from pmq.strategies import REGISTRY                  # noqa: E402
+from pmq.strategies.crypto_fair_value import SYM     # noqa: E402
+from store import Account, MemoryDb, firestore_client, iso   # noqa: E402
+
+log = logging.getLogger("poly")
+
+BANKROLL = 25.0
+UNIVERSE_EVERY = 120          # also how often the next 5-minute markets are picked up (two windows ahead)
+CANDLES_EVERY = 600
+SETTLE_EVERY = 120
+HEARTBEAT_EVERY = 120
+SPOT_SWEEP_EVERY = 5          # seconds between full crypto re-evaluations on price moves
+SPOT_MOVE = 0.0005            # ...and only when a price moved by at least 0.05%
+MAX_NEW_PER_10MIN = 2         # pace entries so a small bankroll is spread over time
+FEED_MAX_SILENCE = 45         # seconds without any book message before trading pauses
+SYMBOLS = sorted(set(SYM.values()))
+
+
+class LiveData:
+    """What strategies read: spot from the Binance stream, candles from a background refresh."""
+    def __init__(self, spot):
+        self._spot = spot
+        self._k = {}
+        self._slices = {}
+
+    def refresh_candles(self):          # blocking; called in a thread
+        for sym in SYMBOLS:
+            self._k[sym] = api.klines(sym, time.time() - 32 * 86400)   # covers the longest market traded (30 days)
+        self._slices.clear()
+
+    def extremes(self, sym, start):
+        """Lowest and highest price since `start`, up to now: hourly candles (including the one in
+        progress at the last refresh) plus the live stream since then. Used for "already touched"."""
+        k = self._k.get(sym)
+        lo, hi = self._spot.extremes(sym, start)
+        if k is not None:
+            seen = k[k.index + 3600 > start]
+            if len(seen):
+                lo, hi = min(lo, float(seen.l.min())), max(hi, float(seen.h.max()))
+        return lo, hi
+
+    def klines(self, sym, t, lookback):
+        key = (sym, lookback, int(t // 300))
+        if key not in self._slices:
+            k = self._k.get(sym)
+            self._slices[key] = None if k is None else k[(k.index <= t - 3600) & (k.index > t - lookback)]
+        return self._slices[key]
+
+    def spot(self, sym):
+        price = self._spot.get(sym)
+        if price is None:
+            raise RuntimeError(f"no live price for {sym}")
+        return price
+
+
+class Worker:
+    def __init__(self, db, bankroll=BANKROLL):
+        self.db = db
+        self.strategies = [cls() for cls in REGISTRY.values()]
+        self.accounts = {s.name: Account(db, s, bankroll) for s in self.strategies}
+        self.books = Books()
+        self.feed = BookFeed(self.books)
+        self.spot = SpotFeed(SYMBOLS)
+        self.data = LiveData(self.spot)
+        self.universe = {s.name: {} for s in self.strategies}     # cid -> market, only those on the live feed
+        self.scanned = {s.name: 0 for s in self.strategies}       # markets looked at in the last listing
+        self.by_token = {}                                        # token -> [(strategy, cid)]
+        self.stats = {s.name: dict(evaluations=0, signals=0, skipped={}) for s in self.strategies}
+        self.errors = {}
+        self._swept = {}
+        self._save_locks = {s.name: asyncio.Lock() for s in self.strategies}
+        self._cpu = (time.process_time(), time.time())
+
+    # ------------------------------------------------------------ persistence
+    def marks(self, acc):
+        return {k: self.books.best_bid(m.get("token_id")) for k, m in acc.meta.items()}
+
+    def feed_ok(self):
+        return self.feed.connected > 0 and time.time() - self.books.last_message < FEED_MAX_SILENCE
+
+    async def save(self, name):
+        acc, st = self.accounts[name], self.stats[name]
+        extra = dict(candidates=self.scanned[name], watching=len(self.universe[name]), evaluations=st["evaluations"], signals=st["signals"],
+                     skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
+                     feed=dict(connected=self.feed_ok(), connections=self.feed.connected, tokens=len(self.feed.tokens),
+                               messages=self.books.messages,
+                               last_message_at=iso(self.books.last_message) if self.books.last_message else None))
+        async with self._save_locks[name]:             # one save per account at a time, in order
+            await asyncio.to_thread(acc.flush_ledger)  # permanent trade ledger first, then the scoreboard
+            doc = acc.document(self.marks(acc), extra)
+            await asyncio.to_thread(self.db.collection("poly_paper_state").document(name).set, doc)
+
+    async def safe_save(self, name):
+        """A failed write must not stop trading: the account stays in memory and the next save retries."""
+        try:
+            await self.save(name)
+        except Exception as exc:
+            log.warning("save_failed strategy=%s error=%s", name, type(exc).__name__)
+
+    # ------------------------------------------------------------ decisions
+    def evaluate(self, s, m, now):
+        """Run one strategy on one market from the local books. Returns True when a paper fill happened."""
+        acc, st = self.accounts[s.name], self.stats[s.name]
+        if acc.pf.held(m["condition_id"]) or m.get("event_slug") in acc.held_events() or not s.universe(m, now):
+            return False
+        acc.recent_entries = [t for t in acc.recent_entries if now - t < 600]
+        if len(acc.recent_entries) >= getattr(s, "max_new_per_10min", MAX_NEW_PER_10MIN):
+            return False
+        toks = m["token_ids"]
+        ladders = [self.books.asks(toks[0]), self.books.asks(toks[1])]
+        if ladders[0] is None or ladders[1] is None:
+            return False                       # no snapshot yet for one side
+        snap = Snapshot(m, now, bid=[self.books.best_bid(toks[0]), self.books.best_bid(toks[1])],
+                        ask=[ladders[0][0][0] if ladders[0] else None, ladders[1][0][0] if ladders[1] else None],
+                        ask_depth=ladders)
+        st["evaluations"] += 1
+        ctx = Context(acc.pf, now=now, data=self.data, mode="paper")
+        risk = dict(one_entry_per_market=True, max_open_markets=12, max_order_usd=acc.pf.start_cash * 0.10,
+                    max_exposure_usd=acc.pf.start_cash * 0.8)
+        if getattr(s, "min_order_usd", None):
+            risk["min_order_usd"] = s.min_order_usd
+        for order in s.on_snapshot(snap, ctx) or []:
+            st["signals"] += 1
+            fill, why = execute(order, snap, acc.pf, risk)
+            if not fill:
+                key = why.split(" (")[0]
+                st["skipped"][key] = st["skipped"].get(key, 0) + 1
+                st["last_skip"] = dict(at=iso(now), why=why, question=m["question"], outcome=m["outcomes"][order.outcome],
+                                       reason=order.reason, limit=round(order.limit, 3), top_asks=ladders[order.outcome][:3])
+                continue
+            acc.record_fill(fill, m)
+            log.info("[%s] PAPER BUY %.2f '%s' @ %.3f ($%.2f, fee %.4f) | %s | %s", s.name, fill.shares,
+                     m["outcomes"][fill.outcome], fill.price, fill.shares * fill.price, fill.fee, m["question"][:70], fill.reason)
+            return True
+        return False
+
+    async def decide_loop(self):
+        by_name = {s.name: s for s in self.strategies}
+        while True:
+            try:
+                await asyncio.wait_for(self.books.event.wait(), 1)
+            except asyncio.TimeoutError:
+                pass
+            now = time.time()
+            todo = {}                                   # (strategy, cid) -> None, insertion-ordered
+            for token in self.books.take_dirty():
+                for pair in self.by_token.get(token, ()):
+                    todo[pair] = None
+            # A crypto price move changes fair value for every crypto market, not just the one whose book moved.
+            moved = [sym for sym in SYMBOLS if (p := self.spot.get(sym)) and abs(p / self._swept.get(sym, (0, p * 2))[1] - 1) >= SPOT_MOVE
+                     and now - self._swept.get(sym, (0, 0))[0] >= SPOT_SWEEP_EVERY]
+            if moved:
+                for sym in moved:
+                    self._swept[sym] = (now, self.spot.get(sym))
+                for s in self.strategies:
+                    if getattr(s, "spot_driven", False):
+                        for cid in self.universe[s.name]:
+                            todo[(s.name, cid)] = None
+            # Time-driven algos (5-minute markets) are re-checked every second even when their book is still.
+            for s in self.strategies:
+                if getattr(s, "time_driven", False):
+                    for cid in self.universe[s.name]:
+                        todo[(s.name, cid)] = None
+            if not todo or not self.feed_ok():
+                continue
+            changed = set()
+            for name, cid in todo:
+                m = self.universe[name].get(cid)
+                if m is None:
+                    continue
+                try:
+                    if self.evaluate(by_name[name], m, now):
+                        changed.add(name)
+                except Exception as exc:
+                    self.errors[name] = f"{type(exc).__name__}: {str(exc)[:160]}"
+            for name in changed:
+                await self.safe_save(name)
+            await asyncio.sleep(0)
+
+    # ------------------------------------------------------------ timers (things with no feed)
+    async def universe_loop(self):
+        candles_at = 0
+        while True:
+            try:
+                if time.time() - candles_at > CANDLES_EVERY:
+                    try:
+                        await asyncio.to_thread(self.data.refresh_candles)
+                        candles_at = time.time()
+                    except Exception as exc:               # keep the old candles and still refresh the markets
+                        log.warning("candle_refresh_failed error=%s", type(exc).__name__)
+                for _ in range(40):                       # the shortlist needs live coin prices
+                    if all(self.spot.get(sym) for sym in SYMBOLS):
+                        break
+                    await asyncio.sleep(0.5)
+                now = time.time()
+                for s in self.strategies:
+                    try:                                   # one algo's data problem must not starve the others
+                        rows = await asyncio.to_thread(api.market_query, s.market_query)
+                        rows = [m for m in rows if m.get("accepting") and len(m["token_ids"]) == 2 and s.universe(m, now)]
+                        acc = self.accounts[s.name]
+                        ctx = Context(acc.pf, now=now, data=self.data, mode="paper")
+                        # Shortlist from the listing's own quotes: only markets near a trade get a live feed.
+                        uni = {m["condition_id"]: m for m in rows if not acc.pf.held(m["condition_id"])
+                               and (getattr(s, "always_stream", False) or s.prefilter(m, ctx))}
+                        self.scanned[s.name] = len(rows)
+                        self.universe[s.name] = uni
+                        self.errors.pop(s.name, None)
+                    except Exception as exc:               # keep this algo's previous shortlist
+                        self.errors[s.name] = f"market refresh: {type(exc).__name__}: {str(exc)[:120]}"
+                        log.warning("universe_refresh_failed strategy=%s error=%s", s.name, type(exc).__name__)
+                by_token = {}
+                for name, uni in self.universe.items():
+                    for cid, m in uni.items():
+                        for tok in m["token_ids"]:
+                            by_token.setdefault(tok, []).append((name, cid))
+                self.by_token = by_token
+                held = [m["token_id"] for acc in self.accounts.values() for m in acc.meta.values() if m.get("token_id")]
+                await self.feed.set_tokens(list(by_token) + held)
+                log.info("scanned %s -> watching %s | %d tokens on %d connection(s)", self.scanned,
+                         {n: len(u) for n, u in self.universe.items()}, len(self.feed.tokens), len(self.feed.tasks))
+            except Exception as exc:
+                log.warning("universe_refresh_failed error=%s", type(exc).__name__)
+            await asyncio.sleep(UNIVERSE_EVERY)
+
+    async def settle_loop(self):
+        while True:
+            await asyncio.sleep(SETTLE_EVERY)
+            try:
+                cids = sorted({c for acc in self.accounts.values() for c, _ in acc.pf.pos})
+                if not cids:
+                    continue
+                info = await asyncio.to_thread(api.markets_by_condition, cids)
+                for name, acc in self.accounts.items():
+                    done = 0
+                    for cid in sorted({c for c, _ in acc.pf.pos}):
+                        m = info.get(cid)
+                        if m and m["closed"] and sorted(m["outcome_prices"]) == [0.0, 1.0]:
+                            done += acc.settle(cid, m["outcome_prices"], time.time())
+                    if done:
+                        log.info("[%s] settled %d position(s), realized %.2f", name, done, acc.d["realized_pnl"])
+                        await self.safe_save(name)
+            except Exception as exc:
+                log.warning("settle_failed error=%s", type(exc).__name__)
+
+    async def heartbeat_loop(self):
+        while True:
+            await asyncio.sleep(HEARTBEAT_EVERY)
+            for name in self.accounts:
+                try:
+                    await self.save(name)
+                except Exception as exc:
+                    log.warning("heartbeat_failed strategy=%s error=%s", name, type(exc).__name__)
+            cpu, wall = time.process_time(), time.time()
+            used = (cpu - self._cpu[0]) / max(wall - self._cpu[1], 1e-9) * 100
+            self._cpu = (cpu, wall)
+            log.info("feed ok=%s msgs=%d cpu=%.0f%% | %s", self.feed_ok(), self.books.messages, used,
+                     {n: f"eq {a.d.get('equity')} open {len(a.pf.pos)} evals {self.stats[n]['evaluations']}" for n, a in self.accounts.items()})
+
+    async def run(self, seconds=None):
+        tasks = [asyncio.create_task(c) for c in (self.spot.run(), self.universe_loop(), self.decide_loop(),
+                                                  self.settle_loop(), self.heartbeat_loop())]
+        try:
+            if seconds:
+                await asyncio.sleep(seconds)
+            else:
+                await asyncio.gather(*tasks)
+        finally:
+            for t in tasks + self.feed.tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, *self.feed.tasks, return_exceptions=True)
+            for name in self.accounts:
+                await self.safe_save(name)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dry", action="store_true", help="in-memory store; no Firestore writes")
+    ap.add_argument("--seconds", type=int, help="stop after this many seconds")
+    a = ap.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    db = MemoryDb() if a.dry else firestore_client()
+    worker = Worker(db)
+    try:
+        asyncio.run(worker.run(a.seconds))
+    except KeyboardInterrupt:
+        pass
+    if a.dry:
+        for path, doc in db.docs.items():
+            keep = ("cash", "equity", "candidates", "watching", "evaluations", "signals", "skipped", "last_skip", "last_error")
+            print(path, json.dumps({k: doc.get(k) for k in keep})[:1400])
+
+
+if __name__ == "__main__":
+    main()

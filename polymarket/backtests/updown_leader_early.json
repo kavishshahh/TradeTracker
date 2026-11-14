@@ -1,0 +1,23 @@
+{
+ "strategy": "updown_leader_early",
+ "train": {
+  "n": 1820,
+  "win_rate": 0.8032967032967033,
+  "avg_price": 0.7375831326240658,
+  "roi_per_bet": 0.07064314147814675,
+  "t_stat": 5.526670780338013,
+  "avg_hold_hours": 0.06583333333333333
+ },
+ "test": {
+  "n": 1226,
+  "win_rate": 0.8058727569331158,
+  "avg_price": 0.7348470857343392,
+  "roi_per_bet": 0.07782867138443318,
+  "t_stat": 5.0099623217613,
+  "avg_hold_hours": 0.06638888888888889
+ },
+ "train_label": "8–12 Nov 2026 (first 60%)",
+ "test_label": "12–14 Nov 2026 (held out)",
+ "note": "3,442 BTC+ETH 5-minute markets, every fill; entry at the next print after the signal plus 1c, real fee. Only 6 days of history, all in one market regime.",
+ "source": "data-api fills, 8-14 Nov 2026"
+}

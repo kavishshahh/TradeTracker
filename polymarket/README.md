@@ -1,0 +1,85 @@
+# Polymarket Algos (private, paper only)
+
+A separate section from Algo Lab. It shares no code, styles, Firestore collections or scheduler
+with the Indian-market algos in `algos/` and `frontend/`. It does use the same Firebase service
+account (read from `backend/.env`) and writes only to the `poly_*` collections. There is no wallet, key or
+order-placement code anywhere in this folder.
+
+## What is where
+
+| Piece | Location |
+|---|---|
+| Feed-driven paper trader | `polymarket/worker.py`, `feed.py`, `store.py`, `pmq/` |
+| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`) |
+| Page and nav hook | `polymarket/frontend/`, route `src/app/poly-algos/page.tsx` |
+| API (read-only) | `backend/poly_api.py` → `GET /poly/access`, `GET /poly/paper`, `GET /poly/trades` |
+| Tests | `backend/test_poly_api.py` |
+
+Two shared app-shell files carry a small addition each: `backend/main_firebase.py` registers the
+router, and `src/components/Layout.tsx` shows the nav item when `/poly/access` says so.
+
+## Who can see it
+
+Decided by Firestore, not code: document `feature_access/polymarket_algos`, field `emails`.
+A signed-in user sees the section only if their verified email is in that list. Everyone else gets
+no nav item, and the data route answers 404. Edit the list in the Firebase console or with:
+
+```powershell
+.venv\Scripts\python.exe seed.py --grant someone@example.com
+.venv\Scripts\python.exe seed.py --revoke someone@example.com
+```
+
+The API re-reads the list within a minute; the browser remembers the answer for the session.
+
+## Running the paper trader
+
+```powershell
+cd polymarket
+python -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt   # once
+.venv\Scripts\python.exe -u worker.py                       # runs until Ctrl+C; resumes from Firestore
+.venv\Scripts\python.exe -u worker.py --dry --seconds 60    # test run, writes nothing
+```
+
+It uses the Firebase service account already in `backend/.env`. It is one long-running process,
+so it needs a machine that stays on. Run only one copy at a time.
+
+How it reacts:
+
+- Only markets near a trade are streamed. Every 3 minutes the worker scans the full market list (about 800 crypto and 180 sports markets, each with its current quotes) and opens live feeds only for the shortlist plus held positions. A market that becomes interesting between scans is picked up at the next one.
+- Polymarket order-book WebSocket: a change in a watched market's best price re-evaluates it immediately.
+- Binance price WebSocket: a 0.05% move re-evaluates every watched crypto market (at most every 5 s).
+- Fills are simulated against the live ask ladder with real taker fees and the 5-share minimum,
+  and saved to Firestore at once. A heartbeat with marks is saved every 2 minutes.
+- No stream exists for these, so they refresh on a timer: the list of open markets and the shortlist (3 min),
+  hourly candles for the volatility estimate (10 min), and resolution of held markets (2 min).
+- 5-minute BTC/ETH up/down markets are always streamed (the current window and the next two) and re-checked every second, because time left is part of the rule. They are found by their fixed slugs (`btc-updown-5m-<start>`), not by the scan.
+- If the book feed goes quiet for 45 s, trading pauses until it reconnects and re-snapshots.
+
+Paper account rules: $25 per strategy, at most 12 open markets, 80% of the bankroll in play, one
+position per event. Bets are about $1.50–2.50; when the price is above ~50c the bet is raised to
+what 5 shares cost (the minimum for the scan-based algos), so up to about $4. Entries are paced:
+2 new positions per 10 minutes for the scan-based algos, 8 for the up/down algos. Up/down bets
+use the $1 minimum that applies to marketable orders.
+
+## Firestore
+
+- `poly_paper_state/{strategy}`: account, open positions, last 150 fills, last 300 settled bets, equity curve, feed status
+- `poly_paper_trades/{id}`: every paper buy and settlement, one document each, never trimmed (`GET /poly/trades`, CSV export on the page)
+- `poly_catalog/{strategy}`: backtest summary (`seed.py --catalog`, from `backtests/*.json`)
+- `feature_access/polymarket_algos`: allowed emails
+
+Writes: about 2,900 a day from heartbeats (four algos, one save every 2 minutes each), plus two
+writes per paper bet and per settlement. The up/down algos can add a few thousand on a busy day.
+The free tier allows 20,000 a day, shared with the main app.
+
+## Algos
+
+| Algo | Markets | Rule | Backtest, held out |
+|---|---|---|---|
+| `crypto_fair_value` | BTC/ETH/SOL/XRP "dip to / reach / above / between" | Volatility model vs ask, 15-point edge | +44% per bet (optimistic: trade prints, not books) |
+| `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet, but ~0% in the tuning period |
+| `updown_leader_3m` | BTC/ETH 5-minute up/down | Last 3 minutes, buy the side at 70c or more | +5.0% per bet, 86% wins at 81c |
+| `updown_leader_early` | BTC/ETH 5-minute up/down | After the first 15s, buy the side at 70-90c | +7.8% per bet, 81% wins at 74c |
+
+The up/down backtest covers 3,442 markets over 6 days (8-14 Nov 2026) using every fill, with entry
+at the next print after the signal plus 1c and the real fee. Six days is one market regime.

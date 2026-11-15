@@ -34,7 +34,7 @@ def main():
         ref.set({"emails": sorted(emails), "updated_at": iso()})
     if a.catalog:
         for path in sorted((Path(__file__).resolve().parent / "backtests").glob("*.json")):
-            db.collection("poly_catalog").document(path.stem).set({**json.loads(path.read_text()), "published_at": iso()})
+            db.collection("poly_catalog").document(path.stem).set({**json.loads(path.read_text(encoding="utf-8")), "published_at": iso()})
             print("published", path.stem)
     doc = ref.get()
     print("access:", (doc.to_dict() or {}).get("emails") if doc.exists else "no document (section hidden for everyone)")

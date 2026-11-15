@@ -7,6 +7,7 @@ export type Account = {
   realized_pnl?: number; n_settled?: number; n_wins?: number; n_fills?: number; updated_at?: string; started_at?: string;
   candidates?: number; watching?: number; signals?: number; params?: Record<string, number>;
   feed?: { connected?: boolean; last_message_at?: string | null }; last_error?: string | null;
+  account_version?: number; previous?: { version: number; ended_at?: string; start_cash?: number; equity?: number; realized_pnl?: number; n_settled?: number; n_wins?: number }[];
   positions: Position[]; fills?: LedgerRow[]; settled?: LedgerRow[];
 };
 export type Stats = { n?: number; win_rate?: number; avg_price?: number; roi_per_bet?: number; t_stat?: number | null; avg_hold_hours?: number };
@@ -16,6 +17,7 @@ export type Feed = { strategies: Record<string, Account>; catalog: Record<string
 export type LedgerRow = {
   t: number; ts: string; cid: string; outcome: number; outcome_name?: string | null; question: string; kind?: 'fill' | 'settled'; strategy?: string;
   shares?: number; price?: number; fee?: number; reason?: string; cost?: number; payout?: number; pnl?: number;
+  version?: number;   // which version of the algo's rules placed the bet (1 when absent)
 };
 
 export const STALE_MS = 5 * 60_000;   // the worker saves at least every 2 minutes
@@ -41,15 +43,15 @@ type Info = { title: string; short: string; color: string; how: (p: Record<strin
 export const ALGOS: Record<string, Info> = {
   updown_leader_3m: {
     title: 'Up/Down · last 3 min', short: 'Your manual pattern', color: 'var(--chart-1)', hold: 'about 2 minutes',
-    how: p => `In each 5-minute Bitcoin and Ethereum "Up or Down" market, during the last ${Math.round((p.max_seconds_left ?? 180) / 60)} minutes it buys whichever side is priced ${cents(p.lo ?? 0.7)} to ${cents(p.hi ?? 0.98)}, then holds to the result.`,
+    how: p => `In each 5-minute Bitcoin and Ethereum "Up or Down" market, during the last ${Math.round((p.max_seconds_left ?? 180) / 60)} minutes it buys whichever side has just traded at ${cents(p.lo ?? 0.7)} to ${cents(p.hi ?? 0.9)}, then holds to the result.`,
   },
   updown_leader_early: {
     title: 'Up/Down · early entry', short: 'Variation of your pattern', color: 'var(--chart-3)', hold: 'about 3 minutes',
-    how: p => `Same 5-minute markets, but it can enter from ${Math.round((300 - (p.max_seconds_left ?? 285)))} seconds into the window and only buys a side priced ${cents(p.lo ?? 0.7)} to ${cents(p.hi ?? 0.9)}, skipping the expensive 90¢+ zone.`,
+    how: p => `Same 5-minute markets, but it can enter from ${Math.round((300 - (p.max_seconds_left ?? 285)))} seconds into the window, buying a side that has just traded at ${cents(p.lo ?? 0.7)} to ${cents(p.hi ?? 0.9)}.`,
   },
   crypto_fair_value: {
     title: 'Crypto price levels', short: 'Modelled on top crypto traders', color: 'var(--chart-2)', hold: 'hours to weeks',
-    how: p => `Prices markets like "Will Bitcoin dip to $62,000?" from the coin's live price and recent volatility, and buys the side that is at least ${Math.round((p.edge ?? 0.15) * 100)} points cheaper than that fair price.`,
+    how: p => `Prices markets like "Will Bitcoin dip to $62,000?" from the coin's live price and recent volatility, and buys NO when it is at least ${Math.round((p.edge ?? 0.15) * 100)} points cheaper than its fair price even in the most volatile recent conditions.`,
   },
   sports_pregame_underdog: {
     title: 'Sports underdogs', short: 'Modelled on a top sports trader', color: 'var(--chart-4)', hold: 'until the game ends',
@@ -66,7 +68,10 @@ const key = (r: LedgerRow) => `${r.strategy}:${r.kind}:${r.cid}:${r.outcome}:${M
 /** Full ledger from /poly/trades, topped up with newer rows the account documents already carry. */
 export function mergeLedger(ledger: LedgerRow[] | null, feed: Feed | null): LedgerRow[] {
   const rows = new Map<string, LedgerRow>();
-  for (const r of ledger ?? []) rows.set(key(r), r);
+  // When an algo's rules change its account restarts; bets from earlier versions stay in the ledger
+  // (and the CSV export) but are not mixed into the current account's figures.
+  const current = (id?: string) => feed?.strategies[id ?? '']?.account_version ?? 1;
+  for (const r of ledger ?? []) if ((r.version ?? 1) === current(r.strategy)) rows.set(key(r), r);
   for (const [id, a] of Object.entries(feed?.strategies ?? {})) {
     for (const r of a.fills ?? []) { const row = { ...r, kind: 'fill' as const, strategy: id }; rows.set(key(row), rows.get(key(row)) ?? row); }
     for (const r of a.settled ?? []) { const row = { ...r, kind: 'settled' as const, strategy: id }; rows.set(key(row), rows.get(key(row)) ?? row); }

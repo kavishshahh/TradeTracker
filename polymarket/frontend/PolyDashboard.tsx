@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { FileText } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import PolyView from './PolyView';
-import { mergeLedger, type Feed, type LedgerRow } from './polyData';
+import type { Feed, LedgerRow } from './polyData';
 import styles from './poly.module.css';
 import { usePolyAccess } from './usePolyAccess';
 
@@ -72,8 +72,9 @@ export default function PolyDashboard() {
     setExporting(true);
     try {
       const fresh = await get<{ trades: LedgerRow[] }>('/poly/trades');
-      const rows = mergeLedger(fresh?.trades ?? ledger, feed);
-      const fields: (keyof LedgerRow)[] = ['ts', 'strategy', 'kind', 'question', 'outcome_name', 'shares', 'price', 'fee', 'cost', 'payout', 'pnl', 'reason', 'cid'];
+      // The export is the complete ledger, including bets placed under earlier versions of an algo's rules.
+      const rows = [...(fresh?.trades ?? ledger ?? [])].sort((x, y) => x.t - y.t);
+      const fields: (keyof LedgerRow)[] = ['ts', 'strategy', 'version', 'kind', 'question', 'outcome_name', 'shares', 'price', 'fee', 'cost', 'payout', 'pnl', 'reason', 'cid'];
       const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const csv = [fields.join(','), ...rows.map(r => fields.map(f => cell(r[f])).join(','))].join('\r\n');
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
@@ -85,7 +86,7 @@ export default function PolyDashboard() {
     } finally {
       setExporting(false);
     }
-  }, [exporting, get, ledger, feed]);
+  }, [exporting, get, ledger]);
 
   // People without access see the same empty page as an unknown route.
   if (allowed === false || denied) return <section className={styles.lab}><div className={styles.card}><div className={styles.emptyRow}><FileText size={20} strokeWidth={1.4} />This page is not available.</div></div></section>;

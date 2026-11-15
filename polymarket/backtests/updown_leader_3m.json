@@ -1,23 +1,23 @@
 {
  "strategy": "updown_leader_3m",
  "train": {
-  "n": 1805,
-  "win_rate": 0.853185595567867,
-  "avg_price": 0.8133321001469805,
-  "roi_per_bet": 0.039597182399150464,
-  "t_stat": 3.667002728629892,
-  "avg_hold_hours": 0.05
+  "n": 2601,
+  "win_rate": 0.8346789696270666,
+  "avg_price": 0.7833247403327182,
+  "roi_per_bet": 0.051976758477695555,
+  "t_stat": 5.418904265288366,
+  "avg_hold_hours": 0.04888888888888889
  },
  "test": {
-  "n": 1193,
-  "win_rate": 0.8600167644593462,
-  "avg_price": 0.8108745981061191,
-  "roi_per_bet": 0.050255140425588964,
-  "t_stat": 3.852571412722988,
-  "avg_hold_hours": 0.05
+  "n": 273,
+  "win_rate": 0.8241758241758241,
+  "avg_price": 0.7797638978351649,
+  "roi_per_bet": 0.044509256336010314,
+  "t_stat": 1.4474842940517116,
+  "avg_hold_hours": 0.04888888888888889
  },
- "train_label": "8–12 Nov 2026 (first 60%)",
- "test_label": "12–14 Nov 2026 (held out)",
- "note": "3,442 BTC+ETH 5-minute markets, every fill; entry at the next print after the signal plus 1c, real fee. Only 6 days of history, all in one market regime.",
- "source": "data-api fills, 8-14 Nov 2026"
+ "train_label": "8–14 Nov 2026 (tuned on)",
+ "test_label": "14–15 Nov 2026 (fresh day)",
+ "note": "Rule: a real trade at 70-90c, entry at the next trade plus 1c, real fee. The first live version bought on the ask quote instead and won only 65% of 105 bets; version 2 follows this tested rule. History is one week only.",
+ "source": "data-api fills"
 }

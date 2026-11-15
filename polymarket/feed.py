@@ -21,6 +21,7 @@ class Books:
     def __init__(self):
         self.b = {}           # token -> {"bids": {price: size}, "asks": {price: size}}
         self.top = {}         # token -> (best bid, best ask) last seen; decisions only depend on these
+        self.trades = {}      # token -> (price, received at) of the last real trade
         self.dirty = set()
         self.event = asyncio.Event()
         self.last_message = 0.0
@@ -41,6 +42,12 @@ class Books:
                 bids={float(x["price"]): float(x["size"]) for x in e.get("bids", [])},
                 asks={float(x["price"]): float(x["size"]) for x in e.get("asks", [])})
             self._touch(e["asset_id"])
+        elif kind == "last_trade_price":
+            try:
+                self.trades[e["asset_id"]] = (float(e["price"]), time.time())
+                self._touch(e["asset_id"])
+            except (KeyError, TypeError, ValueError):
+                pass
         elif kind == "price_change":
             for c in e.get("price_changes", []):
                 book = self.b.get(c["asset_id"])
@@ -67,6 +74,16 @@ class Books:
         out, self.dirty = self.dirty, set()
         self.event.clear()
         return out
+
+    def last_trade(self, token, other, now):
+        """Most recent real trade for this outcome as (price, age seconds). A trade in the opposite
+        outcome at p is the same information as this one at 1 - p."""
+        own, opp = self.trades.get(token), self.trades.get(other)
+        cands = [x for x in (own, (1 - opp[0], opp[1]) if opp else None) if x]
+        if not cands:
+            return None
+        price, at = max(cands, key=lambda x: x[1])
+        return price, now - at
 
     def best_bid(self, token):
         book = self.b.get(token)

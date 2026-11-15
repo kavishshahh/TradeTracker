@@ -1,27 +1,23 @@
 {
  "strategy": "crypto_fair_value",
  "train": {
-  "n": 362,
-  "win_rate": 0.6464088397790055,
-  "avg_price": 0.46292817679558007,
-  "roi_per_bet": 0.2839404942418274,
-  "t_stat": 5.098014489665486,
-  "total_pnl": 303.6612829999999,
-  "bets_per_day": 2.8171170702155406,
-  "avg_hold_hours": 157.88777777777779,
-  "fees_paid": 30.428599999999996
+  "n": 171,
+  "win_rate": 0.783625730994152,
+  "avg_price": 0.5252280701754386,
+  "roi_per_bet": 0.4715004918529373,
+  "t_stat": 7.595005582901795,
+  "avg_hold_hours": 150.0
  },
  "test": {
-  "n": 327,
-  "win_rate": 0.8165137614678899,
-  "avg_price": 0.5530412844036696,
-  "roi_per_bet": 0.4397537883485537,
-  "t_stat": 9.641709120455067,
-  "total_pnl": 409.71042775,
-  "bets_per_day": 7.403686277284466,
-  "avg_hold_hours": 167.85727617164454,
-  "fees_paid": 26.808759999999996
+  "n": 148,
+  "win_rate": 0.8851351351351351,
+  "avg_price": 0.5759864864864865,
+  "roi_per_bet": 0.5330299069790646,
+  "t_stat": 9.878082078216346,
+  "avg_hold_hours": 150.0
  },
- "note": "Main candidate: positive in both periods.",
- "source": "Jun-Nov 2026 resolved markets, taker fills, fees, 1c half-spread"
+ "train_label": "Jun–Sep 2026 (tuned on)",
+ "test_label": "Oct–Nov 2026 (held out)",
+ "note": "Version 2 rule: buys NO only, and only when it is cheap under both the calmest and the most volatile recent estimate. Backtest uses hourly trade prices, not order books, so it is optimistic.",
+ "source": "Jun-Nov 2026 resolved markets, taker fills, fees, 1c slippage"
 }

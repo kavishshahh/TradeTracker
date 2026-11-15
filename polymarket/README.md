@@ -104,12 +104,21 @@ The free tier allows 20,000 a day, shared with the main app.
 
 ## Algos
 
-| Algo | Markets | Rule | Backtest, held out |
+| Algo | Markets | Rule | Backtest |
 |---|---|---|---|
-| `crypto_fair_value` | BTC/ETH/SOL/XRP "dip to / reach / above / between" | Volatility model vs ask, 15-point edge | +44% per bet (optimistic: trade prints, not books) |
-| `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet, but ~0% in the tuning period |
-| `updown_leader_3m` | BTC/ETH 5-minute up/down | Last 3 minutes, buy the side at 70c or more | +5.0% per bet, 86% wins at 81c |
-| `updown_leader_early` | BTC/ETH 5-minute up/down | After the first 15s, buy the side at 70-90c | +7.8% per bet, 81% wins at 74c |
+| `crypto_fair_value` (v2) | BTC/ETH/SOL/XRP "dip to / reach / above / between" | Buy NO when it is 15+ points cheap under both the calmest and hottest recent volatility; max 2 bets that lose on the same move | +53% per bet held out (optimistic: hourly trade prices) |
+| `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet held out, ~0% in the tuning period |
+| `updown_leader_3m` (v2) | BTC/ETH 5-minute up/down | Last 3 minutes; a real trade at 70-90c in the last 10 s and the ask within 3c of it | see `backtests/` |
+| `updown_leader_early` (v2) | BTC/ETH 5-minute up/down | Same, any time after the first 15 s | see `backtests/` |
 
-The up/down backtest covers 3,442 markets over 6 days (8-14 Nov 2026) using every fill, with entry
-at the next print after the signal plus 1c and the real fee. Six days is one market regime.
+### Versions
+
+When an algo's rules change, bump `account_version` on its class. On the next start the worker
+archives the old account to `poly_paper_archive/{algo}_v{n}`, starts a fresh $25 account, and
+records the old result in the new account's `previous` list (shown on the page). Ledger rows carry
+`version`; the page counts only the current version, the CSV export has everything.
+
+Version 1 results (14-15 Nov 2026): up/down 3m -$18.63 after 50 bets (66% won), up/down early
+-$15.21 after 55 (64%), crypto -$18.40 after 6 (0 won). Causes and fixes are in each strategy
+file's docstring; the analysis scripts are in the research folder (`analyze_forward*.py`,
+`updown_variants.py`, `crypto_robust.py`).

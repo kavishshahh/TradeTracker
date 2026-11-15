@@ -148,7 +148,8 @@ class Worker:
             return False                       # no snapshot yet for one side
         snap = Snapshot(m, now, bid=[self.books.best_bid(toks[0]), self.books.best_bid(toks[1])],
                         ask=[ladders[0][0][0] if ladders[0] else None, ladders[1][0][0] if ladders[1] else None],
-                        ask_depth=ladders)
+                        ask_depth=ladders,
+                        last_trade=[self.books.last_trade(toks[0], toks[1], now), self.books.last_trade(toks[1], toks[0], now)])
         st["evaluations"] += 1
         ctx = Context(acc.pf, now=now, data=self.data, mode="paper")
         risk = dict(one_entry_per_market=True, max_open_markets=12, max_order_usd=acc.pf.start_cash * 0.10,
@@ -323,7 +324,10 @@ class Worker:
             for t in everything:
                 t.cancel()
             # Never wait without limit for tasks to finish: state is saved from memory either way.
-            _, stuck = await asyncio.wait(everything, timeout=10)
+            done, stuck = await asyncio.wait(everything, timeout=10)
+            for t in done:                     # collect results so nothing is reported as "never retrieved"
+                if not t.cancelled():
+                    t.exception()
             if stuck:
                 log.warning("%d task(s) did not stop within 10s; saving anyway", len(stuck))
             if not self.lost_lease:

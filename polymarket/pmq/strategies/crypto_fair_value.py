@@ -7,6 +7,13 @@ Model:   driftless GBM with sigma = trailing 7d realised hourly vol * vol_mult.
          above/below/between -> terminal lognormal probability.
 Trade:   buy YES if fair - ask_yes > edge, buy NO if (1 - fair) - ask_no > edge.
          Hold to resolution. One entry per market.
+Version 2 (15 Nov 2026), after the first 6 live bets all lost: they were one bet made six
+times ("this coin won't dip", four coins, 40 minutes, during a selloff), priced with 7-day
+average volatility while the last 6 hours ran 1.6-1.9x hotter. Now:
+  * fair value is computed with the calmest and the hottest of the 7-day, 24-hour and 6-hour
+    volatility, and a side is bought only if it is cheap under both;
+  * only NO is bought: over Jun-Nov 2026 NO returned about +50% per bet and YES about 0%;
+  * at most 2 open bets that lose on the same market move (all coins fall together).
 Backtest (Jun-Nov 2026, held-out Oct-Nov): strongly positive, mostly via NO on
 over-priced YES (narrow 'between' ranges, far barriers). Caveat: historical prices are
 last-trade prints, so forward testing on real order books is the real check.
@@ -79,9 +86,11 @@ def fair_prob(kind, k1, k2, S, sig_h, hours_left, lo_seen=None, hi_seen=None):
 class CryptoFairValue(Strategy):
     name = "crypto_fair_value"
     origin = "two top crypto-level traders on the Polymarket leaderboard"
-    description = "Prices crypto level/touch markets with a volatility model; buys the side the market misprices by > edge."
+    description = "Prices crypto level/touch markets with a volatility model; buys NO when YES is overpriced by more than the edge."
+    account_version = 2
     params = dict(edge=0.15, vol_mult=1.0, min_hours_left=6, max_hours_left=24 * 30,
-                  min_price=0.05, max_price=0.95, stake_frac=0.08, max_candidates=1500)
+                  min_price=0.05, max_price=0.95, stake_frac=0.08, max_candidates=1500,
+                  buy_yes=0, max_same_direction=2)
     interval = 300
     spot_driven = True        # re-evaluate every market when the underlying price moves
     backtest_buckets = ["crypto_level"]
@@ -99,7 +108,8 @@ class CryptoFairValue(Strategy):
         return self.params["min_hours_left"] <= h <= self.params["max_hours_left"]
 
     def _fair(self, m, t, ctx):
-        """Model probability that outcome 0 (Yes) wins, with a short description, or None."""
+        """Lowest and highest model probability that Yes wins across the volatility range, plus a
+        short description; or None when the market cannot be priced."""
         p = parse(m["question"])
         end, start = _ts(m["end"]), _ts(m["start"])
         if not p or not end:
@@ -111,7 +121,10 @@ class CryptoFairValue(Strategy):
         k = ctx.data.klines(sym, t, 7 * 86400)
         if k is None or len(k) < 100:
             return None
-        sig = float(np.log(k.c).diff().std()) * self.params["vol_mult"]
+        lr = np.log(k.c).diff().dropna()
+        vols = [float(v) * self.params["vol_mult"] for v in (lr.std(), lr.iloc[-24:].std(), lr.iloc[-6:].std()) if v == v and v > 0]
+        if not vols:
+            return None
         S = ctx.data.spot(sym) if ctx.mode != "backtest" else float(k.c.iloc[-1])
         if hasattr(ctx.data, "extremes"):
             # live: every price since the market opened, including the current hour and the stream
@@ -121,31 +134,49 @@ class CryptoFairValue(Strategy):
             seen = k[k.index >= (start or 0)]
             lo = min(seen.l.min(), S) if len(seen) else S
             hi = max(seen.h.max(), S) if len(seen) else S
-        fair = fair_prob(kind, k1, k2, S, sig, hours_left, lo, hi)
-        if fair is None or fair >= 0.999:
+        fairs = [fair_prob(kind, k1, k2, S, v, hours_left, lo, hi) for v in vols]
+        if any(f is None for f in fairs) or max(fairs) >= 0.999:
             return None
-        return fair, f"{kind} {sym} K={k1:g} S={S:.2f}"
+        return min(fairs), max(fairs), f"{kind} {sym} K={k1:g} S={S:.2f}"
+
+    @staticmethod
+    def direction(question, outcome):
+        """+1 if the bet wins when the coin goes up or holds, -1 if it wins when it falls, 0 for range bets."""
+        p = parse(question or "")
+        if not p:
+            return None
+        kind = p[1]
+        yes = {"reach": 1, "above": 1, "dip": -1, "below": -1}.get(kind, 0)
+        return yes if outcome == 0 else -yes
 
     def prefilter(self, m, ctx):
         """Cheap shortlist from the listing's own quotes, so only promising books are fetched."""
         r = self._fair(m, ctx.now, ctx)
         if not r:
             return False
-        fair, loose = r[0], self.params["edge"] - 0.10
+        lo_f, hi_f, loose = r[0], r[1], self.params["edge"] - 0.10
         ask, bid = m.get("best_ask"), m.get("best_bid")
         if ask is None and bid is None:
             return True
-        return (ask is not None and fair - float(ask) > loose) or (bid is not None and float(bid) - fair > loose)
+        return (bid is not None and float(bid) - hi_f > loose) or \
+               (bool(self.params["buy_yes"]) and ask is not None and lo_f - float(ask) > loose)
 
     def on_snapshot(self, s, ctx):
         r = self._fair(s.market, s.t, ctx)
         if not r:
             return []
-        fair, desc = r
+        lo_f, hi_f, desc = r
         e, lo_p, hi_p = self.params["edge"], self.params["min_price"], self.params["max_price"]
-        for o, f in ((0, fair), (1, 1 - fair)):
+        # value of each outcome under the estimate least favourable to it
+        sides = [(1, 1 - hi_f)] + ([(0, lo_f)] if self.params["buy_yes"] else [])
+        for o, f in sides:
             a = s.ask[o]
-            if a is not None and lo_p <= a <= hi_p and f - a > e:
-                return [Order(o, "BUY", usd=self.size(ctx, a), limit=min(f - e / 2, 0.99),
-                              reason=f"{desc} fair={f:.3f} ask={a:.3f}")]
+            if a is None or not (lo_p <= a <= hi_p) or f - a <= e:
+                continue
+            d = self.direction(s.market["question"], o)
+            same = sum(1 for (cid, out), pos in ctx.portfolio.pos.items() if self.direction(pos.get("question"), out) == d)
+            if same >= self.params["max_same_direction"]:
+                continue          # already holding enough bets that lose on the same move
+            return [Order(o, "BUY", usd=self.size(ctx, a), limit=min(f - e / 2, 0.99),
+                          reason=f"{desc} fair {'No' if o else 'Yes'}>={f:.3f} ask={a:.3f}")]
         return []

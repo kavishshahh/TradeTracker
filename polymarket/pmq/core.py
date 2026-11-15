@@ -16,6 +16,7 @@ class Snapshot:
     bid: list              # best bid per outcome index  [bid0, bid1]
     ask: list              # best ask per outcome index  [ask0, ask1]
     ask_depth: list = field(default_factory=lambda: [None, None])  # full ask ladders when live
+    last_trade: Optional[list] = None   # live only: per outcome, (price of the last real trade, its age in seconds) or None
 
     def mid(self, i):
         b, a = self.bid[i], self.ask[i]
@@ -121,6 +122,7 @@ class Strategy:
     origin = ""               # which wallets this was reverse-engineered from
     params = {}
     interval = 300            # live: seconds between evaluations
+    account_version = 1       # bump when the rules change: the paper account restarts and the old one is archived
     backtest_buckets = []     # which price-path buckets in data/prices.pkl to replay
     backtest_step = 3600      # backtest: seconds between evaluations
     market_query = dict(kind="markets", days=7)   # live: which Gamma slice to scan (see api.market_query)
@@ -145,4 +147,6 @@ class Strategy:
             usd = self.params["_stake_override"]
         else:
             usd = self.params.get("stake_frac", 0.05) * ctx.portfolio.start_cash
+        if getattr(self, "min_order_usd", None):       # marketable orders: a dollar minimum, not 5 shares
+            return max(usd, self.min_order_usd * 1.1)
         return max(usd, 5 * price * 1.02)

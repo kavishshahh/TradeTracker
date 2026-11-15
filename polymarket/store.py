@@ -5,6 +5,7 @@
   poly_catalog/{strategy}       backtest summary (written by seed.py)
   feature_access/polymarket_algos   {emails: [...]} - who may see the section (written by seed.py)
   poly_worker/lease             which worker process currently trades the accounts (lease.py)
+  poly_paper_archive/{strategy}_v{n}   the account as it stood when its rules changed
 """
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from pmq.core import Portfolio
 
 STATE = "poly_paper_state"
 TRADES = "poly_paper_trades"
+ARCHIVE = "poly_paper_archive"
 KEEP_FILLS, KEEP_SETTLED, KEEP_CURVE = 150, 300, 600
 CURVE_EVERY = 1800
 META_KEYS = ("outcome_name", "token_id", "event_slug", "end", "entry_price")
@@ -46,9 +48,22 @@ class Account:
         self.db, self.s = db, strategy
         doc = db.collection(STATE).document(strategy.name).get()
         d = doc.to_dict() if doc.exists else None
+        version = getattr(strategy, "account_version", 1)
+        previous = []
+        if d and "start_cash" in d and d.get("account_version", 1) != version:
+            # The rules changed: keep the old account as a record and start a fresh one, so results
+            # from different rules are never mixed.
+            old = d.get("account_version", 1)
+            db.collection(ARCHIVE).document(f"{strategy.name}_v{old}").set(json.loads(json.dumps(d, default=str)))
+            previous = d.get("previous", []) + [dict(
+                version=old, started_at=d.get("started_at"), ended_at=iso(), start_cash=d.get("start_cash"),
+                equity=d.get("equity"), realized_pnl=d.get("realized_pnl"), n_settled=d.get("n_settled", 0),
+                n_wins=d.get("n_wins", 0), open_at_end=len(d.get("positions", [])))]
+            d = None
         if not d or "start_cash" not in d:
             d = dict(strategy=strategy.name, start_cash=bankroll, cash=bankroll, started_at=iso(), positions=[],
-                     fills=[], settled=[], equity_curve=[], realized_pnl=0.0, n_settled=0, n_wins=0, n_fills=0)
+                     fills=[], settled=[], equity_curve=[], realized_pnl=0.0, n_settled=0, n_wins=0, n_fills=0,
+                     account_version=version, previous=previous)
         self.d = d
         self.pf = Portfolio(d["start_cash"])
         self.pf.cash = d["cash"]
@@ -71,7 +86,8 @@ class Account:
 
     def _queue(self, kind, row):
         doc_id = f"{self.s.name}_{int(row['t'] * 1000)}_{row['cid'][2:14]}_{row['outcome']}_{kind}"
-        self.pending.append((doc_id, {**row, "kind": kind, "strategy": self.s.name}))
+        self.pending.append((doc_id, {**row, "kind": kind, "strategy": self.s.name,
+                                      "version": self.d.get("account_version", 1)}))
 
     def held_events(self):
         return {m.get("event_slug") for m in self.meta.values() if m.get("event_slug")}

@@ -169,6 +169,7 @@ function AlgoCard({ s, feed, onOpen }: { s: AlgoStats; feed: Feed; onOpen: () =>
     </dl>
     {s.lowCash && <p className={`${styles.verdict} ${styles.verdict_warn}`}>Out of cash: only {usd(s.cash)} free, so it cannot place new bets{s.openCount ? ` until its ${plural(s.openCount, 'open bet')} finish` : ''}.</p>}
     <p className={`${styles.verdict} ${styles[`verdict_${s.verdict.tone}`]}`}>{s.verdict.text}</p>
+    {(a.previous ?? []).map(p => <p key={p.version} className={styles.caption}>Rules changed {when(p.ended_at)}. Version {p.version} ended at {usd(p.equity)} of {usd(p.start_cash, 0)} ({signedUsd((p.equity ?? 0) - (p.start_cash ?? 0))}) after {plural(p.n_settled ?? 0, 'bet')}, {p.n_wins ?? 0} won. This account restarted with the new rules.</p>)}
     {a.last_error && <p className={styles.caption}>Last worker issue: {a.last_error}</p>}
   </button>;
 }

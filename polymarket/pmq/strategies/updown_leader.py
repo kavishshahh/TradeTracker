@@ -51,6 +51,7 @@ class UpDownLeader(Strategy):
     backtest_buckets = []
     market_query = dict(kind="updown5m", coins=["btc", "eth"])
     account_version = 2
+    halted = True               # paused 15 Nov 2026: the corrected test shows no edge (see CORRECTION above)
     params = dict(max_seconds_left=180, min_seconds_left=20, lo=0.70, hi=0.90, max_spread=0.03, stake_frac=0.05,
                   confirm_seconds=10, max_above_trade=0.03)
 

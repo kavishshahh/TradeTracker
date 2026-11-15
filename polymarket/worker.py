@@ -34,6 +34,7 @@ from pmq.core import Context, Snapshot               # noqa: E402
 from pmq.strategies import REGISTRY                  # noqa: E402
 from pmq.strategies.crypto_fair_value import SYM     # noqa: E402
 from store import Account, MemoryDb, firestore_client, iso   # noqa: E402
+import latency
 
 log = logging.getLogger("poly")
 
@@ -42,6 +43,7 @@ UNIVERSE_EVERY = 120          # also how often the next 5-minute markets are pic
 CANDLES_EVERY = 600
 SETTLE_EVERY = 120
 HEARTBEAT_EVERY = 120
+LATENCY_EVERY = 600           # latency probe (logged and saved to poly_worker/latency)
 UNIVERSE_STALL = 900          # no completed market refresh for this long: exit so the host restarts the worker
 SPOT_SWEEP_EVERY = 5          # seconds between full crypto re-evaluations on price moves
 SPOT_MOVE = 0.0005            # ...and only when a price moved by at least 0.05%
@@ -273,6 +275,19 @@ class Worker:
                 log.warning("universe_refresh_failed error=%s", type(exc).__name__)
             await asyncio.sleep(UNIVERSE_EVERY)
 
+    async def latency_loop(self):
+        await asyncio.sleep(45)
+        while True:
+            try:
+                result = await latency.probe()
+                log.info("latency %s", latency.line(result))
+                if self.lease:                 # not on --dry runs
+                    await asyncio.to_thread(self.db.collection("poly_worker").document("latency").set,
+                                            {**result, "at_iso": iso(result["at"]), "host": self.lease.owner})
+            except Exception as exc:
+                log.warning("latency_probe_failed error=%s", type(exc).__name__)
+            await asyncio.sleep(LATENCY_EVERY)
+
     async def settle_loop(self):
         while True:
             await asyncio.sleep(SETTLE_EVERY)
@@ -325,7 +340,7 @@ class Worker:
 
     async def run(self, seconds=None):
         tasks = [asyncio.create_task(c) for c in (self.spot.run(), self.universe_loop(), self.decide_loop(),
-                                                  self.settle_loop())]
+                                                  self.settle_loop(), self.latency_loop())]
         heartbeat = asyncio.create_task(self.heartbeat_loop())     # returns only when the lease is lost
         stop = asyncio.Event()
         try:                                   # hosts stop a service with SIGTERM; finish cleanly on it

@@ -91,7 +91,8 @@ export type AlgoStats = {
 export type Verdict = { tone: 'good' | 'bad' | 'neutral'; text: string };
 
 export const unrealizedOf = (a: Account) => a.positions.reduce((t, p) => t + (p.mark == null ? 0 : p.mark * p.shares - p.cost), 0);
-export const isStale = (a: Account, now = Date.now()) => !a.updated_at || now - Date.parse(a.updated_at) > STALE_MS || a.feed?.connected === false;
+// A paused algo with nothing open has no live feed to be connected to, so only its heartbeat counts.
+export const isStale = (a: Account, now = Date.now()) => !a.updated_at || now - Date.parse(a.updated_at) > STALE_MS || (a.feed?.connected === false && !(a.halted && !a.positions.length));
 
 export function algoStats(id: string, a: Account, ledger: LedgerRow[], catalog: Catalog | undefined, now = Date.now()): AlgoStats {
   const mine = ledger.filter(r => r.strategy === id);

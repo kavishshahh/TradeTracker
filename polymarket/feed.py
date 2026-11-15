@@ -101,35 +101,51 @@ class BookFeed:
         self.books = books
         self.tokens = []
         self.tasks = []
-        self.connected = 0
+        self.live = set()         # connections of the current token set that are open
+        self._stop = None         # tells the current connections to end
         self.stopping = False
+
+    @property
+    def connected(self):
+        return len(self.live)
 
     async def set_tokens(self, tokens):
         tokens = sorted(set(tokens))
         if tokens == self.tokens:
             return
+        # A cancel can be swallowed (asyncio.wait_for on Python 3.11 when a message arrives at the same
+        # moment), so the old connections also get a stop flag and the wait for them is bounded. Waiting
+        # without a limit once froze the market refresh for good.
+        if self._stop is not None:
+            self._stop.set()
         for t in self.tasks:
             t.cancel()
-        await asyncio.gather(*self.tasks, return_exceptions=True)
-        self.tokens, self.connected = tokens, 0
+        if self.tasks:
+            _, pending = await asyncio.wait(self.tasks, timeout=5)
+            if pending:
+                log.warning("book_feed_slow_close connections=%d", len(pending))
+        self.tokens, self.live, self._stop = tokens, set(), asyncio.Event()
         self.books.reset()
-        self.tasks = [asyncio.create_task(self._run(tokens[i:i + CHUNK])) for i in range(0, len(tokens), CHUNK)]
+        self.tasks = [asyncio.create_task(self._run(tokens[i:i + CHUNK], self._stop, self.live))
+                      for i in range(0, len(tokens), CHUNK)]
 
-    async def _run(self, tokens):
-        delay = 1
-        while not self.stopping:
+    async def _run(self, tokens, stop, live):
+        delay, me = 1, object()
+        while not self.stopping and not stop.is_set():
             try:
                 async with websockets.connect(POLY_WS, max_size=None, ping_interval=None, open_timeout=20) as ws:
                     await ws.send(json.dumps({"assets_ids": tokens, "type": "market"}))
-                    self.connected += 1
+                    live.add(me)
                     delay = 1
                     try:
-                        while not self.stopping:
+                        while not self.stopping and not stop.is_set():
                             try:
                                 raw = await asyncio.wait_for(ws.recv(), 10)
                             except asyncio.TimeoutError:
                                 await ws.send("PING")
                                 continue
+                            if stop.is_set():
+                                break             # replaced by a newer token set: its books are not ours
                             if raw == "PONG":
                                 continue
                             data = json.loads(raw)
@@ -138,10 +154,12 @@ class BookFeed:
                                 self.books.messages += 1
                                 self.books.on_event(e)
                     finally:
-                        self.connected -= 1
+                        live.discard(me)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                if stop.is_set():
+                    return
                 log.warning("book_feed_reconnect error=%s", type(exc).__name__)
                 # Stale levels must not be traded on: drop this connection's books until re-snapshotted.
                 for t in tokens:

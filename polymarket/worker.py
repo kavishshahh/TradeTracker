@@ -42,6 +42,7 @@ UNIVERSE_EVERY = 120          # also how often the next 5-minute markets are pic
 CANDLES_EVERY = 600
 SETTLE_EVERY = 120
 HEARTBEAT_EVERY = 120
+UNIVERSE_STALL = 900          # no completed market refresh for this long: exit so the host restarts the worker
 SPOT_SWEEP_EVERY = 5          # seconds between full crypto re-evaluations on price moves
 SPOT_MOVE = 0.0005            # ...and only when a price moved by at least 0.05%
 MAX_NEW_PER_10MIN = 2         # pace entries so a small bankroll is spread over time
@@ -106,6 +107,8 @@ class Worker:
         self._swept = {}
         self._save_locks = {s.name: asyncio.Lock() for s in self.strategies}
         self._cpu = (time.process_time(), time.time())
+        self.universe_at = time.time()     # last completed market refresh
+        self.stalled = False
 
     # ------------------------------------------------------------ persistence
     def marks(self, acc):
@@ -118,6 +121,7 @@ class Worker:
         acc, st = self.accounts[name], self.stats[name]
         extra = dict(candidates=self.scanned[name], watching=len(self.universe[name]), evaluations=st["evaluations"], signals=st["signals"],
                      skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
+                     markets_refreshed_at=iso(self.universe_at),
                      feed=dict(connected=self.feed_ok(), connections=self.feed.connected, tokens=len(self.feed.tokens),
                                messages=self.books.messages,
                                last_message_at=iso(self.books.last_message) if self.books.last_message else None))
@@ -253,6 +257,7 @@ class Worker:
                 self.by_token = by_token
                 held = [m["token_id"] for acc in self.accounts.values() for m in acc.meta.values() if m.get("token_id")]
                 await self.feed.set_tokens(list(by_token) + held)
+                self.universe_at = time.time()
                 log.info("scanned %s -> watching %s | %d tokens on %d connection(s)", self.scanned,
                          {n: len(u) for n, u in self.universe.items()}, len(self.feed.tokens), len(self.feed.tasks))
             except Exception as exc:
@@ -297,6 +302,12 @@ class Worker:
                     await self.save(name)
                 except Exception as exc:
                     log.warning("heartbeat_failed strategy=%s error=%s", name, type(exc).__name__)
+            if time.time() - self.universe_at > UNIVERSE_STALL:
+                # The market refresh has stopped, so the algos are watching old markets. Save, release
+                # the lease and exit non-zero: the host starts a fresh process.
+                log.error("market refresh stalled for %.0fs; restarting", time.time() - self.universe_at)
+                self.stalled = True
+                return
             cpu, wall = time.process_time(), time.time()
             used = (cpu - self._cpu[0]) / max(wall - self._cpu[1], 1e-9) * 100
             self._cpu = (cpu, wall)
@@ -382,7 +393,7 @@ def main():
     # in a background thread (Python 3.11 would wait without limit): exit now.
     logging.shutdown()
     sys.stdout.flush()
-    os._exit(0)
+    os._exit(1 if worker.stalled else 0)
 
 
 if __name__ == "__main__":

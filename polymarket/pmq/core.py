@@ -122,6 +122,7 @@ class Strategy:
     origin = ""               # which wallets this was reverse-engineered from
     params = {}
     interval = 300            # live: seconds between evaluations
+    halted = False            # True: place no new bets and stop scanning; open bets are still held and settled
     account_version = 1       # bump when the rules change: the paper account restarts and the old one is archived
     backtest_buckets = []     # which price-path buckets in data/prices.pkl to replay
     backtest_step = 3600      # backtest: seconds between evaluations

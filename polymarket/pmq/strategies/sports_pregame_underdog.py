@@ -18,6 +18,7 @@ def _ts(x):
 
 
 class SportsPregameUnderdog(Strategy):
+    halted = True             # paused 15 Nov 2026 to focus on the up/down markets
     name = "sports_pregame_underdog"
     origin = "a top sports trader on the Polymarket leaderboard"
     description = "Buys the cheaper side (0.10-0.40) of moneyline/spread/total markets 10-240 min before kickoff."

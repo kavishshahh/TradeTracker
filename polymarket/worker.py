@@ -87,6 +87,10 @@ class LiveData:
         return price
 
 
+def by_halt(worker, name):
+    return any(s.halted for s in worker.strategies if s.name == name)
+
+
 class Worker:
     def __init__(self, db, bankroll=BANKROLL, lease=None):
         self.db = db
@@ -121,7 +125,7 @@ class Worker:
         acc, st = self.accounts[name], self.stats[name]
         extra = dict(candidates=self.scanned[name], watching=len(self.universe[name]), evaluations=st["evaluations"], signals=st["signals"],
                      skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
-                     markets_refreshed_at=iso(self.universe_at),
+                     markets_refreshed_at=iso(self.universe_at), halted=by_halt(self, name),
                      feed=dict(connected=self.feed_ok(), connections=self.feed.connected, tokens=len(self.feed.tokens),
                                messages=self.books.messages,
                                last_message_at=iso(self.books.last_message) if self.books.last_message else None))
@@ -141,6 +145,8 @@ class Worker:
     def evaluate(self, s, m, now):
         """Run one strategy on one market from the local books. Returns True when a paper fill happened."""
         acc, st = self.accounts[s.name], self.stats[s.name]
+        if s.halted:
+            return False
         if acc.pf.held(m["condition_id"]) or m.get("event_slug") in acc.held_events() or not s.universe(m, now):
             return False
         acc.recent_entries = [t for t in acc.recent_entries if now - t < 600]
@@ -235,6 +241,9 @@ class Worker:
                     await asyncio.sleep(0.5)
                 now = time.time()
                 for s in self.strategies:
+                    if s.halted:                           # paused: no scan, no feed; held bets still settle
+                        self.universe[s.name], self.scanned[s.name] = {}, 0
+                        continue
                     try:                                   # one algo's data problem must not starve the others
                         rows = await asyncio.to_thread(api.market_query, s.market_query)
                         rows = [m for m in rows if m.get("accepting") and len(m["token_ids"]) == 2 and s.universe(m, now)]

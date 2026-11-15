@@ -19,6 +19,12 @@ Version 2 (15 Nov 2026), after the first 105 live bets won only 65%:
   * Bets are $1.25, not $2.50: a loss costs about three wins and BTC and ETH lose together.
   * Both variants stop at 90c: above that the backtest shows no edge, and a loss costs 10+ wins.
 
+CORRECTION (15 Nov 2026, evening): the backtest numbers above are wrong. The saved tape was sorted
+inside each second, so the "next print" used as the fill was the cheapest print of the next second.
+Redone without that (research folder, analyze_reverse2.py): prices are well calibrated - the leader
+wins 78% at 78c, about -2% per bet after fee and 1c; betting the other side is about -13% per bet.
+Same on 15-minute markets. Version 2 live: 3m 67% of 83 bets, early 70% of 88. No taker edge found.
+
 Two registered variants run as separate paper accounts so they can be compared live:
   updown_leader_3m    - the pattern as traded by hand: last 3 minutes, 70-90c.
   updown_leader_early - any time after the first 15s, 70-90c only (skips the no-edge 90c+ zone).

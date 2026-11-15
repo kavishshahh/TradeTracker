@@ -88,6 +88,7 @@ class CryptoFairValue(Strategy):
     origin = "two top crypto-level traders on the Polymarket leaderboard"
     description = "Prices crypto level/touch markets with a volatility model; buys NO when YES is overpriced by more than the edge."
     account_version = 2
+    halted = True             # paused 15 Nov 2026 to focus on the up/down markets
     params = dict(edge=0.15, vol_mult=1.0, min_hours_left=6, max_hours_left=24 * 30,
                   min_price=0.05, max_price=0.95, stake_frac=0.08, max_candidates=1500,
                   buy_yes=0, max_same_direction=2)

@@ -35,6 +35,7 @@ from pmq.strategies import REGISTRY                  # noqa: E402
 from pmq.strategies.crypto_fair_value import SYM     # noqa: E402
 from store import Account, MemoryDb, firestore_client, iso   # noqa: E402
 import latency
+from latency_algo import LatencyTrader                # noqa: E402
 
 log = logging.getLogger("poly")
 
@@ -115,6 +116,7 @@ class Worker:
         self._cpu = (time.process_time(), time.time())
         self.universe_at = time.time()     # last completed market refresh
         self.stalled = False
+        self.latency = LatencyTrader(self)
 
     # ------------------------------------------------------------ persistence
     def marks(self, acc):
@@ -128,6 +130,7 @@ class Worker:
         extra = dict(candidates=self.scanned[name], watching=len(self.universe[name]), evaluations=st["evaluations"], signals=st["signals"],
                      skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
                      markets_refreshed_at=iso(self.universe_at), halted=by_halt(self, name),
+                     perp_feed=dict(connected=self.latency.feed.connected, ticks=self.latency.feed.ticks),
                      feed=dict(connected=self.feed_ok(), connections=self.feed.connected, tokens=len(self.feed.tokens),
                                messages=self.books.messages,
                                last_message_at=iso(self.books.last_message) if self.books.last_message else None))
@@ -147,7 +150,7 @@ class Worker:
     def evaluate(self, s, m, now):
         """Run one strategy on one market from the local books. Returns True when a paper fill happened."""
         acc, st = self.accounts[s.name], self.stats[s.name]
-        if s.halted:
+        if s.halted or getattr(s, "latency_rule", False):      # latency algos trade in latency_algo.py
             return False
         if acc.pf.held(m["condition_id"]) or m.get("event_slug") in acc.held_events() or not s.universe(m, now):
             return False
@@ -266,6 +269,7 @@ class Worker:
                         for tok in m["token_ids"]:
                             by_token.setdefault(tok, []).append((name, cid))
                 self.by_token = by_token
+                self.books.track = self.latency.tracked_tokens()
                 held = [m["token_id"] for acc in self.accounts.values() for m in acc.meta.values() if m.get("token_id")]
                 await self.feed.set_tokens(list(by_token) + held)
                 self.universe_at = time.time()
@@ -340,7 +344,7 @@ class Worker:
 
     async def run(self, seconds=None):
         tasks = [asyncio.create_task(c) for c in (self.spot.run(), self.universe_loop(), self.decide_loop(),
-                                                  self.settle_loop(), self.latency_loop())]
+                                                  self.settle_loop(), self.latency_loop(), self.latency.run())]
         heartbeat = asyncio.create_task(self.heartbeat_loop())     # returns only when the lease is lost
         stop = asyncio.Event()
         try:                                   # hosts stop a service with SIGTERM; finish cleanly on it
@@ -355,6 +359,7 @@ class Worker:
         finally:
             self.stopping = True
             self.feed.stopping = True
+            self.latency.feed.stopping = True
             everything = tasks + [heartbeat] + waiters + self.feed.tasks
             for t in everything:
                 t.cancel()

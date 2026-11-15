@@ -10,7 +10,9 @@ order-placement code anywhere in this folder.
 | Piece | Location |
 |---|---|
 | Feed-driven paper trader | `polymarket/worker.py`, `feed.py`, `store.py`, `pmq/` |
-| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`) |
+| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`, `updown_latency_2bp`, `updown_latency_1bp`) |
+| Latency rule and probe | `polymarket/latency_algo.py` (paper fills against the book at the order's arrival time), `latency.py` (network delay probe, every 10 minutes) |
+| Research scripts | `polymarket/research/` |
 | Page and nav hook | `polymarket/frontend/`, route `src/app/poly-algos/page.tsx` |
 | API (read-only) | `backend/poly_api.py` → `GET /poly/access`, `GET /poly/paper`, `GET /poly/trades` |
 | Tests | `backend/test_poly_api.py` |
@@ -110,6 +112,10 @@ The free tier allows 20,000 a day, shared with the main app.
 | `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet held out, ~0% in the tuning period |
 | `updown_leader_3m` (v2) | BTC/ETH 5-minute up/down | Last 3 minutes; a real trade at 70-90c in the last 10 s and the ask within 3c of it | see `backtests/` |
 | `updown_leader_early` (v2) | BTC/ETH 5-minute up/down | Same, any time after the first 15 s | see `backtests/` |
+| `updown_latency_2bp`, `updown_latency_1bp` | BTC/ETH 5-minute up/down | Binance perp moves 2 bp (or 1 bp) in 200 ms: buy the matching side with a limit at the ask seen; the simulated order arrives 100 ms later and fills only if that ask is still there (`latency_algo.py`) | tick research, see `research/README.md` |
+
+Paused (`halted = True` on the class): `crypto_fair_value`, `sports_pregame_underdog` and both
+`updown_leader` algos. They place no new bets; open bets still settle.
 
 ### Versions
 

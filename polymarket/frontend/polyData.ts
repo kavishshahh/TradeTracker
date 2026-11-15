@@ -42,6 +42,14 @@ export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' :
 // ------------------------------------------------------------------ what each algo does
 type Info = { title: string; short: string; color: string; how: (p: Record<string, number>) => string; hold: string };
 export const ALGOS: Record<string, Info> = {
+  updown_latency_2bp: {
+    title: 'Latency · 2 bp move', short: 'Binance perp leads Polymarket', color: 'var(--chart-5)', hold: 'up to 5 minutes',
+    how: p => `Watches the Binance perpetual price. When it moves ${p.move_bp ?? 2} bp within ${p.look_ms ?? 200} ms, it buys the matching side of the current 5-minute Bitcoin or Ethereum market (Up after a rise, Down after a fall) with a limit at the price it saw. The simulated order arrives ${p.order_delay_ms ?? 100} ms later and fills only if that price is still there.`,
+  },
+  updown_latency_1bp: {
+    title: 'Latency · 1 bp move', short: 'Same rule, smaller trigger', color: 'var(--chart-4)', hold: 'up to 5 minutes',
+    how: p => `Same as the 2 bp version but triggers on a ${p.move_bp ?? 1} bp move within ${p.look_ms ?? 200} ms, so it bets more often on weaker signals.`,
+  },
   updown_leader_3m: {
     title: 'Up/Down · last 3 min', short: 'Your manual pattern', color: 'var(--chart-1)', hold: 'about 2 minutes',
     how: p => `In each 5-minute Bitcoin and Ethereum "Up or Down" market, during the last ${Math.round((p.max_seconds_left ?? 180) / 60)} minutes it buys whichever side has just traded at ${cents(p.lo ?? 0.7)} to ${cents(p.hi ?? 0.9)}, then holds to the result.`,
@@ -59,7 +67,7 @@ export const ALGOS: Record<string, Info> = {
     how: p => `${p.min_minutes ?? 10} to ${p.max_minutes ?? 240} minutes before a match starts, buys the underdog when it is priced ${cents(p.lo ?? 0.1)} to ${cents(p.hi ?? 0.4)}.`,
   },
 };
-const ORDER = ['updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
+const ORDER = ['updown_latency_2bp', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
 export const info = (id: string): Info => ALGOS[id] ?? { title: id.replaceAll('_', ' '), short: '', color: 'var(--chart-5)', hold: 'until resolution', how: () => '' };
 export const sortIds = (ids: string[]) => [...ids].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 

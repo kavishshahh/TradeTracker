@@ -4,6 +4,7 @@ Both feeds push updates; nothing here polls. `Books` keeps a local copy of every
 order book (snapshot on subscribe, then per-level changes) and reports which tokens changed.
 """
 import asyncio
+import collections
 import json
 import logging
 import time
@@ -14,6 +15,7 @@ log = logging.getLogger(__name__)
 
 POLY_WS = "wss://ws-subscriptions-clob.polymarket.com/ws/market"
 BINANCE_WS = "wss://data-stream.binance.vision/stream?streams="
+PERP_WS = "wss://fstream.binance.com/stream?streams="
 CHUNK = 400               # tokens per Polymarket connection
 
 
@@ -26,10 +28,34 @@ class Books:
         self.event = asyncio.Event()
         self.last_message = 0.0
         self.messages = 0
+        # For tokens in `track`: top of book over time by Polymarket's own timestamps, so a paper
+        # order can be filled against the book as it stood when the order would have arrived.
+        self.track = set()
+        self.hist = {}        # token -> deque of (server ms, best bid, best ask, size at best ask)
+        self.last_ts = 0      # newest server timestamp seen on any message
 
     def reset(self):
         self.b.clear()
         self.top.clear()
+        self.hist.clear()
+
+    def _record(self, token, ts):
+        book = self.b.get(token)
+        if book is None:
+            return
+        bid = max(book["bids"]) if book["bids"] else None
+        ask = min(book["asks"]) if book["asks"] else None
+        row = (ts, bid, ask, book["asks"].get(ask, 0.0) if ask is not None else 0.0)
+        h = self.hist.setdefault(token, collections.deque(maxlen=4000))
+        if not h or h[-1][1:] != row[1:]:
+            h.append(row)
+
+    def top_at(self, token, ts):
+        """(best bid, best ask, size at best ask) as of server time `ts` ms, or None if unknown."""
+        for row in reversed(self.hist.get(token, ())):
+            if row[0] <= ts:
+                return row[1:]
+        return None
 
     def _touch(self, token):
         self.dirty.add(token)
@@ -37,11 +63,19 @@ class Books:
 
     def on_event(self, e):
         kind = e.get("event_type")
+        try:
+            ts = int(e.get("timestamp") or 0)
+        except (TypeError, ValueError):
+            ts = 0
+        if ts > self.last_ts:
+            self.last_ts = ts
         if kind == "book":
             self.b[e["asset_id"]] = dict(
                 bids={float(x["price"]): float(x["size"]) for x in e.get("bids", [])},
                 asks={float(x["price"]): float(x["size"]) for x in e.get("asks", [])})
             self._touch(e["asset_id"])
+            if e["asset_id"] in self.track:
+                self._record(e["asset_id"], ts)
         elif kind == "last_trade_price":
             try:
                 self.trades[e["asset_id"]] = (float(e["price"]), time.time())
@@ -59,6 +93,8 @@ class Books:
                     side.pop(price, None)
                 else:
                     side[price] = size
+                if c["asset_id"] in self.track:
+                    self._record(c["asset_id"], ts)
                 # Wake on a new top of book, or on a size change at or just behind the best ask (a fill
                 # can be refused for lack of size there). Deeper changes cannot change a decision.
                 top = (c.get("best_bid"), c.get("best_ask"))
@@ -164,6 +200,41 @@ class BookFeed:
                 # Stale levels must not be traded on: drop this connection's books until re-snapshotted.
                 for t in tokens:
                     self.books.b.pop(t, None)
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30)
+
+
+class PerpFeed:
+    """Binance USDT-perpetual best bid/ask, pushed on every change. Calls on_tick(symbol, exchange ms,
+    mid price, local receive ms) for each update."""
+    def __init__(self, symbols, on_tick):
+        self.symbols, self.on_tick = symbols, on_tick
+        self.connected = False
+        self.ticks = 0
+        self.stopping = False
+
+    async def run(self):
+        url = PERP_WS + "/".join(f"{s.lower()}@bookTicker" for s in self.symbols)
+        delay = 1
+        while not self.stopping:
+            try:
+                async with websockets.connect(url, open_timeout=20) as ws:
+                    self.connected, delay = True, 1
+                    try:
+                        async for raw in ws:
+                            if self.stopping:
+                                return
+                            d = json.loads(raw).get("data", {})
+                            if "b" in d:
+                                self.ticks += 1
+                                self.on_tick(d["s"], int(d.get("T") or d.get("E") or 0),
+                                             (float(d["b"]) + float(d["a"])) / 2, time.time() * 1000)
+                    finally:
+                        self.connected = False
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.warning("perp_feed_reconnect error=%s", type(exc).__name__)
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, 30)
 

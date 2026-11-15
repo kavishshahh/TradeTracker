@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, ArrowDownRight, ArrowUpRight, Download, FileText, Info, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ArrowDownRight, ArrowUpRight, ChevronDown, Download, FileText, Info, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
@@ -36,6 +36,8 @@ export default function PolyView({ feed, ledger, loading, error, now, onRefresh,
   const ids = useMemo(() => sortIds(Object.keys(feed?.strategies ?? {})), [feed]);
   const rows = useMemo(() => mergeLedger(ledger, feed), [ledger, feed]);
   const stats = useMemo(() => feed ? ids.map(id => algoStats(id, feed.strategies[id], rows, feed.catalog[id], now)) : [], [feed, ids, rows, now]);
+  // Paused algos keep their open bets and history, but are left out of the totals and the chart.
+  const activeIds = useMemo(() => ids.filter(id => !feed?.strategies[id]?.halted), [ids, feed]);
   const open = stats.flatMap(s => feed!.strategies[s.id].positions.map(p => ({ id: s.id, p })));
   const live = stats.length > 0 && stats.every(s => s.state !== 'offline');
   const lastUpdate = stats.map(s => s.updated).filter(Boolean).sort().at(-1);
@@ -43,14 +45,14 @@ export default function PolyView({ feed, ledger, loading, error, now, onRefresh,
   const filtered = (id: string) => algoFilter === 'all' || algoFilter === id;
   const filterBar = <div className={styles.pills} role="group" aria-label="Filter by algo">
     {['all', ...ids].map(id => <button key={id} className={algoFilter === id ? styles.pillActive : ''} aria-pressed={algoFilter === id} onClick={() => setAlgoFilter(id)}>
-      {id !== 'all' && <Dot color={info(id).color} />}{id === 'all' ? 'All algos' : info(id).title}
+      {id !== 'all' && <Dot color={info(id).color} />}{id === 'all' ? 'All algos' : info(id).title}{id !== 'all' && feed?.strategies[id]?.halted ? ' (paused)' : ''}
     </button>)}
   </div>;
 
   let body: ReactNode;
   if (!feed) body = <div className={styles.card}><Empty>{loading ? 'Loading paper accounts…' : error || 'No data yet.'}</Empty></div>;
   else if (!ids.length) body = <div className={styles.card}><Empty>The paper worker has not published an account yet.</Empty></div>;
-  else if (tab === 'overview') body = <Overview stats={stats} ids={ids} rows={rows} feed={feed} now={now} onOpen={id => { setAlgoFilter(id); setTab('history'); }} />;
+  else if (tab === 'overview') body = <Overview stats={stats} ids={activeIds} rows={rows} feed={feed} now={now} onOpen={id => { setAlgoFilter(id); setTab('history'); }} />;
   else if (tab === 'open') body = <>{filterBar}<OpenBets rows={open.filter(o => filtered(o.id))} /></>;
   else if (tab === 'history') body = <>{filterBar}<History rows={rows} ids={ids.filter(filtered)} /></>;
   else body = <Backtests stats={stats} feed={feed} />;
@@ -59,7 +61,7 @@ export default function PolyView({ feed, ledger, loading, error, now, onRefresh,
     <div className={styles.heading}>
       <div>
         <h1>Polymarket Algos</h1>
-        <p className={styles.subtitle}>Four strategies, each trading its own $25 paper account on live Polymarket prices. No real money is used.</p>
+        <p className={styles.subtitle}>{activeIds.length} {activeIds.length === 1 ? 'strategy' : 'strategies'} trading on live Polymarket prices, each with its own $25 paper account. No real money is used.</p>
       </div>
       <span className={styles.paperBadge}><ShieldCheck size={16} /><span><b>Paper trading only</b>No wallet, no real orders</span></span>
     </div>
@@ -91,12 +93,13 @@ export default function PolyView({ feed, ledger, loading, error, now, onRefresh,
 
 // ------------------------------------------------------------------ overview
 function Overview({ stats, ids, rows, feed, now, onOpen }: { stats: AlgoStats[]; ids: string[]; rows: LedgerRow[]; feed: Feed; now: number; onOpen: (id: string) => void }) {
-  const sum = (f: (s: AlgoStats) => number) => stats.reduce((t, s) => t + f(s), 0);
+  const active = stats.filter(s => ids.includes(s.id)), paused = stats.filter(s => !ids.includes(s.id));
+  const sum = (f: (s: AlgoStats) => number) => active.reduce((t, s) => t + f(s), 0);
   const start = sum(s => s.start), value = sum(s => s.value), settled = sum(s => s.settled), wins = sum(s => s.wins);
   const openCount = sum(s => s.openCount);
   return <>
     <div className={`${styles.card} ${styles.summary}`}>
-      <Stat label="Started with" value={usd(start)} sub={`${plural(stats.length, 'algo')} × ${usd(start / Math.max(stats.length, 1), 0)}`} />
+      <Stat label="Started with" value={usd(start)} sub={`${plural(active.length, 'algo')} × ${usd(start / Math.max(active.length, 1), 0)}`} />
       <Stat label="Worth now" value={usd(value)} sub="cash + open bets at today's prices" />
       <Stat label="Profit / loss" value={signedUsd(value - start)} className={tone(value - start)} sub={<span className={tone(value - start)}>{signedPct((value - start) / start)} since start</span>} />
       <Stat label="From finished bets" value={signedUsd(sum(s => s.realized))} className={tone(sum(s => s.realized))} sub={`${plural(settled, 'bet')} · ${wins} won · ${settled - wins} lost`} />
@@ -107,7 +110,13 @@ function Overview({ stats, ids, rows, feed, now, onOpen }: { stats: AlgoStats[];
     <PnlChart ids={ids} rows={rows} feed={feed} now={now} />
 
     <div className={styles.sectionHead}><h2>The algos</h2><span className={styles.muted}>Click one to see its bets.</span></div>
-    <div className={styles.algoGrid}>{stats.map(s => <AlgoCard key={s.id} s={s} feed={feed} onOpen={() => onOpen(s.id)} />)}</div>
+    <div className={styles.algoGrid}>{active.map(s => <AlgoCard key={s.id} s={s} feed={feed} onOpen={() => onOpen(s.id)} />)}</div>
+
+    {paused.length > 0 && <details className={styles.paused}>
+      <summary><ChevronDown size={16} /><b>Paused algos ({paused.length})</b>
+        <span className={styles.muted}>Not placing new bets and not counted in the totals or the chart above. {plural(paused.reduce((t, s) => t + s.openCount, 0), 'open bet')} still to finish.</span></summary>
+      <div className={styles.algoGrid}>{paused.map(s => <AlgoCard key={s.id} s={s} feed={feed} onOpen={() => onOpen(s.id)} />)}</div>
+    </details>}
   </>;
 }
 
@@ -148,7 +157,7 @@ function PnlChart({ ids, rows, feed, now }: { ids: string[]; rows: LedgerRow[]; 
 
 function AlgoCard({ s, feed, onOpen }: { s: AlgoStats; feed: Feed; onOpen: () => void }) {
   const a = feed.strategies[s.id], i = info(s.id);
-  const stateText = s.state === 'offline' ? `Offline · ${ago(s.updated)}` : s.state === 'holding' ? `Holding ${plural(s.openCount, 'bet')}` : s.lowCash ? 'Out of cash' : 'Watching markets';
+  const stateText = s.state === 'offline' ? `Offline · ${ago(s.updated)}` : s.state === 'paused' ? (s.openCount ? `Paused · ${plural(s.openCount, 'bet')} still open` : 'Paused') : s.state === 'holding' ? `Holding ${plural(s.openCount, 'bet')}` : s.lowCash ? 'Out of cash' : 'Watching markets';
   return <button className={styles.algoCard} onClick={onOpen}>
     <div className={styles.algoTop}>
       <span className={styles.algoName}><Dot color={i.color} /><b>{i.title}</b><small>{i.short}</small></span>

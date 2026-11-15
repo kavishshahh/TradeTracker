@@ -92,6 +92,16 @@
 .state_watching i { background: var(--up); opacity: 1; }
 .state_holding i { background: var(--warn); opacity: 1; }
 .state_offline i { background: var(--down); opacity: .9; }
+.state_paused i { background: var(--muted-foreground); opacity: .55; }
+
+/* Paused algos: collapsed below the active ones */
+.paused { margin-top: 8px; }
+.paused > summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; list-style: none; font-size: 13px; color: var(--foreground); }
+.paused > summary::-webkit-details-marker { display: none; }
+.paused > summary svg { flex: none; transition: transform .15s; transform: rotate(-90deg); color: var(--muted-foreground); }
+.paused[open] > summary svg { transform: none; }
+.paused > summary span { font-size: 12px; }
+.paused[open] > summary { margin-bottom: 12px; }
 
 /* Tables */
 .tableCard { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }

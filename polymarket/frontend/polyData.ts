@@ -7,6 +7,7 @@ export type Account = {
   realized_pnl?: number; n_settled?: number; n_wins?: number; n_fills?: number; updated_at?: string; started_at?: string;
   candidates?: number; watching?: number; signals?: number; params?: Record<string, number>;
   feed?: { connected?: boolean; last_message_at?: string | null }; last_error?: string | null;
+  halted?: boolean;   // paused by the worker: no new bets, open bets still settle
   account_version?: number; previous?: { version: number; ended_at?: string; start_cash?: number; equity?: number; realized_pnl?: number; n_settled?: number; n_wins?: number }[];
   positions: Position[]; fills?: LedgerRow[]; settled?: LedgerRow[];
 };
@@ -84,7 +85,7 @@ export type AlgoStats = {
   id: string; start: number; value: number; pnl: number; pnlPct: number; realized: number; unrealized: number;
   inBets: number; cash: number; openCount: number; settled: number; wins: number; losses: number; winRate: number | null;
   staked: number; bets: number; avgEntry: number | null; liveRoi: number | null; avgWin: number | null; avgLoss: number | null;
-  state: 'offline' | 'holding' | 'watching'; lowCash: boolean; updated?: string; started?: string;
+  state: 'offline' | 'holding' | 'watching' | 'paused'; lowCash: boolean; updated?: string; started?: string;
   backtest?: Stats; verdict: Verdict;
 };
 export type Verdict = { tone: 'good' | 'bad' | 'neutral'; text: string };
@@ -114,7 +115,7 @@ export function algoStats(id: string, a: Account, ledger: LedgerRow[], catalog: 
     avgEntry: fills.length ? fills.reduce((t, r) => t + (r.price ?? 0), 0) / fills.length : null,
     liveRoi, avgWin: winRows.length ? winRows.reduce((t, r) => t + (r.pnl ?? 0), 0) / winRows.length : null,
     avgLoss: lossRows.length ? lossRows.reduce((t, r) => t + (r.pnl ?? 0), 0) / lossRows.length : null,
-    state: isStale(a, now) ? 'offline' : a.positions.length ? 'holding' : 'watching', lowCash: a.cash < MIN_BET,
+    state: isStale(a, now) ? 'offline' : a.halted ? 'paused' : a.positions.length ? 'holding' : 'watching', lowCash: a.cash < MIN_BET,
     updated: a.updated_at, started: a.started_at,
     backtest, verdict: verdict(settled, liveRoi, settled ? wins / settled : null, backtest),
   };

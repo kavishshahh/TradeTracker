@@ -36,6 +36,7 @@ from pmq.strategies.crypto_fair_value import SYM     # noqa: E402
 from store import Account, MemoryDb, firestore_client, iso   # noqa: E402
 import latency
 from latency_algo import LatencyTrader                # noqa: E402
+from copy_algo import CopyTrader                      # noqa: E402
 from live import LiveTrader                           # noqa: E402
 
 log = logging.getLogger("poly")
@@ -118,6 +119,7 @@ class Worker:
         self.universe_at = time.time()     # last completed market refresh
         self.stalled = False
         self.latency = LatencyTrader(self)
+        self.copy = CopyTrader(self)       # copies other wallets' buys from the live activity feed
         self.live = LiveTrader(self)       # real orders; off unless POLY_LIVE=1 and keys are set on the host
 
     # ------------------------------------------------------------ persistence
@@ -133,6 +135,7 @@ class Worker:
                      skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
                      markets_refreshed_at=iso(self.universe_at), halted=by_halt(self, name),
                      perp_feed=dict(connected=self.latency.feed.connected, ticks=self.latency.feed.ticks),
+                     activity_feed=dict(connected=self.copy.connected, messages=self.copy.messages),
                      feed=dict(connected=self.feed_ok(), connections=self.feed.connected, tokens=len(self.feed.tokens),
                                messages=self.books.messages,
                                last_message_at=iso(self.books.last_message) if self.books.last_message else None))
@@ -152,7 +155,7 @@ class Worker:
     def evaluate(self, s, m, now):
         """Run one strategy on one market from the local books. Returns True when a paper fill happened."""
         acc, st = self.accounts[s.name], self.stats[s.name]
-        if s.halted or getattr(s, "latency_rule", False):      # latency algos trade in latency_algo.py
+        if s.halted or getattr(s, "latency_rule", False) or getattr(s, "copy_rule", False):   # traded in latency_algo.py / copy_algo.py
             return False
         if acc.pf.held(m["condition_id"]) or m.get("event_slug") in acc.held_events() or not s.universe(m, now):
             return False
@@ -248,7 +251,7 @@ class Worker:
                     await asyncio.sleep(0.5)
                 now = time.time()
                 for s in self.strategies:
-                    if s.halted:                           # paused: no scan, no feed; held bets still settle
+                    if s.halted or getattr(s, "copy_rule", False):   # paused, or copy algos (no scan); held bets still settle
                         self.universe[s.name], self.scanned[s.name] = {}, 0
                         continue
                     try:                                   # one algo's data problem must not starve the others
@@ -348,7 +351,7 @@ class Worker:
     async def run(self, seconds=None):
         tasks = [asyncio.create_task(c) for c in (self.spot.run(), self.universe_loop(), self.decide_loop(),
                                                   self.settle_loop(), self.latency_loop(), self.latency.run(),
-                                                  self.live.run())]
+                                                  self.live.run(), self.copy.run())]
         heartbeat = asyncio.create_task(self.heartbeat_loop())     # returns only when the lease is lost
         stop = asyncio.Event()
         try:                                   # hosts stop a service with SIGTERM; finish cleanly on it
@@ -364,6 +367,7 @@ class Worker:
             self.stopping = True
             self.feed.stopping = True
             self.latency.feed.stopping = True
+            self.copy.stopping = True
             everything = tasks + [heartbeat] + waiters + self.feed.tasks
             for t in everything:
                 t.cancel()

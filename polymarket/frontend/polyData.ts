@@ -70,8 +70,24 @@ export const ALGOS: Record<string, Info> = {
     title: 'Sports underdogs', short: 'Modelled on a top sports trader', color: 'var(--chart-4)', hold: 'until the game ends',
     how: p => `${p.min_minutes ?? 10} to ${p.max_minutes ?? 240} minutes before a match starts, buys the underdog when it is priced ${cents(p.lo ?? 0.1)} to ${cents(p.hi ?? 0.4)}.`,
   },
+  copy_substantial_service: {
+    title: 'Copy · Substantial-Service', short: 'Copies a large sports wallet', color: 'var(--chart-1)', hold: 'until the market resolves',
+    how: p => `Watches Polymarket's live trade feed for wallet 0x2c33…0563. On its first buy in a market (fills of at least $${p.min_their_usd ?? 20}, priced under ${cents(p.max_price ?? 0.97)}), sends a limit buy at their price plus ${cents(p.max_chase ?? 0.02)}. The order is taken to arrive ${p.order_delay_ms ?? 350} ms after the trade shows on the feed, plus the market's own delay for live games, and fills only at the asks that were there then.`,
+  },
+  copy_c8b9_politics: {
+    title: 'Copy · politics wallet', short: 'Copies an elections trader (0xc8b9…b836)', color: 'var(--chart-2)', hold: 'days to weeks',
+    how: p => `Copies the first buy of at least $${p.min_their_usd ?? 5} in each market by wallet 0xc8b9…b836, under ${cents(p.max_price ?? 0.97)}, with a limit at their price plus ${cents(p.max_chase ?? 0.02)} arriving ${p.order_delay_ms ?? 350} ms after the trade shows on the live feed.`,
+  },
+  copy_goool_esports: {
+    title: 'Copy · esports wallet', short: 'Copies a CS2/LoL pregame trader (Gooooooollllllllll)', color: 'var(--chart-3)', hold: 'until the match ends',
+    how: p => `Copies the first buy of at least $${p.min_their_usd ?? 5} in each market by Gooooooollllllllll (0xda3a…381f), under ${cents(p.max_price ?? 0.97)}, with a limit at their price plus ${cents(p.max_chase ?? 0.02)} arriving ${p.order_delay_ms ?? 350} ms after the trade shows on the live feed.`,
+  },
+  copy_6e82_nba: {
+    title: 'Copy · NBA wallet', short: 'Copies an NBA pregame trader (0x6e82…752c)', color: 'var(--chart-4)', hold: 'until the game ends',
+    how: p => `Copies the first buy of at least $${p.min_their_usd ?? 5} in each market by wallet 0x6e82…752c, under ${cents(p.max_price ?? 0.97)}, with a limit at their price plus ${cents(p.max_chase ?? 0.02)} arriving ${p.order_delay_ms ?? 350} ms after the trade shows on the live feed.`,
+  },
 };
-const ORDER = ['updown_latency_2bp', 'updown_latency_2bp_real', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
+const ORDER = ['copy_substantial_service', 'copy_c8b9_politics', 'copy_goool_esports', 'copy_6e82_nba', 'updown_latency_2bp', 'updown_latency_2bp_real', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
 export const info = (id: string): Info => ALGOS[id] ?? { title: id.replaceAll('_', ' '), short: '', color: 'var(--chart-5)', hold: 'until resolution', how: () => '' };
 export const sortIds = (ids: string[]) => [...ids].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 

@@ -131,12 +131,16 @@ class Worker:
 
     async def save(self, name):
         acc, st = self.accounts[name], self.stats[name]
+        # Copy accounts trade off the activity feed; the order-book feed only matters to them while a bet is
+        # open (for marks). With every other algo paused it has no tokens and is idle, which is not "offline".
+        copying = any(s.name == name and getattr(s, "copy_rule", False) for s in self.strategies)
+        connected = (self.copy.connected and (self.feed_ok() or not acc.pf.pos)) if copying else self.feed_ok()
         extra = dict(candidates=self.scanned[name], watching=len(self.universe[name]), evaluations=st["evaluations"], signals=st["signals"],
                      skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
                      markets_refreshed_at=iso(self.universe_at), halted=by_halt(self, name),
                      perp_feed=dict(connected=self.latency.feed.connected, ticks=self.latency.feed.ticks),
                      activity_feed=dict(connected=self.copy.connected, messages=self.copy.messages),
-                     feed=dict(connected=self.feed_ok(), connections=self.feed.connected, tokens=len(self.feed.tokens),
+                     feed=dict(connected=connected, connections=self.feed.connected, tokens=len(self.feed.tokens),
                                messages=self.books.messages,
                                last_message_at=iso(self.books.last_message) if self.books.last_message else None))
         async with self._save_locks[name]:             # one save per account at a time, in order

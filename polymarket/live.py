@@ -28,12 +28,15 @@ import math
 import os
 import time
 
+import requests
+
 from pmq import api
 from store import iso
 
 log = logging.getLogger("poly")
 
 LIVE_STRATEGY = "updown_latency_2bp"
+GEOBLOCK = "https://polymarket.com/api/geoblock"   # Polymarket's own check of the caller's location
 LO, HI = 0.30, 0.90            # only sides priced in this band (cheap sides lost on paper)
 KEEP_WARM_EVERY = 10           # seconds; keeps the connection to Polymarket open and reads the balance
 SETTLE_EVERY = 60
@@ -81,6 +84,12 @@ class LiveTrader:
             log.warning("live: POLY_LIVE=1 but POLY_SESSION_KEY / POLY_WALLET missing (or dry run); staying off")
             return
         try:
+            logging.getLogger("httpx").setLevel(logging.WARNING)      # one line per request otherwise
+            geo = await asyncio.to_thread(lambda: requests.get(GEOBLOCK, timeout=15).json())
+            if geo.get("blocked"):
+                log.error("live: Polymarket does not accept orders from this server's location (%s %s); staying off. "
+                          "Paper trading continues.", geo.get("country"), geo.get("region"))
+                return
             from polymarket import AsyncSecureClient
             saved = await asyncio.to_thread(lambda: self.doc().get().to_dict())
             if saved:
@@ -193,6 +202,9 @@ class LiveTrader:
         finally:
             self.busy.discard(o["cid"])
         text = str(rec.get("message", "")).lower()
+        if "restricted in your region" in text:                   # never retry against a location refusal
+            self.ready = False
+            log.error("live: Polymarket refused the order for this server's location; live orders are off until restart")
         if not self.d["five_shares"] and not rec.get("price") and ("size" in text or "minimum" in text):
             self.d["five_shares"] = True
             log.warning("[live] order refused for its size (%s); switching to 5 shares per order", rec.get("message"))

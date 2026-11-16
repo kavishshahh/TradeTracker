@@ -126,6 +126,7 @@ class LatencyTrader:
         self.pending.append(dict(s=s, m=market, cid=cid, outcome=outcome, token=token, bp=bp, age=age, ask_seen=ask,
                                  limit=ask + p["max_chase"], arrive=ts + age + p["order_delay_ms"],
                                  give_up=recv + GIVE_UP_MS))
+        w.live.on_signal(self.pending[-1], recv)          # real order too, only if live trading is switched on
 
     # ------------------------------------------------------------ fill
     def resolve(self, o):
@@ -138,6 +139,7 @@ class LatencyTrader:
         if top is None:
             return self.skip(s, "no book at arrival", **detail)
         bid, ask, size = top
+        w.live.paper_result(o, ask if ask is not None and ask <= o["limit"] + 1e-9 else None)
         if ask is None or ask > o["limit"] + 1e-9:
             return self.skip(s, "quote moved before the order arrived", top_asks=[[ask, size]], **detail)
         if acc.pf.held(o["cid"]):

@@ -36,6 +36,7 @@ from pmq.strategies.crypto_fair_value import SYM     # noqa: E402
 from store import Account, MemoryDb, firestore_client, iso   # noqa: E402
 import latency
 from latency_algo import LatencyTrader                # noqa: E402
+from live import LiveTrader                           # noqa: E402
 
 log = logging.getLogger("poly")
 
@@ -117,6 +118,7 @@ class Worker:
         self.universe_at = time.time()     # last completed market refresh
         self.stalled = False
         self.latency = LatencyTrader(self)
+        self.live = LiveTrader(self)       # real orders; off unless POLY_LIVE=1 and keys are set on the host
 
     # ------------------------------------------------------------ persistence
     def marks(self, acc):
@@ -273,6 +275,7 @@ class Worker:
                 held = [m["token_id"] for acc in self.accounts.values() for m in acc.meta.values() if m.get("token_id")]
                 await self.feed.set_tokens(list(by_token) + held)
                 self.universe_at = time.time()
+                await self.live.prewarm(self.books.track)
                 log.info("scanned %s -> watching %s | %d tokens on %d connection(s)", self.scanned,
                          {n: len(u) for n, u in self.universe.items()}, len(self.feed.tokens), len(self.feed.tasks))
             except Exception as exc:
@@ -344,7 +347,8 @@ class Worker:
 
     async def run(self, seconds=None):
         tasks = [asyncio.create_task(c) for c in (self.spot.run(), self.universe_loop(), self.decide_loop(),
-                                                  self.settle_loop(), self.latency_loop(), self.latency.run())]
+                                                  self.settle_loop(), self.latency_loop(), self.latency.run(),
+                                                  self.live.run())]
         heartbeat = asyncio.create_task(self.heartbeat_loop())     # returns only when the lease is lost
         stop = asyncio.Event()
         try:                                   # hosts stop a service with SIGTERM; finish cleanly on it

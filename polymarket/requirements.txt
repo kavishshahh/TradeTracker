@@ -4,3 +4,4 @@ numpy>=1.26
 pandas>=2.2
 firebase-admin>=6.4
 python-dotenv>=1.0
+polymarket-client==0.18.0   # only used by live.py / live_setup.py (real orders, off by default)

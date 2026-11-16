@@ -112,6 +112,7 @@ The free tier allows 20,000 a day, shared with the main app.
 | `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet held out, ~0% in the tuning period |
 | `updown_leader_3m` (v2) | BTC/ETH 5-minute up/down | Last 3 minutes; a real trade at 70-90c in the last 10 s and the ask within 3c of it | see `backtests/` |
 | `updown_leader_early` (v2) | BTC/ETH 5-minute up/down | Same, any time after the first 15 s | see `backtests/` |
+| `updown_latency_2bp_real` | BTC/ETH 5-minute up/down | The 2 bp rule with a 350 ms order delay, the figure measured on real orders | first live test, 16 Nov 2026 |
 | `updown_latency_2bp`, `updown_latency_1bp` | BTC/ETH 5-minute up/down | Binance perp moves 2 bp (or 1 bp) in 200 ms: buy the matching side with a limit at the ask seen; the simulated order arrives 100 ms later and fills only if that ask is still there (`latency_algo.py`) | tick research, see `research/README.md` |
 
 Paused (`halted = True` on the class): `crypto_fair_value`, `sports_pregame_underdog` and both

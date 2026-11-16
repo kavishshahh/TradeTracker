@@ -46,6 +46,10 @@ export const ALGOS: Record<string, Info> = {
     title: 'Latency · 2 bp move', short: 'Binance perp leads Polymarket', color: 'var(--chart-5)', hold: 'up to 5 minutes',
     how: p => `Watches the Binance perpetual price. When it moves ${p.move_bp ?? 2} bp within ${p.look_ms ?? 200} ms, it buys the matching side of the current 5-minute Bitcoin or Ethereum market (Up after a rise, Down after a fall) with a limit at the price it saw. The simulated order arrives ${p.order_delay_ms ?? 100} ms later and fills only if that price is still there.`,
   },
+  updown_latency_2bp_real: {
+    title: 'Latency · 2 bp · real delay', short: 'Same rule at the speed real orders reach', color: 'var(--chart-2)', hold: 'up to 5 minutes',
+    how: p => `Same as the 2 bp version, but the simulated order arrives ${p.order_delay_ms ?? 350} ms after the Binance move is seen instead of 100 ms. That is how long Polymarket took to answer real orders in the first live test.`,
+  },
   updown_latency_1bp: {
     title: 'Latency · 1 bp move', short: 'Same rule, smaller trigger', color: 'var(--chart-4)', hold: 'up to 5 minutes',
     how: p => `Same as the 2 bp version but triggers on a ${p.move_bp ?? 1} bp move within ${p.look_ms ?? 200} ms, so it bets more often on weaker signals.`,
@@ -67,7 +71,7 @@ export const ALGOS: Record<string, Info> = {
     how: p => `${p.min_minutes ?? 10} to ${p.max_minutes ?? 240} minutes before a match starts, buys the underdog when it is priced ${cents(p.lo ?? 0.1)} to ${cents(p.hi ?? 0.4)}.`,
   },
 };
-const ORDER = ['updown_latency_2bp', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
+const ORDER = ['updown_latency_2bp', 'updown_latency_2bp_real', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
 export const info = (id: string): Info => ALGOS[id] ?? { title: id.replaceAll('_', ' '), short: '', color: 'var(--chart-5)', hold: 'until resolution', how: () => '' };
 export const sortIds = (ids: string[]) => [...ids].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 

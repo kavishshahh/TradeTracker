@@ -44,6 +44,14 @@ class UpDownLatency2bp(UpDownLatency):
     description = "5-minute BTC/ETH up/down: when the Binance perp moves 2 bp in 200 ms, buy the matching side before Polymarket's quote follows."
 
 
+class UpDownLatency2bpReal(UpDownLatency):
+    """Same 2 bp rule with the order delay measured on real orders (16 Nov 2026, from Ireland):
+    Polymarket answered real orders after 212-673 ms, median about 330 ms, not the 100 ms assumed above."""
+    name = "updown_latency_2bp_real"
+    description = "The 2 bp rule with the order delay measured on real orders (350 ms instead of 100 ms)."
+    params = dict(UpDownLatency.params, order_delay_ms=350)
+
+
 class UpDownLatency1bp(UpDownLatency):
     name = "updown_latency_1bp"
     description = "Same rule with a smaller trigger: the Binance perp moves 1 bp in 200 ms."

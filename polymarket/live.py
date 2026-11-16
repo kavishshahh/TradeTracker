@@ -11,10 +11,14 @@ Environment (set on the host, never in code):
   POLY_LIVE=1                 switch. Anything else: this file does nothing.
   POLY_SESSION_KEY            private key of the session signer
   POLY_WALLET                 the account (deposit) wallet address
-  POLY_LIVE_SHARES=5          shares per order (5 is the market minimum)
-  POLY_LIVE_MAX_ORDERS_DAY=40 orders sent per UTC day
-  POLY_LIVE_DAY_LOSS=10       stop for the day after losing this many dollars (settled bets)
-  POLY_LIVE_TOTAL_LOSS=20     stop for good after losing this much in total, until the state is reset
+  POLY_LIVE_USD=1             dollars per order
+  POLY_LIVE_MAX_ORDERS_DAY=60 orders sent per UTC day
+  POLY_LIVE_MAX_OPEN=4        bets open at the same time
+  POLY_LIVE_DAY_LOSS=15       stop for the day after losing this many dollars (settled bets)
+  POLY_LIVE_TOTAL_LOSS=15     stop for good after losing this much in total, until the state is reset
+Defaults are sized for a $20 account: $1 a bet, so at least 15 bets even if every one loses.
+The listed minimum for resting orders is 5 shares. If Polymarket refuses a $1 order for its size,
+this switches by itself to 5 shares per order ($1.50-$4.55) and says so in the log.
 
 State and the order log live in Firestore `poly_live/state` (one write per order and per result).
 """
@@ -33,7 +37,6 @@ LIVE_STRATEGY = "updown_latency_2bp"
 LO, HI = 0.30, 0.90            # only sides priced in this band (cheap sides lost on paper)
 KEEP_WARM_EVERY = 10           # seconds; keeps the connection to Polymarket open and reads the balance
 SETTLE_EVERY = 60
-MAX_OPEN = 6
 KEEP_ORDERS = 300              # order records kept in the state document
 
 
@@ -54,15 +57,16 @@ class LiveTrader:
         self.wanted = os.environ.get("POLY_LIVE") == "1"
         self.ready = False            # client connected and state loaded
         self.client = None
-        self.shares = _env_float("POLY_LIVE_SHARES", 5)
-        self.max_orders = int(_env_float("POLY_LIVE_MAX_ORDERS_DAY", 40))
-        self.day_loss = _env_float("POLY_LIVE_DAY_LOSS", 10)
-        self.total_loss = _env_float("POLY_LIVE_TOTAL_LOSS", 20)
+        self.usd = max(1.0, _env_float("POLY_LIVE_USD", 1))
+        self.max_orders = int(_env_float("POLY_LIVE_MAX_ORDERS_DAY", 60))
+        self.day_loss = _env_float("POLY_LIVE_DAY_LOSS", 15)
+        self.total_loss = _env_float("POLY_LIVE_TOTAL_LOSS", 15)
+        self.max_open = int(_env_float("POLY_LIVE_MAX_OPEN", 4))
         self.balance = None
         self.busy = set()             # condition ids with an order in flight
         self.tasks = set()
         self.d = dict(day=day(), orders_today=0, pnl_today=0.0, pnl_total=0.0, spent_total=0.0, n_orders=0,
-                      n_filled=0, n_settled=0, n_wins=0, open={}, orders=[], stopped=None)
+                      n_filled=0, n_settled=0, n_wins=0, open={}, orders=[], stopped=None, five_shares=False, summary={})
 
     # ------------------------------------------------------------ setup
     def doc(self):
@@ -85,8 +89,9 @@ class LiveTrader:
             bal = await self.client.get_balance_allowance(asset_type="COLLATERAL")
             self.balance = bal.balance / 1e6
             self.ready = True
-            log.info("live: ON wallet=%s type=%s balance=%.2f | %s shares/order, max %d orders/day, stop at -$%.0f/day, -$%.0f total",
-                     wallet[:8], self.client.wallet_type, self.balance, self.shares, self.max_orders, self.day_loss, self.total_loss)
+            log.info("live: ON wallet=%s type=%s balance=%.2f | %s per order, max %d orders/day, %d open, stop at -$%.0f/day, -$%.0f total",
+                     wallet[:8], self.client.wallet_type, self.balance, "5 shares" if self.d["five_shares"] else f"${self.usd:.2f}",
+                     self.max_orders, self.max_open, self.day_loss, self.total_loss)
         except Exception as exc:
             log.error("live: could not start (%s: %s); staying off", type(exc).__name__, str(exc)[:200])
 
@@ -106,11 +111,42 @@ class LiveTrader:
             return "daily loss limit"
         if self.d["orders_today"] >= self.max_orders:
             return "daily order limit"
-        if len(self.d["open"]) + len(self.busy) >= MAX_OPEN:
+        if len(self.d["open"]) + len(self.busy) >= self.max_open:
             return "max open"
+        if self.balance is not None and self.balance < self.amount(HI) + 0.25:
+            return "balance too low (claim winnings or add funds)"
         return None
 
     # ------------------------------------------------------------ orders
+    def amount(self, limit):
+        """Dollars to spend on one order capped at price `limit`."""
+        if self.d["five_shares"]:
+            return math.ceil(5 * limit * 100) / 100               # enough for 5 shares even at the cap price
+        return round(self.usd, 2)
+
+    def summarize(self):
+        """Timing and fill figures over the kept order records: the point of the live test."""
+        rows = [r for r in self.d["orders"] if r.get("ms") is not None]
+        if not rows:
+            return {}
+        def pct(vals, q):
+            vals = sorted(vals)
+            return vals[min(len(vals) - 1, int(q * len(vals)))]
+        ms, wait = [r["ms"] for r in rows], [r["wait_ms"] for r in rows]
+        filled = [r for r in rows if r.get("price")]
+        judged = [r for r in rows if "paper" in r]
+        both = [r for r in filled if isinstance(r.get("paper"), (int, float))]
+        out = dict(orders=len(rows), filled=len(filled), fill_rate=round(len(filled) / len(rows), 3),
+                   answer_ms=dict(min=min(ms), median=pct(ms, 0.5), p90=pct(ms, 0.9), max=max(ms)),
+                   send_wait_ms=dict(median=pct(wait, 0.5), p90=pct(wait, 0.9)),
+                   paper_filled=sum(1 for r in judged if r["paper"] != "miss"),
+                   paper_missed=sum(1 for r in judged if r["paper"] == "miss"),
+                   real_filled_paper_missed=sum(1 for r in filled if r.get("paper") == "miss"),
+                   real_missed_paper_filled=sum(1 for r in judged if not r.get("price") and r["paper"] != "miss"))
+        if both:
+            out["real_minus_paper_price"] = round(sum(r["price"] - r["paper"] for r in both) / len(both), 4)
+        return out
+
     def on_signal(self, o, recv_ms):
         """Called by the paper trader the moment it notes an order. Must not block."""
         if not self.ready or o["s"].name != LIVE_STRATEGY:
@@ -129,7 +165,7 @@ class LiveTrader:
     async def send(self, o, recv_ms):
         m = o["m"]
         limit = round(o["limit"], 2)
-        usd = math.ceil(self.shares * limit * 100) / 100          # enough for `shares` even at the cap price
+        usd = self.amount(limit)
         rec = dict(at=iso(), cid=o["cid"], question=m["question"][:80], outcome=m["outcomes"][o["outcome"]],
                    bp=round(o["bp"], 2), ask_seen=o["ask_seen"], limit=limit, usd=usd)
         o["live"] = rec                                           # the paper trader adds its own result here
@@ -156,10 +192,17 @@ class LiveTrader:
             rec.update(status="error", message=f"{type(exc).__name__}: {str(exc)[:120]}")
         finally:
             self.busy.discard(o["cid"])
+        text = str(rec.get("message", "")).lower()
+        if not self.d["five_shares"] and not rec.get("price") and ("size" in text or "minimum" in text):
+            self.d["five_shares"] = True
+            log.warning("[live] order refused for its size (%s); switching to 5 shares per order", rec.get("message"))
         log.info("[live] %s %s '%s' cap %.2f | bp %+.1f | sent after %sms, answered in %sms | %s",
                  rec.get("status"), rec["question"][:48], rec["outcome"], limit, o["bp"], rec["wait_ms"], rec.get("ms"),
                  f"{rec.get('shares')} @ {rec.get('price')}" if rec.get("price") else rec.get("message", ""))
         self.d["orders"] = (self.d["orders"] + [rec])[-KEEP_ORDERS:]
+        self.d["summary"] = self.summarize()
+        if self.d["n_orders"] % 5 == 0:
+            log.info("[live] summary %s", self.d["summary"])
         await self.save()
 
     def paper_result(self, o, price):
@@ -216,6 +259,8 @@ class LiveTrader:
                         del self.d["open"][cid]
                         done += 1
                 if done:
+                    self.d["summary"] = self.summarize()
+                    log.info("[live] summary %s", self.d["summary"])
                     log.info("[live] settled %d | today %+.2f, total %+.2f over %d bets (%d won), balance %s",
                              done, self.d["pnl_today"], self.d["pnl_total"], self.d["n_settled"], self.d["n_wins"], self.balance)
                     await self.save()

@@ -10,16 +10,23 @@ from poly_api import create_poly_router
 
 
 class Database(dict):
-    """Path-keyed stand-in for the two Firestore calls the router makes."""
+    """Path-keyed stand-in for the Firestore calls the router makes."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.queries = []
     def collection(self, name):
         db = self
         def document(doc_id):
             path = f'{name}/{doc_id}'
             return SimpleNamespace(get=lambda: SimpleNamespace(exists=path in db, to_dict=lambda: db.get(path)))
-        def stream():
+        def stream(keep=lambda payload: True):
             return [SimpleNamespace(id=path.split('/')[1], to_dict=lambda payload=payload: payload)
-                    for path, payload in db.items() if path.startswith(name + '/')]
-        return SimpleNamespace(document=document, stream=stream)
+                    for path, payload in db.items() if path.startswith(name + '/') and keep(payload)]
+        def where(filter):
+            assert (filter.field_path, filter.op_string) == ('t', '>='), 'router only filters t >= since'
+            db.queries.append((name, filter.value))
+            return SimpleNamespace(stream=lambda: stream(lambda payload: payload.get('t', 0) >= filter.value))
+        return SimpleNamespace(document=document, stream=stream, where=where)
 
 
 async def request(app, path, user=None):
@@ -27,8 +34,9 @@ async def request(app, path, user=None):
     headers = [(b'host', b'localhost')] + ([(b'authorization', ('Bearer ' + user).encode())] if user else [])
     async def receive(): return {'type': 'http.request', 'body': b'', 'more_body': False}
     async def send(message): messages.append(message)
+    path, _, query = path.partition('?')
     await app({'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1', 'scheme': 'http', 'method': 'GET',
-               'path': path, 'raw_path': path.encode(), 'query_string': b'', 'root_path': '', 'headers': headers,
+               'path': path, 'raw_path': path.encode(), 'query_string': query.encode(), 'root_path': '', 'headers': headers,
                'client': ('127.0.0.1', 1), 'server': ('localhost', 80)}, receive, send)
     status = next(item['status'] for item in messages if item['type'] == 'http.response.start')
     return status, json.loads(b''.join(item.get('body', b'') for item in messages if item['type'] == 'http.response.body'))
@@ -81,6 +89,12 @@ class PolyAccessTests(unittest.TestCase):
         status, body = self.get('/poly/trades', 'alice')
         self.assertEqual((status, [row['kind'] for row in body['trades']]), (200, ['fill', 'settled']))
         self.assertEqual(self.get('/poly/trades', 'bob')[0], 404)
+        # Incremental read: only rows at or after `since`, filtered in Firestore (not after a full stream).
+        status, body = self.get('/poly/trades?since=2', 'alice')
+        self.assertEqual((status, [row['kind'] for row in body['trades']]), (200, ['settled']))
+        self.assertEqual(self.db.queries, [('poly_paper_trades', 2.0)])
+        self.assertEqual(self.get('/poly/trades?since=-1', 'alice')[0], 422)
+        self.assertEqual(self.get('/poly/trades?since=nan', 'alice')[0], 422)
         self.assertEqual(self.get('/poly/trades')[0], 401)
 
     def test_access_follows_the_database_not_code(self):

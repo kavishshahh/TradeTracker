@@ -10,6 +10,7 @@ when their verified Firebase email is in that list. Everyone else gets `allowed:
 from /poly/access and 404 from the data route, so the section does not exist for them.
 """
 import logging
+import math
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -73,12 +74,21 @@ def create_poly_router(db, get_current_user, email_lookup=None, clock=time.monot
         return {'strategies': states, 'catalog': catalog, 'execution': 'paper_only'}
 
     @router.get('/trades')
-    async def trades(current_user: str = Depends(get_current_user)):
-        """Complete paper ledger (every buy and settlement). Read on demand for export, not on the poll."""
+    async def trades(since: float | None = None, current_user: str = Depends(get_current_user)):
+        """Paper ledger (every buy and settlement), oldest first. The ledger is append-only, so the page keeps
+        what it already has and passes ``since`` (epoch seconds of its newest row) to read only rows at or after
+        it: one Firestore read per returned bet instead of one per bet ever placed. Without ``since`` the
+        whole ledger is returned (first visit, or the browser has no cached copy)."""
         if not is_allowed(current_user):
             raise HTTPException(404, 'Not found')
+        if since is not None and not (math.isfinite(since) and since >= 0):
+            raise HTTPException(422, 'since must be a non-negative number of seconds')
         try:
-            rows = [doc.to_dict() for doc in db.collection('poly_paper_trades').stream()]
+            query = db.collection('poly_paper_trades')
+            if since is not None:
+                from google.cloud.firestore_v1.base_query import FieldFilter
+                query = query.where(filter=FieldFilter('t', '>=', since))
+            rows = [doc.to_dict() for doc in query.stream()]
         except Exception as exc:
             log.warning('poly_api_unavailable error=%s', type(exc).__name__)
             raise HTTPException(503, 'Polymarket trade ledger is unavailable') from None

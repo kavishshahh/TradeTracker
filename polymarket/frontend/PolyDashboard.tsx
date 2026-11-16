@@ -3,6 +3,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { FileText } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { loadCachedLedger, mergeRows, newestTime, saveCachedLedger } from './ledgerCache';
 import PolyView from './PolyView';
 import type { Feed, LedgerRow } from './polyData';
 import styles from './poly.module.css';
@@ -14,8 +15,10 @@ const POLL_MS = 30_000;
 /**
  * Data loading for the Polymarket page. Reads cost Firestore quota, so:
  *  - the account documents (/poly/paper, 8 small reads) are polled every 30 s, only while the tab is visible;
- *  - the full bet ledger (/poly/trades, one read per bet) is loaded once per visit and on Refresh;
- *    bets placed after that arrive through the account documents, which carry the most recent ones.
+ *  - the bet ledger (/poly/trades, one read per bet returned) is kept in the browser (ledgerCache), so a
+ *    visit, Refresh or CSV export reads only bets placed since the newest cached one; the full ledger is
+ *    read only without a cached copy (first visit on a device, or once the copy is a week old). Bets placed
+ *    between loads arrive through the account documents, which carry the most recent ones.
  */
 export default function PolyDashboard() {
   const { currentUser } = useAuth();
@@ -36,17 +39,30 @@ export default function PolyDashboard() {
     return await response.json() as T;
   }, [currentUser]);
 
+  /** Cached ledger topped up with bets at or after its newest one; the full ledger when nothing is cached. */
+  const syncLedger = useCallback(async (signal?: AbortSignal): Promise<LedgerRow[] | null> => {
+    const uid = currentUser!.uid;
+    const cached = await loadCachedLedger(uid);
+    const since = cached && cached.rows.length ? newestTime(cached.rows) : null;
+    const fresh = await get<{ trades: LedgerRow[] }>(since == null ? '/poly/trades' : `/poly/trades?since=${since}`, signal);
+    if (!fresh || signal?.aborted) return null;
+    const rows = cached ? mergeRows(cached.rows, fresh.trades) : mergeRows([], fresh.trades);
+    const now = Date.now();
+    await saveCachedLedger(uid, { rows, savedAt: now, fullAt: cached ? cached.fullAt : now });
+    return rows;
+  }, [currentUser, get]);
+
   const load = useCallback(async (withLedger: boolean, signal?: AbortSignal) => {
     if (!currentUser) return;
     setLoading(true);
     try {
       const [paper, trades] = await Promise.all([
         get<Feed>('/poly/paper', signal),
-        withLedger ? get<{ trades: LedgerRow[] }>('/poly/trades', signal) : Promise.resolve(null),
+        withLedger ? syncLedger(signal) : Promise.resolve(null),
       ]);
       if (signal?.aborted) return;
       if (paper) setFeed(paper);
-      if (trades) setLedger(trades.trades);
+      if (trades) setLedger(trades);
       setNow(Date.now());
       setError('');
     } catch (err) {
@@ -54,7 +70,7 @@ export default function PolyDashboard() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [currentUser, get]);
+  }, [currentUser, get, syncLedger]);
 
   useEffect(() => {
     if (allowed !== true) return;
@@ -71,9 +87,11 @@ export default function PolyDashboard() {
     if (exporting) return;
     setExporting(true);
     try {
-      const fresh = await get<{ trades: LedgerRow[] }>('/poly/trades');
-      // The export is the complete ledger, including bets placed under earlier versions of an algo's rules.
-      const rows = [...(fresh?.trades ?? ledger ?? [])].sort((x, y) => x.t - y.t);
+      // The export is the complete ledger, including bets placed under earlier versions of an algo's rules:
+      // the cached copy plus anything placed since it (only the new bets are read).
+      const synced = await syncLedger();
+      if (synced) setLedger(synced);
+      const rows = [...(synced ?? ledger ?? [])].sort((x, y) => x.t - y.t);
       const fields: (keyof LedgerRow)[] = ['ts', 'strategy', 'version', 'kind', 'question', 'outcome_name', 'shares', 'price', 'fee', 'cost', 'payout', 'pnl', 'reason', 'cid'];
       const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const csv = [fields.join(','), ...rows.map(r => fields.map(f => cell(r[f])).join(','))].join('\r\n');
@@ -86,7 +104,7 @@ export default function PolyDashboard() {
     } finally {
       setExporting(false);
     }
-  }, [exporting, get, ledger]);
+  }, [exporting, ledger, syncLedger]);
 
   // People without access see the same empty page as an unknown route.
   if (allowed === false || denied) return <section className={styles.lab}><div className={styles.card}><div className={styles.emptyRow}><FileText size={20} strokeWidth={1.4} />This page is not available.</div></div></section>;

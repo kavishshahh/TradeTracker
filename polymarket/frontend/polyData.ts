@@ -66,6 +66,10 @@ export const ALGOS: Record<string, Info> = {
     title: 'Crypto price levels', short: 'Modelled on top crypto traders', color: 'var(--chart-2)', hold: 'hours to weeks',
     how: p => `Prices markets like "Will Bitcoin dip to $62,000?" from the coin's live price and recent volatility, and buys NO when it is at least ${Math.round((p.edge ?? 0.15) * 100)} points cheaper than its fair price even in the most volatile recent conditions.`,
   },
+  long_dated_no: {
+    title: 'Long-dated No', short: 'From a study of resolved markets', color: 'var(--chart-1)', hold: 'one to several months',
+    how: p => `In Yes/No markets with at least ${p.min_days_left ?? 30} days to the scheduled end, buys No when Yes is priced ${cents(p.lo ?? 0.35)} to ${cents(p.hi ?? 0.65)} and the No spread is ${Math.round((p.max_spread ?? 0.03) * 100)}¢ or less. One bet per event, about ${p.stake_usd ?? 2} dollars each, held to resolution. In past markets Yes at these prices won less often than its price; this account checks whether that holds at live prices and today's fees.`,
+  },
   sports_pregame_underdog: {
     title: 'Sports underdogs', short: 'Modelled on a top sports trader', color: 'var(--chart-4)', hold: 'until the game ends',
     how: p => `${p.min_minutes ?? 10} to ${p.max_minutes ?? 240} minutes before a match starts, buys the underdog when it is priced ${cents(p.lo ?? 0.1)} to ${cents(p.hi ?? 0.4)}.`,
@@ -87,7 +91,7 @@ export const ALGOS: Record<string, Info> = {
     how: p => `Copies the first buy of at least $${p.min_their_usd ?? 5} in each market by wallet 0x6e82…752c, under ${cents(p.max_price ?? 0.97)}, with a limit at their price plus ${cents(p.max_chase ?? 0.02)} arriving ${p.order_delay_ms ?? 350} ms after the trade shows on the live feed.`,
   },
 };
-const ORDER = ['copy_substantial_service', 'copy_c8b9_politics', 'copy_goool_esports', 'copy_6e82_nba', 'updown_latency_2bp', 'updown_latency_2bp_real', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
+const ORDER = ['long_dated_no', 'copy_substantial_service', 'copy_c8b9_politics', 'copy_goool_esports', 'copy_6e82_nba', 'updown_latency_2bp', 'updown_latency_2bp_real', 'updown_latency_1bp', 'updown_leader_3m', 'updown_leader_early', 'crypto_fair_value', 'sports_pregame_underdog'];
 export const info = (id: string): Info => ALGOS[id] ?? { title: id.replaceAll('_', ' '), short: '', color: 'var(--chart-5)', hold: 'until resolution', how: () => '' };
 export const sortIds = (ids: string[]) => [...ids].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 

@@ -48,6 +48,7 @@ def _parse_market(m):
         min_size=float(m.get("orderMinSize") or 5), tick=float(m.get("orderPriceMinTickSize") or 0.01),
         best_bid=m.get("bestBid"), best_ask=m.get("bestAsk"), volume24h=m.get("volume24hr"),
         liquidity=float(m.get("liquidityNum") or 0), uma=m.get("umaResolutionStatus"),
+        fee_type=m.get("feeType"),
     )
 
 

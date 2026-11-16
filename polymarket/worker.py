@@ -103,7 +103,7 @@ class Worker:
         self.lost_lease = False
         self.stopping = False         # loops also check this: on Python 3.11 a cancel can be swallowed
         self.strategies = [cls() for cls in REGISTRY.values()]
-        self.accounts = {s.name: Account(db, s, bankroll) for s in self.strategies}
+        self.accounts = {s.name: Account(db, s, getattr(s, "bankroll", bankroll)) for s in self.strategies}
         self.books = Books()
         self.feed = BookFeed(self.books)
         self.spot = SpotFeed(SYMBOLS)
@@ -114,6 +114,7 @@ class Worker:
         self.stats = {s.name: dict(evaluations=0, signals=0, skipped={}) for s in self.strategies}
         self.errors = {}
         self._swept = {}
+        self._listing = {}                 # strategy -> (time, rows) for algos that set scan_every
         self._save_locks = {s.name: asyncio.Lock() for s in self.strategies}
         self._cpu = (time.process_time(), time.time())
         self.universe_at = time.time()     # last completed market refresh
@@ -180,6 +181,7 @@ class Worker:
                     max_exposure_usd=acc.pf.start_cash * 0.8)
         if getattr(s, "min_order_usd", None):
             risk["min_order_usd"] = s.min_order_usd
+        risk.update(getattr(s, "risk", {}))      # an algo may set its own limits (e.g. many small long-held bets)
         for order in s.on_snapshot(snap, ctx) or []:
             st["signals"] += 1
             fill, why = execute(order, snap, acc.pf, risk)
@@ -259,7 +261,13 @@ class Worker:
                         self.universe[s.name], self.scanned[s.name] = {}, 0
                         continue
                     try:                                   # one algo's data problem must not starve the others
-                        rows = await asyncio.to_thread(api.market_query, s.market_query)
+                        cached = self._listing.get(s.name)
+                        if cached and now - cached[0] < getattr(s, "scan_every", 0):
+                            rows = cached[1]               # a large listing is re-read only every scan_every seconds
+                        else:
+                            rows = await asyncio.to_thread(api.market_query, s.market_query)
+                            if getattr(s, "scan_every", 0):
+                                self._listing[s.name] = (now, rows)
                         rows = [m for m in rows if m.get("accepting") and len(m["token_ids"]) == 2 and s.universe(m, now)]
                         acc = self.accounts[s.name]
                         ctx = Context(acc.pf, now=now, data=self.data, mode="paper")

@@ -10,7 +10,7 @@ order-placement code anywhere in this folder.
 | Piece | Location |
 |---|---|
 | Feed-driven paper trader | `polymarket/worker.py`, `feed.py`, `store.py`, `pmq/` |
-| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`, `updown_latency_2bp`, `updown_latency_1bp`, `copy_substantial_service`, `copy_c8b9_politics`, `copy_goool_esports`, `copy_6e82_nba`) |
+| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`, `updown_latency_2bp`, `updown_latency_1bp`, `copy_substantial_service`, `copy_c8b9_politics`, `copy_goool_esports`, `copy_6e82_nba`, `long_dated_no`) |
 | Copy trading | `polymarket/copy_algo.py` (watches Polymarket's live activity feed for copied wallets, paper fills against the book at the copy order's arrival time), wallets in `pmq/strategies/copy_wallet.py` |
 | Latency rule and probe | `polymarket/latency_algo.py` (paper fills against the book at the order's arrival time), `latency.py` (network delay probe, every 10 minutes) |
 | Research scripts | `polymarket/research/` |
@@ -111,6 +111,7 @@ The free tier allows 20,000 a day, shared with the main app.
 | Algo | Markets | Rule | Backtest |
 |---|---|---|---|
 | `crypto_fair_value` (v2) | BTC/ETH/SOL/XRP "dip to / reach / above / between" | Buy NO when it is 15+ points cheap under both the calmest and hottest recent volatility; max 2 bets that lose on the same move | +53% per bet held out (optimistic: hourly trade prices) |
+| `long_dated_no` | Yes/No markets, 30+ days to the scheduled end, no sports | Buy No when Yes is 35-65c and the No spread is 3c or less; one bet per event, $2, held to resolution. Paper account of $1,000 so a few hundred bets can be open at once | +5c a share at real trade prices (551 events, Apr-Nov 2026), +6c in an unseen earlier year (666 events); mostly pre-fee, not yet tested at live bid/ask |
 | `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet held out, ~0% in the tuning period |
 | `updown_leader_3m` (v2) | BTC/ETH 5-minute up/down | Last 3 minutes; a real trade at 70-90c in the last 10 s and the ask within 3c of it | see `backtests/` |
 | `updown_leader_early` (v2) | BTC/ETH 5-minute up/down | Same, any time after the first 15 s | see `backtests/` |

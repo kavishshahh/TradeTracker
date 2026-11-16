@@ -37,6 +37,7 @@ log = logging.getLogger("poly")
 
 LIVE_STRATEGY = "updown_latency_2bp"
 GEOBLOCK = "https://polymarket.com/api/geoblock"   # Polymarket's own check of the caller's location
+API_OPEN = {"IE", "JP", "NL", "KR", "MT"}             # website close-only, API not restricted (Polymarket docs, Nov 2026)
 LO, HI = 0.30, 0.90            # only sides priced in this band (cheap sides lost on paper)
 KEEP_WARM_EVERY = 10           # seconds; keeps the connection to Polymarket open and reads the balance
 SETTLE_EVERY = 60
@@ -86,10 +87,14 @@ class LiveTrader:
         try:
             logging.getLogger("httpx").setLevel(logging.WARNING)      # one line per request otherwise
             geo = await asyncio.to_thread(lambda: requests.get(GEOBLOCK, timeout=15).json())
-            if geo.get("blocked"):
+            # This endpoint describes the website. A few countries (Ireland, Netherlands, Japan...) are
+            # closed on the website but open for API orders, so only the known API-restricted ones stop here.
+            # Anywhere else, the first refused order turns live trading off (see send()).
+            if geo.get("blocked") and geo.get("country") not in API_OPEN:
                 log.error("live: Polymarket does not accept orders from this server's location (%s %s); staying off. "
                           "Paper trading continues.", geo.get("country"), geo.get("region"))
                 return
+            log.info("live: server location %s %s", geo.get("country"), geo.get("region"))
             from polymarket import AsyncSecureClient
             saved = await asyncio.to_thread(lambda: self.doc().get().to_dict())
             if saved:

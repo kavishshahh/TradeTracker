@@ -186,6 +186,7 @@ class LiveTrader:
         o["live"] = rec                                           # the paper trader adds its own result here
         t0 = time.time() * 1000
         rec["wait_ms"] = round(t0 - recv_ms)                      # Binance update received -> order handed to the client
+        rec["book_sent"] = self.top(o["token"])                   # public feed's asks when the order left
         try:
             signed = await self.client.create_market_order(asset_id=o["token"], side="BUY", amount=str(usd),
                                                            max_price=str(limit), order_type="FAK")
@@ -211,6 +212,10 @@ class LiveTrader:
             rec.update(status="error", message=f"{type(exc).__name__}: {str(exc)[:120]}")
         finally:
             self.busy.discard(o["cid"])
+        # What the public feed showed when the answer came back. If it still shows an ask within the cap
+        # while Polymarket found nothing to match, the feed and the real book disagree.
+        rec["book_answer"] = self.top(o["token"])
+        rec["feed_age_ms"] = round(time.time() * 1000 - getattr(self.w.books, "last_ts", 0))   # how current that view is
         text = str(rec.get("message", "")).lower()
         if "restricted in your region" in text:                   # never retry against a location refusal
             self.ready = False
@@ -221,12 +226,21 @@ class LiveTrader:
         log.info("[live] %s %s '%s' cap %.2f | bp %+.1f | binance age %.0fms, sent after %sms, sign %sms, answer %sms | %s",
                  rec.get("status"), rec["question"][:48], rec["outcome"], limit, o["bp"], o["age"], rec["wait_ms"],
                  rec.get("sign_ms"), rec.get("post_ms", rec.get("ms")),
-                 f"{rec.get('shares')} @ {rec.get('price')}" if rec.get("price") else rec.get("message", ""))
+                 f"{rec.get('shares')} @ {rec.get('price')}" if rec.get("price") else str(rec.get("message", ""))[:40])
+        log.info("[live]   feed asks when sent %s, when answered %s (feed %sms old)", rec.get("book_sent"),
+                 rec.get("book_answer"), rec.get("feed_age_ms"))
         self.d["orders"] = (self.d["orders"] + [rec])[-KEEP_ORDERS:]
         self.d["summary"] = self.summarize()
         if self.d["n_orders"] % 5 == 0:
             log.info("[live] summary %s", self.d["summary"])
         await self.save()
+
+    def top(self, token):
+        """Best three asks [price, size] as the public feed shows them now."""
+        try:
+            return [[round(p, 2), round(z, 1)] for p, z in self.w.books.asks(token)[:3]]
+        except Exception:
+            return None
 
     def paper_result(self, o, price):
         """The paper trader's verdict for the same order: its fill price, or None for a miss."""

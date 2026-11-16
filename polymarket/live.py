@@ -26,6 +26,7 @@ import asyncio
 import logging
 import math
 import os
+import threading
 import time
 
 import requests
@@ -61,6 +62,7 @@ class LiveTrader:
         self.wanted = os.environ.get("POLY_LIVE") == "1"
         self.ready = False            # client connected and state loaded
         self.client = None
+        self.loop = None              # orders run on their own thread and event loop (see run)
         self.usd = max(1.0, _env_float("POLY_LIVE_USD", 1))
         self.max_orders = int(_env_float("POLY_LIVE_MAX_ORDERS_DAY", 60))
         self.day_loss = _env_float("POLY_LIVE_DAY_LOSS", 15)
@@ -152,6 +154,7 @@ class LiveTrader:
         both = [r for r in filled if isinstance(r.get("paper"), (int, float))]
         out = dict(orders=len(rows), filled=len(filled), fill_rate=round(len(filled) / len(rows), 3),
                    answer_ms=dict(min=min(ms), median=pct(ms, 0.5), p90=pct(ms, 0.9), max=max(ms)),
+                   post_ms=dict(median=pct([r.get("post_ms", r["ms"]) for r in rows], 0.5)),
                    send_wait_ms=dict(median=pct(wait, 0.5), p90=pct(wait, 0.9)),
                    paper_filled=sum(1 for r in judged if r["paper"] != "miss"),
                    paper_missed=sum(1 for r in judged if r["paper"] == "miss"),
@@ -172,9 +175,7 @@ class LiveTrader:
         self.busy.add(o["cid"])
         self.d["orders_today"] += 1
         self.d["n_orders"] += 1
-        task = asyncio.create_task(self.send(o, recv_ms))
-        self.tasks.add(task)
-        task.add_done_callback(self.tasks.discard)
+        asyncio.run_coroutine_threadsafe(self.send(o, recv_ms), self.loop)
 
     async def send(self, o, recv_ms):
         m = o["m"]
@@ -186,9 +187,13 @@ class LiveTrader:
         t0 = time.time() * 1000
         rec["wait_ms"] = round(t0 - recv_ms)                      # Binance update received -> order handed to the client
         try:
-            r = await self.client.place_market_order(asset_id=o["token"], side="BUY", amount=str(usd),
-                                                     max_price=str(limit), order_type="FAK")
-            rec["ms"] = round(time.time() * 1000 - t0)            # sign + send + matched response
+            signed = await self.client.create_market_order(asset_id=o["token"], side="BUY", amount=str(usd),
+                                                           max_price=str(limit), order_type="FAK")
+            t1 = time.time() * 1000
+            rec["sign_ms"] = round(t1 - t0)                       # build and sign the order
+            r = await self.client.post_order(signed)
+            rec["post_ms"] = round(time.time() * 1000 - t1)       # send it and get the matched/refused answer
+            rec["ms"] = round(time.time() * 1000 - t0)
             if r.ok:
                 spent, got = float(r.making_amount), float(r.taking_amount)
                 if got > 0 and spent / got > 1:                   # amounts reported the other way round
@@ -213,8 +218,9 @@ class LiveTrader:
         if not self.d["five_shares"] and not rec.get("price") and ("size" in text or "minimum" in text):
             self.d["five_shares"] = True
             log.warning("[live] order refused for its size (%s); switching to 5 shares per order", rec.get("message"))
-        log.info("[live] %s %s '%s' cap %.2f | bp %+.1f | sent after %sms, answered in %sms | %s",
-                 rec.get("status"), rec["question"][:48], rec["outcome"], limit, o["bp"], rec["wait_ms"], rec.get("ms"),
+        log.info("[live] %s %s '%s' cap %.2f | bp %+.1f | binance age %.0fms, sent after %sms, sign %sms, answer %sms | %s",
+                 rec.get("status"), rec["question"][:48], rec["outcome"], limit, o["bp"], o["age"], rec["wait_ms"],
+                 rec.get("sign_ms"), rec.get("post_ms", rec.get("ms")),
                  f"{rec.get('shares')} @ {rec.get('price')}" if rec.get("price") else rec.get("message", ""))
         self.d["orders"] = (self.d["orders"] + [rec])[-KEEP_ORDERS:]
         self.d["summary"] = self.summarize()
@@ -236,8 +242,10 @@ class LiveTrader:
     # ------------------------------------------------------------ background
     async def prewarm(self, tokens):
         """Load order metadata for the next markets so the first order on each is not slowed by a lookup."""
-        if not self.ready:
-            return
+        if self.ready:
+            asyncio.run_coroutine_threadsafe(self._prewarm(list(tokens)), self.loop)
+
+    async def _prewarm(self, tokens):
         for tok in tokens:
             try:
                 await self.client._ctx.order_metadata.resolve_market(self.client._ctx, token_id=tok)
@@ -284,11 +292,19 @@ class LiveTrader:
             except Exception as exc:
                 log.warning("live_settle_failed error=%s", type(exc).__name__)
 
-    async def run(self):
+    async def _order_main(self):
+        self.loop = asyncio.get_running_loop()
         await self.start()
-        if not self.ready:
-            return await asyncio.Event().wait()            # off: idle until cancelled
-        try:
-            await asyncio.gather(self.keep_warm(), self.settle_loop())
-        finally:
-            await self.save()
+        if self.ready:
+            try:
+                await asyncio.gather(self.keep_warm(), self.settle_loop())
+            finally:
+                await self.save()
+
+    async def run(self):
+        """Everything live runs on its own thread with its own event loop. The worker's main loop can be
+        busy for hundreds of milliseconds with bursts of price updates exactly when a signal fires, and an
+        order waiting behind that backlog arrives too late."""
+        if self.wanted:
+            threading.Thread(target=lambda: asyncio.run(self._order_main()), name="live-orders", daemon=True).start()
+        await asyncio.Event().wait()                       # idle until cancelled

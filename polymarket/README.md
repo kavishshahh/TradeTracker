@@ -115,8 +115,10 @@ The free tier allows 20,000 a day, shared with the main app.
 | `updown_latency_2bp_real` | BTC/ETH 5-minute up/down | The 2 bp rule with a 350 ms order delay, the figure measured on real orders | first live test, 16 Nov 2026 |
 | `updown_latency_2bp`, `updown_latency_1bp` | BTC/ETH 5-minute up/down | Binance perp moves 2 bp (or 1 bp) in 200 ms: buy the matching side with a limit at the ask seen; the simulated order arrives 100 ms later and fills only if that ask is still there (`latency_algo.py`) | tick research, see `research/README.md` |
 
-Paused (`halted = True` on the class): `crypto_fair_value`, `sports_pregame_underdog` and both
-`updown_leader` algos. They place no new bets; open bets still settle.
+Paused (`halted = True` on the class): all of them. The three `updown_latency` algos were paused on
+16 Nov 2026 after a real-order test: Polymarket holds taker orders on these markets for 250 ms, so the
+quotes the paper accounts assumed are gone before a real order is matched. Also paused: `crypto_fair_value`,
+`sports_pregame_underdog` and both `updown_leader` algos. They place no new bets; open bets still settle.
 
 ### Versions
 

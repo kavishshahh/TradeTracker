@@ -24,6 +24,10 @@ from .updown_leader import WINDOW, window_start
 
 class UpDownLatency(Strategy):
     origin = "tick research on Binance perp vs Polymarket quotes"
+    # Paused 16 Nov 2026. Real $1 orders showed the rule cannot be traded: Polymarket holds taker orders
+    # on these markets for 250 ms before matching (`itode`), and quotes are pulled within that time.
+    # 4 fills in about 35 real orders, 1 won. The 100 ms paper accounts are not achievable.
+    halted = True
     latency_rule = True         # traded by latency_algo.LatencyTrader, not by the snapshot loop
     always_stream = True
     max_new_per_10min = 8

@@ -85,7 +85,8 @@ How it reacts:
   and saved to Firestore at once. A heartbeat with marks is saved every 2 minutes.
 - No stream exists for these, so they refresh on a timer: the list of open markets and the shortlist (3 min),
   hourly candles for the volatility estimate (10 min), and resolution of held markets (2 min).
-- Copy algos: Polymarket's live activity WebSocket (`wss://ws-live-data.polymarket.com`, every trade on the exchange with the trader's wallet) triggers a copy as soon as a copied wallet buys. Each copy opens a short book connection for that token and fetches the market's settings once (`clob-markets/{condition_id}`).
+- Copy algos: Polymarket's live activity WebSocket (`wss://ws-live-data.polymarket.com`, every trade on the exchange with the trader's wallet) triggers a copy as soon as a copied wallet buys. Each copy opens a short book connection for that token and fetches the market's settings once (`clob-markets/{condition_id}`). That feed names only the taker of each trade, so a wallet's resting (maker) orders being filled never show there. Those come from Polygon: an `eth_subscribe` log subscription for the exchange's fill event with maker = a copied wallet (`wss://polygon-bor-rpc.publicnode.com`, then `wss://polygon.drpc.org`; override with `POLYGON_WS`). Chain fills arrive after the block, about 2 s later; the market is looked up from the token (`markets-by-token/{token}`).
+- `copy_6e82_nba` is paused (17 Nov 2026): the wallet had made no buys in 30 days.
 - 5-minute BTC/ETH up/down markets are always streamed (the current window and the next two) and re-checked every second, because time left is part of the rule. They are found by their fixed slugs (`btc-updown-5m-<start>`), not by the scan.
 - If the book feed goes quiet for 45 s, trading pauses until it reconnects and re-snapshots.
 

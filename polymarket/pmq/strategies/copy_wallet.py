@@ -1,6 +1,8 @@
 """Copy another Polymarket wallet's buys (paper).
 
-The wallet's trades come from Polymarket's public live-activity WebSocket. When the wallet buys into
+The wallet's trades come from Polymarket's public live-activity WebSocket, which only names the taker
+of each trade, and from Polygon's fill events, which also catch the wallet's resting (maker) orders
+being filled. When the wallet buys into
 a market we do not hold, the paper account sends a limit buy at the wallet's price plus `max_chase`.
 The order is taken to reach Polymarket `order_delay_ms` after the trade showed up on the feed, plus
 the market's own taker delay (the sports delay `sd` once the game has started, 250 ms on markets
@@ -63,8 +65,12 @@ class CopyGooolEsports(CopyWallet):
 
 
 class Copy6e82Nba(CopyWallet):
-    """NBA/WNBA before the game, about 2 new markets a day."""
+    """NBA/WNBA before the game, about 2 new markets a day.
+
+    Paused 17 Nov 2026: the wallet made no buys at all in the 30 days before. Its recent profit was old
+    bets settling, which is why it passed the screen. Nothing to copy."""
     name = "copy_6e82_nba"
+    halted = True
     description = "Copies the first buy in each market by wallet 0x6e82...752c, an NBA pregame trader."
     origin = "wallet 0x6e82b93eb57b01a63027bd0c6d2f3f04934a752c"
     params = dict(CopyWallet.params, wallet="0x6e82b93eb57b01a63027bd0c6d2f3f04934a752c", min_their_usd=5.0)

@@ -140,7 +140,8 @@ class Worker:
                      skipped=st["skipped"], last_skip=st.get("last_skip"), last_error=self.errors.get(name), last_evaluation=iso(),
                      markets_refreshed_at=iso(self.universe_at), halted=by_halt(self, name),
                      perp_feed=dict(connected=self.latency.feed.connected, ticks=self.latency.feed.ticks),
-                     activity_feed=dict(connected=self.copy.connected, messages=self.copy.messages),
+                     activity_feed=dict(connected=self.copy.connected, messages=self.copy.messages,
+                                        chain_connected=self.copy.chain_connected, chain_maker_fills=self.copy.chain_events),
                      feed=dict(connected=connected, connections=self.feed.connected, tokens=len(self.feed.tokens),
                                messages=self.books.messages,
                                last_message_at=iso(self.books.last_message) if self.books.last_message else None))

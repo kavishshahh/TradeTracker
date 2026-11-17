@@ -21,7 +21,7 @@ export type LedgerRow = {
   version?: number;   // which version of the algo's rules placed the bet (1 when absent)
 };
 
-export const STALE_MS = 5 * 60_000;   // the worker saves at least every 2 minutes
+export const STALE_MS = 25 * 60_000;  // the worker saves each active account at least every 10 minutes
 export const MIN_BET = 1;             // below this much free cash an algo cannot place a new bet
 
 // ------------------------------------------------------------------ presentation helpers
@@ -124,7 +124,11 @@ export type Verdict = { tone: 'good' | 'bad' | 'neutral'; text: string };
 
 export const unrealizedOf = (a: Account) => a.positions.reduce((t, p) => t + (p.mark == null ? 0 : p.mark * p.shares - p.cost), 0);
 // A paused algo with nothing open has no live feed to be connected to, so only its heartbeat counts.
-export const isStale = (a: Account, now = Date.now()) => !a.updated_at || now - Date.parse(a.updated_at) > STALE_MS || (a.feed?.connected === false && !(a.halted && !a.positions.length));
+// Paused accounts with no open bets are saved only every 6 hours (nothing changes), so age alone does not make them offline.
+export const isStale = (a: Account, now = Date.now()) => {
+  const idle = a.halted && !a.positions.length;
+  return !a.updated_at || (!idle && now - Date.parse(a.updated_at) > STALE_MS) || (a.feed?.connected === false && !idle);
+};
 
 export function algoStats(id: string, a: Account, ledger: LedgerRow[], catalog: Catalog | undefined, now = Date.now()): AlgoStats {
   const mine = ledger.filter(r => r.strategy === id);

@@ -45,7 +45,11 @@ BANKROLL = 25.0
 UNIVERSE_EVERY = 120          # also how often the next 5-minute markets are picked up (two windows ahead)
 CANDLES_EVERY = 600
 SETTLE_EVERY = 120
-HEARTBEAT_EVERY = 120
+HEARTBEAT_EVERY = 120         # lease renewal; account saves are spaced out below
+SAVE_EVERY = 600              # an account's scoreboard (marks, equity) is saved at least this often; fills and
+                              # settlements save at once. Firestore's free tier is 20,000 writes a day, shared
+                              # with the main app, so a 2-minute save for every account was too much.
+IDLE_SAVE_EVERY = 6 * 3600    # paused accounts with no open bets: nothing changes, so only an occasional save
 LATENCY_EVERY = 600           # latency probe (logged and saved to poly_worker/latency)
 UNIVERSE_STALL = 900          # no completed market refresh for this long: exit so the host restarts the worker
 SPOT_SWEEP_EVERY = 5          # seconds between full crypto re-evaluations on price moves
@@ -116,6 +120,7 @@ class Worker:
         self._swept = {}
         self._listing = {}                 # strategy -> (time, rows) for algos that set scan_every
         self._save_locks = {s.name: asyncio.Lock() for s in self.strategies}
+        self._saved_at = {}           # account -> time of its last successful save
         self._cpu = (time.process_time(), time.time())
         self.universe_at = time.time()     # last completed market refresh
         self.stalled = False
@@ -149,6 +154,7 @@ class Worker:
             await asyncio.to_thread(acc.flush_ledger)  # permanent trade ledger first, then the scoreboard
             doc = acc.document(self.marks(acc), extra)
             await asyncio.to_thread(self.db.collection("poly_paper_state").document(name).set, doc)
+            self._saved_at[name] = time.time()
 
     async def safe_save(self, name):
         """A failed write must not stop trading: the account stays in memory and the next save retries."""
@@ -344,7 +350,10 @@ class Worker:
                         return
                 except Exception as exc:       # cannot reach Firestore: trading pauses once the lease goes stale
                     log.warning("lease_renew_failed error=%s", type(exc).__name__)
-            for name in self.accounts:
+            for name, acc in self.accounts.items():
+                every = IDLE_SAVE_EVERY if by_halt(self, name) and not acc.pf.pos else SAVE_EVERY
+                if time.time() - self._saved_at.get(name, 0) < every - 30:
+                    continue
                 try:
                     await self.save(name)
                 except Exception as exc:

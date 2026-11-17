@@ -82,7 +82,7 @@ How it reacts:
 - Polymarket order-book WebSocket: a change in a watched market's best price re-evaluates it immediately.
 - Binance price WebSocket: a 0.05% move re-evaluates every watched crypto market (at most every 5 s).
 - Fills are simulated against the live ask ladder with real taker fees and the 5-share minimum,
-  and saved to Firestore at once. A heartbeat with marks is saved every 2 minutes.
+  and saved to Firestore at once. Each account's marks and equity are saved every 10 minutes; paused accounts with no open bets every 6 hours. The lease is renewed every 2 minutes.
 - No stream exists for these, so they refresh on a timer: the list of open markets and the shortlist (3 min),
   hourly candles for the volatility estimate (10 min), and resolution of held markets (2 min).
 - Copy algos: Polymarket's live activity WebSocket (`wss://ws-live-data.polymarket.com`, every trade on the exchange with the trader's wallet) triggers a copy as soon as a copied wallet buys. Each copy opens a short book connection for that token and fetches the market's settings once (`clob-markets/{condition_id}`). That feed names only the taker of each trade, so a wallet's resting (maker) orders being filled never show there. Those come from Polygon: an `eth_subscribe` log subscription for the exchange's fill event with maker = a copied wallet (`wss://polygon-bor-rpc.publicnode.com`, then `wss://polygon.drpc.org`; override with `POLYGON_WS`). Chain fills arrive after the block, about 2 s later; the market is looked up from the token (`markets-by-token/{token}`).
@@ -103,8 +103,10 @@ use the $1 minimum that applies to marketable orders.
 - `poly_catalog/{strategy}`: backtest summary (`seed.py --catalog`, from `backtests/*.json`)
 - `feature_access/polymarket_algos`: allowed emails
 
-Writes: about 2,900 a day from heartbeats (four algos, one save every 2 minutes each), plus two
-writes per paper bet and per settlement. The up/down algos can add a few thousand on a busy day.
+Writes: about 720 a day for the lease, 144 per active account (one save every 10 minutes), 4 per
+paused account with no open bets, plus two writes per paper bet and per settlement. With four active
+accounts that is about 1,300 a day before bets. (On 17 Nov 2026 a 2-minute save for all twelve accounts,
+about 8,600 a day, plus the main app's market-hours writes went over the limit and stopped all saves.)
 The free tier allows 20,000 a day, shared with the main app.
 
 ## Algos

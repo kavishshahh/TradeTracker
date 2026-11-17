@@ -2,19 +2,21 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { FileText } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadCachedLedger, mergeRows, newestTime, saveCachedLedger } from './ledgerCache';
 import PolyView from './PolyView';
-import type { Feed, LedgerRow } from './polyData';
+import type { Feed, FeedReply, LedgerRow } from './polyData';
 import styles from './poly.module.css';
 import { usePolyAccess } from './usePolyAccess';
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
-const POLL_MS = 30_000;
+const POLL_MS = 120_000;   // the worker saves each account every 10 minutes, and at once on a bet or settlement
 
 /**
  * Data loading for the Polymarket page. Reads cost Firestore quota, so:
- *  - the account documents (/poly/paper, 8 small reads) are polled every 30 s, only while the tab is visible;
+ *  - the account documents (/poly/paper) are polled every 2 minutes, only while the tab is visible. A poll asks
+ *    only for accounts written since the previous reply and merges them in (the full set is several hundred KB);
+ *    the first load and Refresh fetch everything;
  *  - the bet ledger (/poly/trades, one read per bet returned) is kept in the browser (ledgerCache), so a
  *    visit, Refresh or CSV export reads only bets placed since the newest cached one; the full ledger is
  *    read only without a cached copy (first visit on a device, or once the copy is a week old). Bets placed
@@ -30,6 +32,7 @@ export default function PolyDashboard() {
   const [exporting, setExporting] = useState(false);
   const [denied, setDenied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const held = useRef<{ feed: Feed; asOf: number } | null>(null);   // last full picture, for changed-only polls
 
   const get = useCallback(async <T,>(path: string, signal?: AbortSignal): Promise<T | null> => {
     const token = await currentUser!.getIdToken();
@@ -52,12 +55,28 @@ export default function PolyDashboard() {
     return rows;
   }, [currentUser, get]);
 
+  /** Account documents: only the changed ones when a previous full picture is held, merged into it. */
+  const loadPaper = useCallback(async (full: boolean, signal?: AbortSignal): Promise<Feed | null> => {
+    const prev = full ? null : held.current;
+    const reply = await get<FeedReply>(prev ? `/poly/paper?since=${prev.asOf}` : '/poly/paper', signal);
+    if (!reply) return null;
+    let strategies = reply.strategies;
+    if (reply.partial && prev) {
+      const ids = reply.ids ?? Object.keys(prev.feed.strategies);
+      if (ids.some(id => !reply.strategies[id] && !prev.feed.strategies[id])) return loadPaper(true, signal);   // cannot merge: fetch all
+      strategies = Object.fromEntries(ids.map(id => [id, reply.strategies[id] ?? prev.feed.strategies[id]]));
+    }
+    const feed: Feed = { strategies, catalog: reply.catalog };
+    held.current = reply.as_of != null ? { feed, asOf: reply.as_of } : null;   // no as_of: next poll fetches all
+    return feed;
+  }, [get]);
+
   const load = useCallback(async (withLedger: boolean, signal?: AbortSignal) => {
     if (!currentUser) return;
     setLoading(true);
     try {
       const [paper, trades] = await Promise.all([
-        get<Feed>('/poly/paper', signal),
+        loadPaper(withLedger, signal),   // first load and Refresh: everything; polls: changes only
         withLedger ? syncLedger(signal) : Promise.resolve(null),
       ]);
       if (signal?.aborted) return;
@@ -70,7 +89,7 @@ export default function PolyDashboard() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [currentUser, get, syncLedger]);
+  }, [currentUser, loadPaper, syncLedger]);
 
   useEffect(() => {
     if (allowed !== true) return;

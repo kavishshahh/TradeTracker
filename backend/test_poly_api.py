@@ -29,17 +29,21 @@ class Database(dict):
         return SimpleNamespace(document=document, stream=stream, where=where)
 
 
-async def request(app, path, user=None):
+async def request(app, path, user=None, gzip_ok=False, raw=False):
     messages = []
     headers = [(b'host', b'localhost')] + ([(b'authorization', ('Bearer ' + user).encode())] if user else [])
+    headers += [(b'accept-encoding', b'gzip, deflate')] if gzip_ok else []
     async def receive(): return {'type': 'http.request', 'body': b'', 'more_body': False}
     async def send(message): messages.append(message)
     path, _, query = path.partition('?')
     await app({'type': 'http', 'asgi': {'version': '3.0'}, 'http_version': '1.1', 'scheme': 'http', 'method': 'GET',
                'path': path, 'raw_path': path.encode(), 'query_string': query.encode(), 'root_path': '', 'headers': headers,
                'client': ('127.0.0.1', 1), 'server': ('localhost', 80)}, receive, send)
-    status = next(item['status'] for item in messages if item['type'] == 'http.response.start')
-    return status, json.loads(b''.join(item.get('body', b'') for item in messages if item['type'] == 'http.response.body'))
+    start = next(item for item in messages if item['type'] == 'http.response.start')
+    body = b''.join(item.get('body', b'') for item in messages if item['type'] == 'http.response.body')
+    if raw:
+        return start['status'], dict(start['headers']), body
+    return start['status'], json.loads(body)
 
 OWNER, OTHER = 'owner@example.com', 'other@example.com'
 
@@ -108,6 +112,30 @@ class PolyAccessTests(unittest.TestCase):
         del self.db['feature_access/polymarket_algos']
         self.assertFalse(self.get('/poly/access', 'alice')[1]['allowed'])
         self.assertEqual(self.get('/poly/paper', 'alice')[0], 404)
+
+    def test_large_replies_are_gzipped_only_when_accepted(self):
+        import gzip
+        self.db['poly_paper_state/long_dated_no'] = {'positions': [{'question': 'q' * 50, 'cost': 2.0}] * 200}
+        status, headers, body = asyncio.run(request(self.app, '/poly/paper', 'alice', gzip_ok=True, raw=True))
+        self.assertEqual((status, headers.get(b'content-encoding')), (200, b'gzip'))
+        plain = self.get('/poly/paper', 'alice')[1]
+        self.assertEqual(json.loads(gzip.decompress(body)), plain)
+        status, headers, body = asyncio.run(request(self.app, '/poly/paper', 'alice', raw=True))
+        self.assertIsNone(headers.get(b'content-encoding'))
+        self.assertEqual(json.loads(body), plain)
+
+    def test_since_sends_only_accounts_written_after_it(self):
+        from datetime import datetime, timezone
+        at = lambda t: datetime.fromtimestamp(t, timezone.utc)
+        docs = [SimpleNamespace(id='old', to_dict=lambda: {'equity': 1}, update_time=at(100), read_time=at(500)),
+                SimpleNamespace(id='new', to_dict=lambda: {'equity': 2}, update_time=at(400), read_time=at(500))]
+        stream = self.db.collection
+        self.db.collection = lambda name: SimpleNamespace(stream=lambda: docs) if name == 'poly_paper_state' else stream(name)
+        full = self.get('/poly/paper', 'alice')[1]
+        self.assertEqual((set(full['strategies']), full['as_of'], 'partial' in full), ({'old', 'new'}, 500.0, False))
+        part = self.get('/poly/paper?since=300', 'alice')[1]
+        self.assertEqual((set(part['strategies']), part['ids'], part['partial']), ({'new'}, ['old', 'new'], True))
+        self.assertEqual(self.get('/poly/paper?since=nan', 'alice')[0], 422)
 
     def test_section_is_read_only(self):
         routes = {(method, route.path) for route in self.app.routes for method in getattr(route, 'methods', [])

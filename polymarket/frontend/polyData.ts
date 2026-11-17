@@ -14,6 +14,8 @@ export type Account = {
 export type Stats = { n?: number; win_rate?: number; avg_price?: number; roi_per_bet?: number; t_stat?: number | null; avg_hold_hours?: number };
 export type Catalog = { train?: Stats; test?: Stats; note?: string; train_label?: string; test_label?: string };
 export type Feed = { strategies: Record<string, Account>; catalog: Record<string, Catalog> };
+/** /poly/paper reply. `as_of`: pass back as `since` to get only accounts written after it (`partial`), with `ids` listing every account. */
+export type FeedReply = Feed & { as_of?: number | null; partial?: boolean; ids?: string[] };
 /** One ledger record: a paper buy ("fill") or a resolved bet ("settled"). */
 export type LedgerRow = {
   t: number; ts: string; cid: string; outcome: number; outcome_name?: string | null; question: string; kind?: 'fill' | 'settled'; strategy?: string;

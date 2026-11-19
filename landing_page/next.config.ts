@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
         ],
       },
-      ...["/sitemap.xml", "/robots.txt", "/feed.xml", "/llms.txt"].map((source) => ({
+      ...["/sitemap.xml", "/sitemap.txt", "/robots.txt", "/feed.xml", "/llms.txt"].map((source) => ({
         source,
         headers: [{ key: "Cache-Control", value: "public, max-age=86400, s-maxage=86400" }],
       })),

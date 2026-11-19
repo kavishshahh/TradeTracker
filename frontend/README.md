@@ -22,12 +22,13 @@ Three tiers, decided by Firestore, not code:
 
 - Every signed-in user sees the card grid and basic stats: names, descriptions, backtest
   metrics, monthly returns and each paper account's summary numbers and live status.
-- Users whose verified email is in `feature_access/algo_lab` (field `emails`) also see the
-  trades: Past trades (backtest ledger and paper ledger), Positions and Orders. The API
+- Users whose account email is in `feature_access/algo_lab` (field `emails`) also see the
+  trades (no email verification is needed to request or to be listed): Past trades (backtest ledger and paper ledger), Positions and Orders. The API
   strips open and closed positions from the paper feed for everyone else and answers 403
   on the backtest ledger.
-- The owner (`ALGO_LAB_OWNER_EMAIL` on the API, default kavishshah30@gmail.com) is always
-  allowed and is the only account that receives each strategy's rules, limitations, exit
+- The owner (`ALGO_LAB_OWNER_EMAIL` on the API, default kavishshah30@gmail.com; Firebase must
+  have verified the address, which Google sign-in does, so nobody can claim it with a password
+  sign-up) is always allowed and is the only account that receives each strategy's rules, limitations, exit
   policy, tuning parameters and the full description on the About algo page. Everyone
   else reads the catalogue's short `summary` as the description, on the cards and on About
   algo; a record without one shows only its style and underlying. The client hides the rules

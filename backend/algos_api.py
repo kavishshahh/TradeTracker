@@ -78,21 +78,26 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
 
     # --- who is asking -------------------------------------------------------------------------
     def lookup_email(uid):
+        """(email, verified). A test lookup may return just the email, taken as verified."""
         if email_lookup:
-            return email_lookup(uid)
+            found = email_lookup(uid)
+            return found if isinstance(found, tuple) else (found, True)
         from firebase_admin import auth
         record = auth.get_user(uid)
-        return record.email if record.email_verified else None
+        return record.email, bool(record.email_verified)
 
-    def email_of(uid):
-        """The user's verified email, lower-cased; None when unverified or unknown. Cached per process."""
+    def email_of(uid, verified_only=False):
+        """The user's email, lower-cased; None when unknown. Cached per process.
+        Requests and the allow-list take any email the account signed up with. Only the
+        owner check needs Firebase to have verified it, or anyone could sign up with a
+        password as the owner's address and read the rules."""
         try:
             now = clock()
             hit = emails.get(uid)
-            if not hit or now - hit[1] > EMAIL_TTL_SECONDS:
-                found = lookup_email(uid)
-                emails[uid] = hit = (found.strip().lower() if found else None, now)
-            return hit[0]
+            if not hit or now - hit[2] > EMAIL_TTL_SECONDS:
+                found, verified = lookup_email(uid)
+                emails[uid] = hit = (found.strip().lower() if found else None, bool(verified), now)
+            return hit[0] if hit[0] and (hit[1] or not verified_only) else None
         except Exception as exc:
             # Fail closed: an unknown caller is an outsider.
             log.warning('algo_access_email_lookup_failed error=%s', type(exc).__name__)
@@ -110,14 +115,14 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
         return access['emails']
 
     def is_owner(uid):
-        return email_of(uid) == owner
+        return email_of(uid, verified_only=True) == owner
 
     def is_allowed(uid):
         email = email_of(uid)
         if not email:
             return False
         if email == owner:
-            return True
+            return is_owner(uid)
         try:
             return email in allowed_emails()
         except Exception as exc:
@@ -194,7 +199,7 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
             return {'allowed': True, 'request': 'granted'}
         email = email_of(current_user)
         if not email:
-            raise HTTPException(400, 'Verify your email address before requesting access')
+            raise HTTPException(400, 'Your account has no email address to grant access to')
         try:
             db.collection(REQUESTS_COLLECTION).document(current_user).set({
                 'uid': current_user, 'email': email, 'status': 'pending', 'requested_at': now_iso(), 'decided_at': None})

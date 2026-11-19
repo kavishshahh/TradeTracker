@@ -49,7 +49,8 @@ async def request(app, path, method='GET', user=None, body=None, extra_headers=N
 
 OWNER, GUEST, OUTSIDER = 'owner@example.com', 'guest@example.com', 'outsider@example.com'
 # alice owns Algo Lab, bob is on the allow-list, carol is signed in but not listed, dave has no verified email.
-EMAILS = {'alice': OWNER, 'bob': GUEST, 'carol': OUTSIDER, 'dave': None}
+# erin signed up with a password as the owner's address and never verified it; frank is a listed guest, unverified.
+EMAILS = {'alice': OWNER, 'bob': GUEST, 'carol': OUTSIDER, 'dave': None, 'erin': (OWNER, False), 'frank': (GUEST, False)}
 ACCESS = 'feature_access/algo_lab'
 DATA_ROUTES = [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/backtest/zen_strategy_01','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]
 ADMIN_ROUTES = [('/algos/access/admin','GET',None),('/algos/access/admin/emails','PUT',{'email': OUTSIDER, 'allowed': True}),('/algos/access/admin/requests/carol','PUT',{'allowed': True})]
@@ -69,7 +70,7 @@ class APIAuthenticationTests(unittest.TestCase):
                             'algo_catalog/zen_strategy_02': {'name': 'Two', 'description': 'how it works', 'category': 'Overnight credit spread', 'underlying': 'NIFTY 50'}, ACCESS: {'emails': [' Guest@Example.com ']}})
         self.catalog_keys = set(self.db)
         async def user(authorization: str = Header(None)):
-            if authorization not in ('Bearer alice','Bearer bob','Bearer carol','Bearer dave'): raise HTTPException(401)
+            if authorization.split()[-1] not in EMAILS if authorization else True: raise HTTPException(401)
             return authorization.split()[1]
         # catalog_ttl=0: these tests change the catalogue between requests and expect to see it at once.
         self.app = make_app(self.db, user, catalog_ttl=0)
@@ -83,7 +84,7 @@ class APIAuthenticationTests(unittest.TestCase):
         self.db['algo_backtests/zen_strategy_01'] = {'trade_count': 1, 'trades': [{'pnl': 10.0}]}
         self.db['algo_paper_state/zen_strategy_01'] = {'capital': 1.0, 'realized_pnl': 5.0, 'ledger_limit': 50,
                                                       'open_position': {'sell_strike': 1}, 'closed_positions': [{'pnl': 1.0}]}
-        for who in ('carol', 'dave'):                                                               # not listed / no verified email
+        for who in ('carol', 'dave', 'erin'):                                                       # not listed / no email / unverified owner address
             self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user=who))[0],403)
             status, body = asyncio.run(request(self.app,'/algos/catalog',user=who))
             self.assertEqual((status, body['detail'], len(body['strategies'])), (200, 'public', 2))
@@ -95,7 +96,7 @@ class APIAuthenticationTests(unittest.TestCase):
             self.assertEqual((account['in_trade'], account['trades_hidden']), (True, True))
             self.assertIsNone(body['strategies']['zen_strategy_02'])
         self.assertEqual(asyncio.run(request(self.app,'/algos/follow/zen_strategy_01','PUT','carol',{'enabled': True}))[0],200)
-        for who in ('bob', 'alice'):                                                                 # listed / owner
+        for who in ('bob', 'frank', 'alice'):                                                        # listed, listed unverified, owner
             self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user=who))[0],200)
             status, body = asyncio.run(request(self.app,'/algos/paper',user=who))
             self.assertEqual((status, body['access']), (200, True))
@@ -121,7 +122,11 @@ class APIAuthenticationTests(unittest.TestCase):
         self.assertEqual(get('alice'), {'allowed': True, 'owner': True, 'request': 'granted'})
         self.assertEqual(get('bob'), {'allowed': True, 'owner': False, 'request': 'granted'})
         self.assertEqual(get('carol'), {'allowed': False, 'owner': False, 'request': 'none'})
-        self.assertEqual(asyncio.run(request(self.app,'/algos/access/request','POST','dave'))[0], 400)
+        self.assertEqual(get('frank'), {'allowed': True, 'owner': False, 'request': 'granted'})
+        self.assertEqual(get('erin'), {'allowed': False, 'owner': False, 'request': 'none'})
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/request','POST','dave'))[0], 400)   # no email at all
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/request','POST','erin'))[1], {'allowed': False, 'request': 'pending'})
+        self.assertEqual(self.db['algo_access_requests/erin']['email'], OWNER)
         status, body = asyncio.run(request(self.app,'/algos/access/request','POST','carol'))
         self.assertEqual((status, body), (200, {'allowed': False, 'request': 'pending'}))
         self.assertEqual(self.db['algo_access_requests/carol']['email'], OUTSIDER)
@@ -129,7 +134,7 @@ class APIAuthenticationTests(unittest.TestCase):
         self.assertEqual(asyncio.run(request(self.app,'/algos/access/request','POST','bob'))[1], {'allowed': True, 'request': 'granted'})
 
     def test_admin_routes_exist_only_for_the_owner(self):
-        for who in ('bob','carol','dave'):
+        for who in ('bob','carol','dave','erin','frank'):
             for path, method, body in ADMIN_ROUTES:
                 self.assertEqual(asyncio.run(request(self.app,path,method,who,body=body))[0],404)
         self.assertEqual(set(self.db), self.catalog_keys)

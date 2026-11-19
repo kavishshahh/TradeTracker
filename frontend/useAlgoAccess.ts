@@ -40,7 +40,7 @@ export function useAlgoAccess() {
 
   const requestAccess = useCallback(async () => {
     const response = await call('/algos/access/request', 'POST');
-    if (!response.ok) throw new Error(response.status === 400 ? 'Verify your email address first, then ask again.' : 'Could not send your request. Please retry.');
+    if (!response.ok) throw new Error(response.status === 400 ? 'Your account has no email address to grant access to.' : 'Could not send your request. Please retry.');
     const body = await response.json() as { allowed?: boolean; request?: RequestState };
     setAccess(current => ({ ...current, allowed: body.allowed === true, request: body.request || 'pending' }));
   }, [call]);

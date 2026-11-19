@@ -34,6 +34,13 @@ Three tiers, decided by Firestore, not code:
   unless the API says the viewer is the owner, so an older API cannot expose them. New or
   changed summaries reach Firestore with `backend/set_catalog_summaries.py` (one merge write
   per strategy), since the seed script never touches existing records.
+- The owner also gets a Research tab (`?tab=research`, `AlgoResearch.tsx`): write-ups of strategies that
+  were built and tested but not listed, with their figures and the reason they were left out. The notes
+  name rules, so they come from `GET /algos/research` (owner only, 404 for everyone else) and are never
+  in the page bundle. They live in `backend/seed_data/algo_research.json`, a file shipped with the API
+  (no Firestore read); add a note there when a strategy is researched and rejected. Research-only
+  strategies are listed in `RESEARCH_ONLY` in `algos/zen_credit/strategy/registry.py`, which keeps them
+  out of the paper worker.
 
 Anyone without access sees a banner and, in place of the trades sections, a Request
 access card. Asking writes `algo_access_requests/{uid}` (email, requested_at, status).

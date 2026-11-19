@@ -12,6 +12,7 @@ Anyone may ask for access: POST /algos/access/request writes one document to
 `algo_access_requests/{uid}` (email, requested_at, status) for the owner to grant or decline.
 """
 from datetime import datetime, timezone
+import json
 import logging
 import os
 import re
@@ -36,6 +37,8 @@ EMAIL_TTL_SECONDS = 600.0
 PUBLIC_FIELDS = ('id', 'name', 'version', 'summary', 'underlying', 'category', 'capital',
                  'period_start', 'period_end', 'metrics', 'monthly', 'order', 'enabled', 'execution')
 EMAIL_PATTERN = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+# Write-ups of strategies that were researched and not listed. A file shipped with the API: no Firestore read.
+RESEARCH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seed_data', 'algo_research.json')
 
 
 class FollowRequest(BaseModel):
@@ -259,6 +262,16 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
         rows = read_catalog()
         return {'strategies': rows if full else [public(row) for row in rows], 'execution': 'paper_only',
                 'detail': 'full' if full else 'public'}
+
+    @router.get('/research')
+    async def research(current_user: str = Depends(get_current_user)):
+        # The notes name the rules of unlisted strategies, so like the catalogue rules they are the owner's only.
+        require_owner(current_user)
+        try:
+            with open(RESEARCH_FILE, encoding='utf-8') as handle:
+                return json.load(handle)
+        except (OSError, ValueError) as exc:
+            unavailable('research', exc, 'Research notes unavailable')
 
     @router.get('/paper')
     async def paper(current_user: str = Depends(get_current_user)):

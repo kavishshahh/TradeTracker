@@ -134,6 +134,21 @@ class APIAuthenticationTests(unittest.TestCase):
                 self.assertEqual(asyncio.run(request(self.app,path,method,who,body=body))[0],404)
         self.assertEqual(set(self.db), self.catalog_keys)
 
+    def test_research_notes_are_the_owners_only_and_cost_no_database_read(self):
+        for who in ('bob','carol','dave'):                                   # listed guests included: notes name rules
+            self.assertEqual(asyncio.run(request(self.app,'/algos/research',user=who))[0],404)
+        self.assertEqual(asyncio.run(request(self.app,'/algos/research',user=None))[0],401)
+        reads = self.db.reads if hasattr(self.db,'reads') else None
+        status, body = asyncio.run(request(self.app,'/algos/research',user='alice'))
+        self.assertEqual(status,200)
+        self.assertEqual([note['id'] for note in body['notes']], ['zen_strategy_09','zen_strategy_07'])
+        for note in body['notes']:
+            self.assertTrue(note['verdict'].startswith('Not listed'))
+            self.assertEqual({'name','note','edge_points','gross','mid','high'} - set(note['costs'][0]), set())
+        self.assertTrue(body['method'])
+        if reads is not None: self.assertEqual(self.db.reads, reads)
+        self.assertEqual(set(self.db), self.catalog_keys)
+
     def test_owner_grants_declines_and_revokes(self):
         asyncio.run(request(self.app,'/algos/access/request','POST','carol'))
         _, body = asyncio.run(request(self.app,'/algos/access/admin',user='alice'))

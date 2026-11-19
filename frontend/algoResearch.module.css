@@ -1,0 +1,40 @@
+/* Algo Lab > Research. Colours and elevation come from the tokens algos.module.css defines on .lab. */
+.research { display: flex; flex-direction: column; gap: 16px; }
+.intro { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
+.intro svg { flex-shrink: 0; color: var(--primary); }
+
+.note { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--lift); }
+.head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.title { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.title h2 { margin: 0; font-size: 16px; font-weight: 500; letter-spacing: -.01em; color: var(--foreground); }
+.title small { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+.title small i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .6; }
+.tag { flex-shrink: 0; padding: 3px 9px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: 4px; white-space: nowrap; }
+
+.verdict { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.45; color: var(--foreground); }
+.summary { margin: -6px 0 0; max-width: 78ch; font-size: 13px; line-height: 1.6; color: var(--muted-foreground); }
+
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; background: var(--border); border: 1px solid var(--border); border-radius: 8px; }
+.stats > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 14px; background: var(--card); }
+.stats dt { font-size: 11px; line-height: 1.35; color: var(--muted-foreground); }
+.stats dd { margin: 0; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--foreground); }
+
+.columns { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.columns section { min-width: 0; }
+.columns h3 { margin: 0 0 10px; font-size: 12px; font-weight: 500; color: var(--foreground); }
+.flat { box-shadow: none; }
+.reference td { background: color-mix(in srgb, var(--muted) 55%, var(--card)); }
+.name { min-width: 150px; white-space: normal; }
+.findings { display: flex; flex-direction: column; gap: 8px; margin: 0; padding-left: 18px; list-style: disc; font-size: 12.5px; line-height: 1.55; color: var(--foreground); }
+.findings li::marker { color: var(--muted-foreground); }
+.code { margin: 12px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.code code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10.5px; color: var(--foreground); }
+
+@media (max-width: 1180px) {
+  .columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .note { padding: 16px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .head { flex-wrap: wrap; }
+}

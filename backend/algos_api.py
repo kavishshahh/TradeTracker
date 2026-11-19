@@ -30,9 +30,10 @@ REQUESTS_COLLECTION = 'algo_access_requests'
 DEFAULT_OWNER_EMAIL = 'kavishshah30@gmail.com'
 ACCESS_TTL_SECONDS = 60.0
 EMAIL_TTL_SECONDS = 600.0
-# Catalogue fields anyone with access may see. Rules, limitations, exit policy and
-# tuning parameters are enough to rebuild an algo, so they are sent to the owner only.
-PUBLIC_FIELDS = ('id', 'name', 'version', 'description', 'underlying', 'category', 'capital',
+# Catalogue fields anyone may see. Rules, limitations, exit policy, tuning parameters and the
+# full description are enough to rebuild an algo, so they are sent to the owner only; everyone
+# else reads the short `summary` as the description.
+PUBLIC_FIELDS = ('id', 'name', 'version', 'summary', 'underlying', 'category', 'capital',
                  'period_start', 'period_end', 'metrics', 'monthly', 'order', 'enabled', 'execution')
 EMAIL_PATTERN = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 
@@ -156,7 +157,10 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
         return status if status in ('pending', 'denied') else 'none'
 
     def public(row):
-        return {key: value for key, value in row.items() if key in PUBLIC_FIELDS}
+        shown = {key: value for key, value in row.items() if key in PUBLIC_FIELDS}
+        # A record without a summary gets a line that says nothing about how it trades.
+        shown['description'] = row.get('summary') or f"{row.get('category', 'Strategy')} on {row.get('underlying', 'NIFTY 50')}."
+        return shown
 
     # --- catalogue -----------------------------------------------------------------------------
     def read_catalog():

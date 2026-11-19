@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { AccessBanner, AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import AlgoDetail from './AlgoDetail';
 import { useAlgoAccess } from './useAlgoAccess';
-import { PERIODS, algoState, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
+import { PERIODS, algoState, blurb, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Sparkline, tone } from './algoUi';
 import styles from './algos.module.css';
 
@@ -84,7 +84,7 @@ export default function AlgoDashboard() {
 
   // A grant takes effect on the next paper poll, which then carries the trades.
   const requestAccess = access.requestAccess;
-  const labAccess = useMemo<LabAccess>(() => ({ allowed: access.allowed, request: access.request, requestAccess }), [access.allowed, access.request, requestAccess]);
+  const labAccess = useMemo<LabAccess>(() => ({ allowed: access.allowed, owner: access.owner, request: access.request, requestAccess }), [access.allowed, access.owner, access.request, requestAccess]);
 
   async function follow(id: string, enabled: boolean) {
     if (!currentUser || saving || !paper) return;
@@ -153,7 +153,7 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, acce
   else if (!access.allowed && view !== 'algos') main = <AccessCard access={access} what={view === 'positions' ? 'Open positions' : 'Simulated orders'} />;
   else if (view === 'positions') main = <PositionsView catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
   else if (view === 'orders') main = <OrdersView catalog={catalog} paper={paper} />;
-  else main = <MyAlgos catalog={catalog} paper={paper} period={period} onPeriod={setPeriod} onOpen={id => go(view, id)} />;
+  else main = <MyAlgos catalog={catalog} paper={paper} period={period} owner={access.owner} onPeriod={setPeriod} onOpen={id => go(view, id)} />;
 
   return <section className={styles.lab}>
     <div className={styles.heading}>
@@ -176,12 +176,12 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, acce
   </section>;
 }
 
-const matches = (item: Strategy, needle: string) => !needle || `${item.name} ${item.category} ${item.underlying} ${item.version} ${item.description}`.toLowerCase().includes(needle);
+const matches = (item: Strategy, needle: string) => !needle || `${item.name} ${item.category} ${item.underlying} ${item.version} ${item.summary || ''}`.toLowerCase().includes(needle);
 
 type Sort = 'returns' | 'drawdown' | 'winrate' | 'name';
 const SORTS: { id: Sort; label: string }[] = [{ id: 'returns', label: 'Highest return' }, { id: 'drawdown', label: 'Lowest drawdown' }, { id: 'winrate', label: 'Highest win rate' }, { id: 'name', label: 'Name' }];
 
-function MyAlgos({ catalog, paper, period, onPeriod, onOpen }: { catalog: Strategy[]; paper: PaperResponse | null; period: Period; onPeriod: (period: Period) => void; onOpen: (id: string) => void }) {
+function MyAlgos({ catalog, paper, period, owner, onPeriod, onOpen }: { catalog: Strategy[]; paper: PaperResponse | null; period: Period; owner: boolean; onPeriod: (period: Period) => void; onOpen: (id: string) => void }) {
   const [group, setGroup] = useState<'following' | 'all'>('all');
   const [today, setToday] = useState(true);
   const [hidden, setHidden] = useState(false);
@@ -236,7 +236,7 @@ function MyAlgos({ catalog, paper, period, onPeriod, onOpen }: { catalog: Strate
             <AlgoIcon version={item.version} size="lg" />
             <span className={styles.cardName}><b>{item.name}</b><small>{item.underlying}<i />{item.category}</small></span>
           </span>
-          <span className={styles.cardDesc}>{item.description}</span>
+          <span className={styles.cardDesc}>{blurb(item, owner)}</span>
           <span className={styles.cardChart}><BacktestTag /><Sparkline values={equityPoints(item).map(point => point.value)} label={`Backtest equity curve for ${item.name}`} /></span>
           <span className={styles.cardStats}>
             <span><small>Model capital</small><b>{mask(money(account?.capital ?? item.capital))}</b></span>

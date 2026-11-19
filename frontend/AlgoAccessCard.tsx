@@ -5,9 +5,9 @@ import { useState } from 'react';
 import styles from './algos.module.css';
 import type { RequestState } from './useAlgoAccess';
 
-/** What the lab needs to know about the viewer: may they see trades, and where their request stands. */
-export type LabAccess = { allowed: boolean; request: RequestState; requestAccess: () => Promise<void> };
-export const openAccess: LabAccess = { allowed: true, request: 'granted', requestAccess: async () => {} };
+/** What the lab needs to know about the viewer: may they see trades, do they own the lab, and where their request stands. */
+export type LabAccess = { allowed: boolean; owner: boolean; request: RequestState; requestAccess: () => Promise<void> };
+export const openAccess: LabAccess = { allowed: true, owner: true, request: 'granted', requestAccess: async () => {} };
 
 function useAsk(access: LabAccess) {
   const [sending, setSending] = useState(false);

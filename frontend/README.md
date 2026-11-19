@@ -28,8 +28,12 @@ Three tiers, decided by Firestore, not code:
   on the backtest ledger.
 - The owner (`ALGO_LAB_OWNER_EMAIL` on the API, default kavishshah30@gmail.com) is always
   allowed and is the only account that receives each strategy's rules, limitations, exit
-  policy and tuning parameters on the About algo page; everyone else gets a basic
-  description there.
+  policy, tuning parameters and the full description on the About algo page. Everyone
+  else reads the catalogue's short `summary` as the description, on the cards and on About
+  algo; a record without one shows only its style and underlying. The client hides the rules
+  unless the API says the viewer is the owner, so an older API cannot expose them. New or
+  changed summaries reach Firestore with `backend/set_catalog_summaries.py` (one merge write
+  per strategy), since the seed script never touches existing records.
 
 Anyone without access sees a banner and, in place of the trades sections, a Request
 access card. Asking writes `algo_access_requests/{uid}` (email, requested_at, status).

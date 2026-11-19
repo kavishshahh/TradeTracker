@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
-import { algoState, equityPoints, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
+import { algoState, blurb, equityPoints, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
 import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import styles from './algos.module.css';
@@ -32,7 +32,7 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
     {tab === 'performance' && <Performance strategy={strategy} account={account} />}
     {tab === 'trades' && (access.allowed ? <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} /> : <AccessCard access={access} what="Past trades" />)}
     {tab === 'monthly' && <Monthly strategy={strategy} />}
-    {tab === 'rules' && <Rules strategy={strategy} />}
+    {tab === 'rules' && <Rules strategy={strategy} owner={access.owner} />}
   </>;
 }
 
@@ -275,11 +275,12 @@ function MonthlyChart({ months, selected, onSelect }: { months: Month[]; selecte
   </svg>;
 }
 
-/** About algo. The API sends rules, limitations and exit policy to the owner only; everyone else gets the basics. */
-function Rules({ strategy }: { strategy: Strategy }) {
-  const detailed = !!strategy.rules?.length;
+/** About algo. The API sends rules, limitations, exit policy and the full description to the owner only, and this
+ *  view shows them only to the owner too, so an API that still sends everything cannot expose them. */
+function Rules({ strategy, owner }: { strategy: Strategy; owner: boolean }) {
+  const detailed = owner && !!strategy.rules?.length;
   return <div className={styles.card}>
-    <p className={styles.aboutText}>{strategy.description}</p>
+    <p className={styles.aboutText}>{blurb(strategy, owner)}</p>
     <dl className={styles.rules}>
       <div><dt>Underlying</dt><dd>{strategy.underlying}</dd></div>
       <div><dt>Style</dt><dd>{strategy.category}</dd></div>

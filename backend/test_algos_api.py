@@ -65,8 +65,8 @@ def make_app(db, user, **options):
 
 class APIAuthenticationTests(unittest.TestCase):
     def setUp(self):
-        self.db = Database({'algo_catalog/zen_strategy_01': {'name': 'One', 'rules': ['secret'], 'limitations': 'x', 'exit_policy': 'y', 'volatility_window': 150, 'metrics': {'trade_count': 1}},
-                            'algo_catalog/zen_strategy_02': {'name': 'Two'}, ACCESS: {'emails': [' Guest@Example.com ']}})
+        self.db = Database({'algo_catalog/zen_strategy_01': {'name': 'One', 'description': 'how it works', 'summary': 'what it is', 'rules': ['secret'], 'limitations': 'x', 'exit_policy': 'y', 'volatility_window': 150, 'metrics': {'trade_count': 1}},
+                            'algo_catalog/zen_strategy_02': {'name': 'Two', 'description': 'how it works', 'category': 'Overnight credit spread', 'underlying': 'NIFTY 50'}, ACCESS: {'emails': [' Guest@Example.com ']}})
         self.catalog_keys = set(self.db)
         async def user(authorization: str = Header(None)):
             if authorization not in ('Bearer alice','Bearer bob','Bearer carol','Bearer dave'): raise HTTPException(401)
@@ -108,10 +108,13 @@ class APIAuthenticationTests(unittest.TestCase):
         full = next(row for row in owner['strategies'] if row['id']=='zen_strategy_01')
         basic = next(row for row in guest['strategies'] if row['id']=='zen_strategy_01')
         self.assertEqual((owner['detail'], guest['detail']), ('full', 'public'))
-        self.assertEqual(full['rules'], ['secret'])
+        self.assertEqual((full['rules'], full['description'], full['summary']), (['secret'], 'how it works', 'what it is'))
         for secret in ('rules','limitations','exit_policy','volatility_window'):
             self.assertNotIn(secret, basic)
         self.assertEqual((basic['name'], basic['metrics'], basic['execution']), ('One', {'trade_count': 1}, 'paper_only'))
+        self.assertEqual((basic['description'], basic['summary']), ('what it is', 'what it is'))     # the summary stands in for the description
+        plain = next(row for row in guest['strategies'] if row['id']=='zen_strategy_02')
+        self.assertEqual(plain['description'], 'Overnight credit spread on NIFTY 50.')                 # no summary: a line that says nothing about the method
 
     def test_access_status_and_request_flow(self):
         get = lambda who: asyncio.run(request(self.app,'/algos/access',user=who))[1]

@@ -2,8 +2,8 @@
 
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
-import { algoState, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Strategy, type Trade } from './algoData';
-import { AlgoIcon, EmptyRow, Pills, PositionTable, tone } from './algoUi';
+import { algoState, equityPoints, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
+import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
 import styles from './algos.module.css';
 
 type Tab = 'performance' | 'trades' | 'monthly' | 'rules';
@@ -11,9 +11,9 @@ type Range = '1m' | '3m' | '6m' | '1y' | 'all';
 const RANGES: { id: Range; label: string; months: number }[] = [{ id: '1m', label: '1M', months: 1 }, { id: '3m', label: '3M', months: 3 }, { id: '6m', label: '6M', months: 6 }, { id: '1y', label: '1Y', months: 12 }, { id: 'all', label: 'All', months: Infinity }];
 
 type LoadBacktest = (id: string) => Promise<BacktestLedger | null>;
-type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
+type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
 
-export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, onFollow, onDownload, loadBacktest }: Props) {
+export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, onFollow, onDownload, loadBacktest }: Props) {
   const [tab, setTab] = useState<Tab>('performance');
   const state = algoState(account);
   return <>
@@ -21,13 +21,13 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
       <AlgoIcon version={strategy.version} size="lg" />
       <div className={styles.detailTitle}>
         <h2>{strategy.name}</h2>
-        <p>{strategy.underlying} · {strategy.category} · <span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{paperLoaded ? stateLabel[state] : 'Loading'}</span></p>
+        <p>{strategy.underlying}<i />{strategy.category}<i /><span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{paperLoaded ? stateLabel[state] : 'Loading'}</span></p>
       </div>
       <div className={styles.detailStat}><span>Model capital</span><b>{money(account?.capital ?? strategy.capital)}</b></div>
-      <div className={styles.detailStat}><span>Backtest 3M</span><b className={tone(strategy.metrics.return_3m_pct)}>{signedPercent(strategy.metrics.return_3m_pct)}</b></div>
+      <div className={styles.detailStat}><span>{periodShort[period]} returns <BacktestTag /></span><b><Return value={periodReturn(strategy, period)} /></b></div>
       <button className={following ? styles.followingButton : styles.followButton} onClick={() => onFollow(!following)} disabled={saving || !paperLoaded} title={following ? 'Click to stop following' : 'Follow this algo’s paper trades'}>{following ? <Check size={15} /> : <Plus size={15} />}{saving ? 'Saving…' : following ? 'Following' : 'Follow'}</button>
     </div>
-    <Pills label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly' }, { id: 'rules', label: 'Rules' }]} />
+    <Tabs label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Algo performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly returns' }, { id: 'rules', label: 'About algo' }]} />
     {tab === 'performance' && <Performance strategy={strategy} account={account} />}
     {tab === 'trades' && <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} />}
     {tab === 'monthly' && <Monthly strategy={strategy} />}
@@ -35,11 +35,6 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
   </>;
 }
 
-/** Backtest equity: model capital plus cumulative gross P&L at each month end. */
-function equityPoints(strategy: Strategy) {
-  let value = strategy.capital;
-  return [{ label: strategy.period_start, value }, ...strategy.monthly.map(month => { value += month.pnl; return { label: (month as Month & { observed_end?: string }).observed_end || `${month.month}-28`, value }; })];
-}
 const shortDate = (value: string, withDay = false) => new Date(`${value}T00:00:00Z`).toLocaleDateString('en-IN', { day: withDay ? 'numeric' : undefined, month: 'short', year: 'numeric', timeZone: 'UTC' });
 
 function EquityChart({ points }: { points: { label: string; value: number }[] }) {

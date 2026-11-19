@@ -1,11 +1,11 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { AlertCircle, ArrowLeft, ChevronRight, Eye, EyeOff, RefreshCw, Search, ShieldCheck } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, AlertCircle, ArrowLeft, ArrowUpDown, Banknote, ChevronRight, Eye, EyeOff, RefreshCw, Search, ShieldCheck, Star, TrendingUp, Wallet } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import AlgoDetail from './AlgoDetail';
-import { algoState, clock, isStale, ledgerFills, marketOpen, money, openPnl, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Strategy, type Trade } from './algoData';
-import { AlgoIcon, EmptyRow, Pills, PositionTable, tone } from './algoUi';
+import { PERIODS, algoState, clock, equityPoints, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
+import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Sparkline, tone } from './algoUi';
 import styles from './algos.module.css';
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
@@ -20,30 +20,7 @@ export default function AlgoDashboard() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadedAt, setLoadedAt] = useState<string | null>(null);
-  const [view, setView] = useState<View>('algos');
-  const [algoId, setAlgoId] = useState<string | null>(null);
   const [, setTick] = useState(0);
-
-  // The open tab and algo live in the query string (?tab=positions, ?algo=zen_strategy_01) so reloads and back/forward keep them.
-  useEffect(() => {
-    const read = () => {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get('tab') as View | null;
-      setView(tab && VIEWS.includes(tab) ? tab : 'algos');
-      setAlgoId(params.get('algo'));
-    };
-    read();
-    window.addEventListener('popstate', read);
-    return () => window.removeEventListener('popstate', read);
-  }, []);
-  const go = useCallback((next: View, algo: string | null = null) => {
-    setView(next); setAlgoId(algo);
-    const params = new URLSearchParams();
-    if (next !== 'algos') params.set('tab', next);
-    if (algo) params.set('algo', algo);
-    const query = params.toString();
-    window.history.pushState(null, '', window.location.pathname + (query ? `?${query}` : ''));
-  }, []);
 
   const authed = useCallback(async (path: string, signal?: AbortSignal) => {
     const token = await currentUser!.getIdToken();
@@ -124,15 +101,50 @@ export default function AlgoDashboard() {
     const link = document.createElement('a'); link.href = url; link.download = `${strategyId}-paper-trades.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
+  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} />;
+}
+
+export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null> };
+
+/** Everything on screen, given data. Holds only view state: the open tab, the open algo and the return period. */
+export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, onRefresh, onFollow, onDownload, loadBacktest }: AlgoLabProps) {
+  const [view, setView] = useState<View>('algos');
+  const [algoId, setAlgoId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>('1y');
+
+  // The open tab and algo live in the query string (?tab=positions, ?algo=zen_strategy_01) so reloads and back/forward keep them.
+  useEffect(() => {
+    const read = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab') as View | null;
+      setView(tab && VIEWS.includes(tab) ? tab : 'algos');
+      setAlgoId(params.get('algo'));
+    };
+    read();
+    window.addEventListener('popstate', read);
+    return () => window.removeEventListener('popstate', read);
+  }, []);
+  const go = useCallback((next: View, algo: string | null = null) => {
+    setView(next); setAlgoId(algo);
+    const params = new URLSearchParams();
+    if (next !== 'algos') params.set('tab', next);
+    if (algo) params.set('algo', algo);
+    const query = params.toString();
+    window.history.pushState(null, '', window.location.pathname + (query ? `?${query}` : ''));
+  }, []);
+
   const detail = algoId ? catalog.find(item => item.id === algoId) : undefined;
   const openCount = catalog.filter(item => paper?.strategies[item.id]?.open_position).length * 2;
 
   let main;
-  if (!catalog.length) main = <div className={styles.card}><EmptyRow>{loading ? 'Loading strategies…' : error || 'No strategies are listed in the catalogue yet.'}</EmptyRow>{!loading && <button className={styles.outlineButton} onClick={() => void refresh()}>Refresh catalogue</button>}</div>;
-  else if (algoId) main = detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} onFollow={enabled => void follow(detail.id, enabled)} onDownload={() => downloadLedger(detail.id)} loadBacktest={loadBacktest} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>;
+  if (!catalog.length) main = <div className={styles.card}><EmptyRow>{loading ? 'Loading strategies…' : error || 'No strategies are listed in the catalogue yet.'}</EmptyRow>{!loading && <button className={styles.outlineButton} onClick={onRefresh}>Refresh catalogue</button>}</div>;
+  else if (algoId) main = <div className={styles.split}>
+    <AlgoRail catalog={catalog} activeId={algoId} period={period} onPeriod={setPeriod} onOpen={id => go(view, id)} />
+    <div className={styles.splitMain}>{detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} period={period} onFollow={enabled => onFollow(detail.id, enabled)} onDownload={() => onDownload(detail.id)} loadBacktest={loadBacktest} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>}</div>
+  </div>;
   else if (view === 'positions') main = <PositionsView catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
   else if (view === 'orders') main = <OrdersView catalog={catalog} paper={paper} />;
-  else main = <MyAlgos catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
+  else main = <MyAlgos catalog={catalog} paper={paper} period={period} onPeriod={setPeriod} onOpen={id => go(view, id)} />;
 
   return <section className={styles.lab}>
     <div className={styles.heading}>
@@ -145,19 +157,26 @@ export default function AlgoDashboard() {
       </nav>}
       <div className={styles.tabMeta}>
         <span className={styles.market}><i className={marketOpen() ? styles.marketOpen : ''} />Market {marketOpen() ? 'open' : 'closed'}</span>
-        <button className={styles.refresh} onClick={() => void refresh()} disabled={loading} title={loadedAt ? `Updated ${clock(loadedAt)}` : undefined}><RefreshCw size={14} className={loading ? styles.spin : ''} />{loading ? 'Refreshing' : 'Refresh'}</button>
+        <button className={styles.refresh} onClick={onRefresh} disabled={loading} title={loadedAt ? `Updated ${clock(loadedAt)}` : undefined}><RefreshCw size={14} className={loading ? styles.spin : ''} />{loading ? 'Refreshing' : 'Refresh'}</button>
       </div>
     </div>
-    {error && <div className={styles.notice} role="status"><AlertCircle size={16} />{error}<button onClick={() => void refresh()}>Retry</button></div>}
+    {error && <div className={styles.notice} role="status"><AlertCircle size={16} />{error}<button onClick={onRefresh}>Retry</button></div>}
     <div className={styles.content}>{main}</div>
     <footer className={styles.disclaimer}><ShieldCheck size={15} /><p>Positions, orders and P&L come from shared paper model accounts, not your brokerage account. Backtests are gross historical simulations. Following an algo saves your selection; it never places orders. All times IST.</p></footer>
   </section>;
 }
 
-function MyAlgos({ catalog, paper, onOpen }: { catalog: Strategy[]; paper: PaperResponse | null; onOpen: (id: string) => void }) {
+const matches = (item: Strategy, needle: string) => !needle || `${item.name} ${item.category} ${item.underlying} ${item.version} ${item.description}`.toLowerCase().includes(needle);
+
+type Sort = 'returns' | 'drawdown' | 'winrate' | 'name';
+const SORTS: { id: Sort; label: string }[] = [{ id: 'returns', label: 'Highest return' }, { id: 'drawdown', label: 'Lowest drawdown' }, { id: 'winrate', label: 'Highest win rate' }, { id: 'name', label: 'Name' }];
+
+function MyAlgos({ catalog, paper, period, onPeriod, onOpen }: { catalog: Strategy[]; paper: PaperResponse | null; period: Period; onPeriod: (period: Period) => void; onOpen: (id: string) => void }) {
   const [group, setGroup] = useState<'following' | 'all'>('all');
   const [today, setToday] = useState(true);
   const [hidden, setHidden] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<Sort>('returns');
   const followed = catalog.filter(item => paper?.following[item.id]);
   const rows = group === 'following' ? followed : catalog;
   const accounts = rows.map(item => paper?.strategies[item.id]).filter((account): account is Paper => !!account);
@@ -168,39 +187,82 @@ function MyAlgos({ catalog, paper, onOpen }: { catalog: Strategy[]; paper: Paper
   const total = realized == null || unrealized == null ? null : realized + unrealized;
   const mask = (value: string) => hidden ? '••••' : value;
   const prefix = today ? 'Today’s' : 'Overall';
+  const needle = query.trim().toLowerCase();
+  const cards = rows.filter(item => matches(item, needle)).sort((a, b) =>
+    sort === 'name' ? a.name.localeCompare(b.name)
+      : sort === 'drawdown' ? Math.abs(a.metrics.max_drawdown_pct) - Math.abs(b.metrics.max_drawdown_pct)
+      : sort === 'winrate' ? b.metrics.win_rate_pct - a.metrics.win_rate_pct
+      : periodReturn(b, period) - periodReturn(a, period));
   return <>
     <div className={`${styles.card} ${styles.summary}`}>
-      <div><span>Model capital</span><strong>{mask(money(capital))}</strong></div>
-      <div><span>{prefix} P&L</span><strong className={hidden ? '' : tone(total)}>{mask(money(total))}</strong></div>
-      <div><span>{prefix} realized</span><strong className={hidden ? '' : tone(realized)}>{mask(money(realized))}</strong></div>
-      <div><span>Unrealized</span><strong className={hidden ? '' : tone(unrealized)}>{mask(money(unrealized))}</strong></div>
-      <button className={styles.iconButton} onClick={() => setHidden(value => !value)} aria-label={hidden ? 'Show amounts' : 'Hide amounts'} aria-pressed={hidden}>{hidden ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+      <div><Wallet size={20} strokeWidth={1.5} /><p><span>Model capital</span><strong>{mask(money(capital))}</strong></p></div>
+      <div><TrendingUp size={20} strokeWidth={1.5} /><p><span>{prefix} P&L</span><strong className={hidden ? '' : tone(total)}>{mask(money(total))}</strong></p></div>
+      <div><Banknote size={20} strokeWidth={1.5} /><p><span>{prefix} realized</span><strong className={hidden ? '' : tone(realized)}>{mask(money(realized))}</strong></p></div>
+      <div><Activity size={20} strokeWidth={1.5} /><p><span>Unrealized</span><strong className={hidden ? '' : tone(unrealized)}>{mask(money(unrealized))}</strong></p></div>
+      <div className={styles.summaryControls}>
+        <Pills label="P&L period" value={today ? 'today' : 'overall'} onChange={value => setToday(value === 'today')} items={[{ id: 'today', label: 'Today' }, { id: 'overall', label: 'Overall' }]} />
+        <button className={styles.iconButton} onClick={() => setHidden(value => !value)} aria-label={hidden ? 'Show amounts' : 'Hide amounts'} aria-pressed={hidden}>{hidden ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+      </div>
     </div>
     <div className={styles.toolbar}>
       <Pills label="Algo group" value={group} onChange={setGroup} items={[{ id: 'all', label: 'All algos', count: catalog.length }, { id: 'following', label: 'Following', count: followed.length }]} />
-      <Pills label="P&L period" value={today ? 'today' : 'overall'} onChange={value => setToday(value === 'today')} items={[{ id: 'today', label: 'Today' }, { id: 'overall', label: 'Overall' }]} />
+      <div className={styles.toolbarEnd}>
+        <label className={styles.search}><Search size={14} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search algos" aria-label="Search algos" /></label>
+        <Pills label="Backtest return period" value={period} onChange={onPeriod} items={PERIODS.map(id => ({ id, label: periodShort[id] }))} />
+        <label className={styles.sort}><ArrowUpDown size={14} /><span>Sort</span><select value={sort} onChange={event => setSort(event.target.value as Sort)} aria-label="Sort algos">{SORTS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+      </div>
     </div>
-    <div className={styles.tableCard}><div className={styles.tableScroll}><table className={`${styles.table} ${styles.clickable}`}>
-      <thead><tr><th>Algo</th><th>Status</th><th>Position</th><th className={styles.num}>Model capital</th><th className={styles.num}>Unrealized</th><th className={styles.num}>{prefix} realized</th><th aria-label="Open" /></tr></thead>
-      <tbody>{rows.map(item => {
-        const account = paper?.strategies[item.id];
-        const state = algoState(account);
-        const realizedValue = today ? todayRealized(account) : account?.realized_pnl;
-        return <tr key={item.id} onClick={() => onOpen(item.id)} tabIndex={0} onKeyDown={event => { if (event.key === 'Enter') onOpen(item.id); }}>
-          <td><span className={styles.algoCell}><AlgoIcon version={item.version} /><span><b>{item.name}</b><small>{item.category}{paper?.following[item.id] ? ' · Following' : ''}</small></span></span></td>
-          <td><span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{stateLabel[state]}</span></td>
-          <td className={styles.muted}>{account?.open_position ? `${account.open_position.sell_strike}/${account.open_position.buy_strike} ${account.open_position.option_type}` : '—'}</td>
-          <td className={styles.num}>{mask(money(account?.capital ?? item.capital))}</td>
-          <td className={`${styles.num} ${hidden ? '' : tone(openPnl(account))}`}>{account?.open_position ? mask(money(account.unrealized_pnl)) : '—'}</td>
-          <td className={`${styles.num} ${hidden ? '' : tone(realizedValue)}`}>{realizedValue == null ? '—' : mask(money(realizedValue))}</td>
-          <td className={styles.chevron}><ChevronRight size={16} /></td>
-        </tr>;
-      })}</tbody>
-    </table></div>
-      {!rows.length && <EmptyRow>You are not following any algo yet. Open one from All algos and choose Follow.</EmptyRow>}
-    </div>
-    <p className={styles.caption}>Status combines NSE hours with the paper worker heartbeat (stale after 3 minutes without an update). Click an algo for its backtest, paper trades and rules.</p>
+    {cards.length ? <div className={styles.algoGrid}>{cards.map((item, index) => {
+      const account = paper?.strategies[item.id];
+      const state = algoState(account);
+      const position = account?.open_position;
+      const realizedValue = today ? todayRealized(account) : account?.realized_pnl;
+      const livePnl = position ? account!.unrealized_pnl : realizedValue;
+      return <button key={item.id} className={styles.algoCard} style={{ '--i': index } as CSSProperties} onClick={() => onOpen(item.id)} aria-label={`Open ${item.name}`}>
+        {paper?.following[item.id] && <span className={styles.cornerTag}>Following</span>}
+        <span className={styles.cardBody}>
+          <span className={styles.cardTop}>
+            <AlgoIcon version={item.version} size="lg" />
+            <span className={styles.cardName}><b>{item.name}</b><small>{item.underlying}<i />{item.category}</small></span>
+          </span>
+          <span className={styles.cardDesc}>{item.description}</span>
+          <span className={styles.cardChart}><BacktestTag /><Sparkline values={equityPoints(item).map(point => point.value)} label={`Backtest equity curve for ${item.name}`} /></span>
+          <span className={styles.cardStats}>
+            <span><small>Model capital</small><b>{mask(money(account?.capital ?? item.capital))}</b></span>
+            <span><small>{periodShort[period]} returns</small><b><Return value={periodReturn(item, period)} /></b></span>
+            <span><small>Max drawdown</small><b>{percent(-Math.abs(item.metrics.max_drawdown_pct))}</b></span>
+          </span>
+        </span>
+        <span className={styles.cardLive}>
+          <span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{stateLabel[state]}{position ? <em>{position.sell_strike}/{position.buy_strike} {position.option_type}</em> : null}</span>
+          <span className={styles.cardPnl}><small>{position ? 'Unrealized' : `${prefix} realized`}</small><b className={hidden ? '' : tone(livePnl)}>{livePnl == null ? '—' : mask(money(livePnl))}</b></span>
+          <ChevronRight size={16} className={styles.cardGo} aria-hidden="true" />
+        </span>
+      </button>;
+    })}</div> : <div className={styles.tableCard}><EmptyRow>{needle ? 'No algos match your search.' : 'You are not following any algo yet. Open one from All algos and choose Follow.'}</EmptyRow></div>}
+    <p className={styles.caption}>Returns are gross backtest figures on fixed model capital; the curve on each card is the full backtest equity. Status combines NSE hours with the paper worker heartbeat (stale after 3 minutes without an update).</p>
   </>;
+}
+
+/** Left rail on the algo page: every algo ranked by backtest return for the chosen period. */
+function AlgoRail({ catalog, activeId, period, onPeriod, onOpen }: { catalog: Strategy[]; activeId: string; period: Period; onPeriod: (period: Period) => void; onOpen: (id: string) => void }) {
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const rows = catalog.filter(item => matches(item, needle)).sort((a, b) => periodReturn(b, period) - periodReturn(a, period));
+  return <aside className={styles.rail} aria-label="All algos">
+    <label className={styles.search}><Search size={14} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search for algo name, kind etc" aria-label="Search algos" /></label>
+    <div className={styles.railCard}>
+      <div className={styles.railHead}><Star size={13} />Top algos by return<span>{catalog.length}</span></div>
+      <div className={styles.railList}>
+        {rows.map(item => <button key={item.id} className={item.id === activeId ? styles.railActive : ''} aria-current={item.id === activeId ? 'page' : undefined} onClick={() => onOpen(item.id)}>
+          <span className={styles.railName}><b>{item.name}</b><small>{item.underlying}<i />Capital {money(item.capital)}</small></span>
+          <span className={styles.railRet}><Return value={periodReturn(item, period)} /><small>{periodName[period]}</small></span>
+        </button>)}
+        {!rows.length && <EmptyRow>No algos match your search.</EmptyRow>}
+      </div>
+      <div className={styles.railFoot} role="group" aria-label="Backtest return period">{PERIODS.map(id => <button key={id} className={period === id ? styles.railPeriodActive : ''} aria-pressed={period === id} onClick={() => onPeriod(id)}>{periodShort[id].toLowerCase()}</button>)}<BacktestTag /></div>
+    </div>
+  </aside>;
 }
 
 function PositionsView({ catalog, paper, onOpen }: { catalog: Strategy[]; paper: PaperResponse | null; onOpen: (id: string) => void }) {

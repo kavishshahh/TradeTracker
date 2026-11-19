@@ -102,3 +102,12 @@ export function pastTrades(ledger: BacktestLedger | null, account: Paper | null 
   const paper = (account?.closed_positions || []).filter(trade => trade.exit_ts).map((trade): PastTrade => ({ key: `p${trade.signal_id}`, source: 'paper', entry: trade.entry_ts, exit: trade.exit_ts!, day: istDay(trade.exit_ts), type: trade.option_type, expiry: trade.expiry, sell: trade.sell_strike, buy: trade.buy_strike, lots: trade.lots, pnl: trade.pnl, reason: trade.exit_reason }));
   return [...backtest, ...paper].sort((a, b) => Date.parse(a.exit) - Date.parse(b.exit));
 }
+
+export const PERIODS: Period[] = ['1m', '3m', '6m', '1y'];
+export const periodShort: Record<Period, string> = { '1m': '1M', '3m': '3M', '6m': '6M', '1y': '1Y' };
+
+/** Backtest equity: model capital plus cumulative gross P&L at each month end. */
+export function equityPoints(strategy: Strategy) {
+  let value = strategy.capital;
+  return [{ label: strategy.period_start, value }, ...strategy.monthly.map(month => { value += month.pnl; return { label: (month as Month & { observed_end?: string }).observed_end || `${month.month}-28`, value }; })];
+}

@@ -4,6 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { algoState, equityPoints, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
+import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import styles from './algos.module.css';
 
 type Tab = 'performance' | 'trades' | 'monthly' | 'rules';
@@ -11,9 +12,9 @@ type Range = '1m' | '3m' | '6m' | '1y' | 'all';
 const RANGES: { id: Range; label: string; months: number }[] = [{ id: '1m', label: '1M', months: 1 }, { id: '3m', label: '3M', months: 3 }, { id: '6m', label: '6M', months: 6 }, { id: '1y', label: '1Y', months: 12 }, { id: 'all', label: 'All', months: Infinity }];
 
 type LoadBacktest = (id: string) => Promise<BacktestLedger | null>;
-type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
+type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; access?: LabAccess; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
 
-export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, onFollow, onDownload, loadBacktest }: Props) {
+export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, access = openAccess, onFollow, onDownload, loadBacktest }: Props) {
   const [tab, setTab] = useState<Tab>('performance');
   const state = algoState(account);
   return <>
@@ -29,7 +30,7 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
     </div>
     <Tabs label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Algo performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly returns' }, { id: 'rules', label: 'About algo' }]} />
     {tab === 'performance' && <Performance strategy={strategy} account={account} />}
-    {tab === 'trades' && <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} />}
+    {tab === 'trades' && (access.allowed ? <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} /> : <AccessCard access={access} what="Past trades" />)}
     {tab === 'monthly' && <Monthly strategy={strategy} />}
     {tab === 'rules' && <Rules strategy={strategy} />}
   </>;
@@ -274,11 +275,22 @@ function MonthlyChart({ months, selected, onSelect }: { months: Month[]; selecte
   </svg>;
 }
 
+/** About algo. The API sends rules, limitations and exit policy to the owner only; everyone else gets the basics. */
 function Rules({ strategy }: { strategy: Strategy }) {
+  const detailed = !!strategy.rules?.length;
   return <div className={styles.card}>
     <p className={styles.aboutText}>{strategy.description}</p>
-    <dl className={styles.rules}>{strategy.rules.map((rule, index) => { const { label, description } = ruleText(rule); return <div key={index}><dt>{label || `Rule ${index + 1}`}</dt><dd>{description}</dd></div>; })}</dl>
-    <p className={styles.limitations}><b>Limitations.</b> {strategy.limitations}</p>
-    <p className={styles.caption}>These records describe the versioned Python implementation. Editing catalogue text does not change the running engine.</p>
+    <dl className={styles.rules}>
+      <div><dt>Underlying</dt><dd>{strategy.underlying}</dd></div>
+      <div><dt>Style</dt><dd>{strategy.category}</dd></div>
+      <div><dt>Model capital</dt><dd>{money(strategy.capital)}</dd></div>
+      <div><dt>Backtest</dt><dd>{shortDate(strategy.period_start, true)} – {shortDate(strategy.period_end, true)} · {strategy.metrics.trade_count} trades</dd></div>
+      {detailed && strategy.rules!.map((rule, index) => { const { label, description } = ruleText(rule); return <div key={index}><dt>{label || `Rule ${index + 1}`}</dt><dd>{description}</dd></div>; })}
+      {detailed && strategy.exit_policy && <div><dt>Exit policy</dt><dd>{strategy.exit_policy}</dd></div>}
+    </dl>
+    {detailed ? <>
+      <p className={styles.limitations}><b>Limitations.</b> {strategy.limitations}</p>
+      <p className={styles.caption}>Only you see the rules above. These records describe the versioned Python implementation; editing catalogue text does not change the running engine.</p>
+    </> : <p className={styles.limitations}><b>Private.</b> The entry, exit and sizing rules are kept by the algo’s author and are not shown here. The performance, past trades and monthly returns tabs are the full record of what it did.</p>}
   </div>;
 }

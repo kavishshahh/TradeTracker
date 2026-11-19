@@ -5,10 +5,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { trackEvent, trackFormSubmission, trackPageView } from '@/lib/analytics';
 import { getFeesConfig, getUserProfile, saveFeesConfig, updateUserProfile } from '@/lib/api';
 import { FeesConfig } from '@/types/trade';
-import { Calculator, DollarSign, Lock, Moon, Save, Settings, Sun, User } from 'lucide-react';
+import { Calculator, DollarSign, Lock, Moon, Save, Settings, ShieldCheck, Sun, User } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'react-toastify';
+import AlgoAccessAdmin from '../../frontend/AlgoAccessAdmin';
+import { useAlgoAccess } from '../../frontend/useAlgoAccess';
 
 interface ProfileFormData {
   account_balance: number;
@@ -26,7 +28,9 @@ export default function Profile() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profile' | 'fees' | 'security'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'fees' | 'security' | 'admin'>('profile');
+  // The Admin tab exists only for the Algo Lab owner; the API decides who that is.
+  const algoAccess = useAlgoAccess();
   const [feesConfig, setFeesConfig] = useState<FeesConfig | null>(null);
   const [isFeesSubmitting, setIsFeesSubmitting] = useState(false);
   const [feesSubmitSuccess, setFeesSubmitSuccess] = useState(false);
@@ -303,6 +307,19 @@ export default function Profile() {
               <Lock className="h-4 w-4 mr-2 inline" />
               Security
             </button>
+            {algoAccess.owner && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'admin'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                <ShieldCheck className="h-4 w-4 mr-2 inline" />
+                Admin
+              </button>
+            )}
           </nav>
         </div>
 
@@ -330,8 +347,10 @@ export default function Profile() {
               feesSubmitSuccess={feesSubmitSuccess}
               getDefaultFeesConfig={getDefaultFeesConfig}
             />
+          ) : activeTab === 'admin' && algoAccess.owner ? (
+            <AlgoAccessAdmin call={algoAccess.call} />
           ) : (
-            <SecurityTabContent 
+            <SecurityTabContent
               registerPassword={registerPassword}
               handlePasswordSubmit={handlePasswordSubmit}
               onPasswordSubmit={onPasswordSubmit}

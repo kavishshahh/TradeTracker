@@ -1,6 +1,19 @@
-"""Authenticated algo catalogue and paper account views; no broker order routes."""
+"""Authenticated algo catalogue and paper account views; no broker order routes.
+
+Three tiers, decided by Firestore, not code:
+- Every signed-in user sees the catalogue's public fields (names, descriptions, backtest
+  metrics and monthly returns) and each paper account's summary numbers.
+- Users whose verified email is listed in `feature_access/algo_lab` (`emails: [...]`) also
+  see the trades: the backtest ledger, open positions and the closed paper ledger.
+- The owner (ALGO_LAB_OWNER_EMAIL) additionally receives each strategy's rules,
+  limitations and tuning parameters, and manages the list from Settings > Admin.
+
+Anyone may ask for access: POST /algos/access/request writes one document to
+`algo_access_requests/{uid}` (email, requested_at, status) for the owner to grant or decline.
+"""
 from datetime import datetime, timezone
 import logging
+import os
 import re
 import time
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,15 +25,42 @@ log = logging.getLogger(__name__)
 # poll (each 30s per open tab) used to stream it again. One cached copy per
 # process serves all users and bounds the Firestore reads it costs.
 CATALOG_TTL_SECONDS = 60.0
+ACCESS_DOC = ('feature_access', 'algo_lab')
+REQUESTS_COLLECTION = 'algo_access_requests'
+DEFAULT_OWNER_EMAIL = 'kavishshah30@gmail.com'
+ACCESS_TTL_SECONDS = 60.0
+EMAIL_TTL_SECONDS = 600.0
+# Catalogue fields anyone with access may see. Rules, limitations, exit policy and
+# tuning parameters are enough to rebuild an algo, so they are sent to the owner only.
+PUBLIC_FIELDS = ('id', 'name', 'version', 'description', 'underlying', 'category', 'capital',
+                 'period_start', 'period_end', 'metrics', 'monthly', 'order', 'enabled', 'execution')
+EMAIL_PATTERN = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 
 
 class FollowRequest(BaseModel):
     enabled: bool
 
 
-def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, clock=time.monotonic):
+class EmailAccess(BaseModel):
+    email: str
+    allowed: bool
+
+
+class Decision(BaseModel):
+    allowed: bool
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, clock=time.monotonic,
+                        email_lookup=None, owner_email=None):
     router = APIRouter(prefix='/algos', tags=['Paper algorithms'])
     cache = {'rows': None, 'at': None}
+    access = {'emails': None, 'at': 0.0}
+    emails = {}
+    owner = (owner_email or os.environ.get('ALGO_LAB_OWNER_EMAIL') or DEFAULT_OWNER_EMAIL).strip().lower()
 
     def unavailable(route, exc, detail):
         # Firestore errors were invisible behind a bare 503; the type name says
@@ -32,6 +72,93 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
         if db is None:
             raise HTTPException(503, 'Paper account storage is unavailable')
 
+    # --- who is asking -------------------------------------------------------------------------
+    def lookup_email(uid):
+        if email_lookup:
+            return email_lookup(uid)
+        from firebase_admin import auth
+        record = auth.get_user(uid)
+        return record.email if record.email_verified else None
+
+    def email_of(uid):
+        """The user's verified email, lower-cased; None when unverified or unknown. Cached per process."""
+        try:
+            now = clock()
+            hit = emails.get(uid)
+            if not hit or now - hit[1] > EMAIL_TTL_SECONDS:
+                found = lookup_email(uid)
+                emails[uid] = hit = (found.strip().lower() if found else None, now)
+            return hit[0]
+        except Exception as exc:
+            # Fail closed: an unknown caller is an outsider.
+            log.warning('algo_access_email_lookup_failed error=%s', type(exc).__name__)
+            return None
+
+    def allowed_emails(force=False):
+        if db is None:
+            return set()
+        now = clock()
+        if force or access['emails'] is None or now - access['at'] > ACCESS_TTL_SECONDS:
+            doc = db.collection(ACCESS_DOC[0]).document(ACCESS_DOC[1]).get()
+            listed = (doc.to_dict() or {}).get('emails', []) if doc.exists else []
+            access['emails'] = {str(item).strip().lower() for item in listed if item}
+            access['at'] = now
+        return access['emails']
+
+    def is_owner(uid):
+        return email_of(uid) == owner
+
+    def is_allowed(uid):
+        email = email_of(uid)
+        if not email:
+            return False
+        if email == owner:
+            return True
+        try:
+            return email in allowed_emails()
+        except Exception as exc:
+            log.warning('algo_access_check_failed error=%s', type(exc).__name__)
+            return False
+
+    def require_access(uid):
+        if not is_allowed(uid):
+            raise HTTPException(403, 'Past trades are shared by invitation. Request access from the Algo Lab page.')
+
+    def without_trades(state):
+        """A paper account for someone without access: the summary numbers stay, every trade goes."""
+        if not state:
+            return state
+        return {**state, 'open_position': None, 'closed_positions': [], 'ledger_limit': 0,
+                'in_trade': bool(state.get('open_position')), 'trades_hidden': True}
+
+    def require_owner(uid):
+        # The admin routes do not exist for anyone but the owner.
+        if not is_owner(uid):
+            raise HTTPException(404, 'Not found')
+
+    def set_allowed(email, allowed):
+        current = set(allowed_emails(force=True))
+        (current.add if allowed else current.discard)(email)
+        db.collection(ACCESS_DOC[0]).document(ACCESS_DOC[1]).set({'emails': sorted(current)}, merge=True)
+        access['emails'], access['at'] = current, clock()
+        return sorted(current)
+
+    def request_status(uid):
+        """'none', 'pending' or 'denied' for a user who is not allowed yet."""
+        if db is None:
+            return 'none'
+        try:
+            doc = db.collection(REQUESTS_COLLECTION).document(uid).get()
+        except Exception as exc:
+            log.warning('algo_access_request_read_failed error=%s', type(exc).__name__)
+            return 'none'
+        status = (doc.to_dict() or {}).get('status') if doc.exists else None
+        return status if status in ('pending', 'denied') else 'none'
+
+    def public(row):
+        return {key: value for key, value in row.items() if key in PUBLIC_FIELDS}
+
+    # --- catalogue -----------------------------------------------------------------------------
     def read_catalog():
         require_db()
         now = clock()
@@ -47,13 +174,93 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
         cache['at'] = now
         return cache['rows']
 
+    @router.get('/access')
+    async def get_access(current_user: str = Depends(get_current_user)):
+        owner_flag = is_owner(current_user)
+        allowed = owner_flag or is_allowed(current_user)
+        return {'allowed': allowed, 'owner': owner_flag, 'request': 'granted' if allowed else request_status(current_user)}
+
+    @router.post('/access/request')
+    async def request_access(current_user: str = Depends(get_current_user)):
+        require_db()
+        if is_allowed(current_user):
+            return {'allowed': True, 'request': 'granted'}
+        email = email_of(current_user)
+        if not email:
+            raise HTTPException(400, 'Verify your email address before requesting access')
+        try:
+            db.collection(REQUESTS_COLLECTION).document(current_user).set({
+                'uid': current_user, 'email': email, 'status': 'pending', 'requested_at': now_iso(), 'decided_at': None})
+        except Exception as exc:
+            unavailable('access_request', exc, 'Could not record your request')
+        return {'allowed': False, 'request': 'pending'}
+
+    @router.get('/access/admin')
+    async def admin(current_user: str = Depends(get_current_user)):
+        """Owner only: every request ever made and the current allow-list. Status is derived from the list,
+        so an email revoked from the list shows its request as revoked without a second write."""
+        require_owner(current_user)
+        require_db()
+        try:
+            listed = sorted(allowed_emails(force=True))
+            requests = [{**doc.to_dict(), 'uid': doc.id} for doc in db.collection(REQUESTS_COLLECTION).stream()]
+        except Exception as exc:
+            unavailable('access_admin', exc, 'Access requests are unavailable')
+        for row in requests:
+            stored = row.get('status', 'pending')
+            row['status'] = 'granted' if row.get('email') in listed else ('revoked' if stored == 'granted' else stored)
+        requests.sort(key=lambda row: row.get('requested_at') or '', reverse=True)
+        return {'owner': owner, 'emails': listed, 'requests': requests}
+
+    @router.put('/access/admin/emails')
+    async def set_email_access(body: EmailAccess, current_user: str = Depends(get_current_user)):
+        require_owner(current_user)
+        require_db()
+        email = body.email.strip().lower()
+        if not EMAIL_PATTERN.fullmatch(email):
+            raise HTTPException(422, 'Enter a valid email address')
+        if email == owner:
+            raise HTTPException(400, 'The owner always has access')
+        try:
+            listed = set_allowed(email, body.allowed)
+        except Exception as exc:
+            unavailable('access_admin', exc, 'Could not update access')
+        return {'email': email, 'allowed': body.allowed, 'emails': listed}
+
+    @router.put('/access/admin/requests/{uid}')
+    async def decide_request(uid: str, body: Decision, current_user: str = Depends(get_current_user)):
+        require_owner(current_user)
+        require_db()
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', uid):
+            raise HTTPException(404, 'Unknown request')
+        try:
+            ref = db.collection(REQUESTS_COLLECTION).document(uid)
+            doc = ref.get()
+            email = (doc.to_dict() or {}).get('email') if doc.exists else None
+            if not email:
+                raise HTTPException(404, 'Unknown request')
+            if email == owner:
+                raise HTTPException(400, 'The owner always has access')
+            listed = set_allowed(email, body.allowed)
+            ref.set({'status': 'granted' if body.allowed else 'denied', 'decided_at': now_iso()}, merge=True)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            unavailable('access_admin', exc, 'Could not update access')
+        return {'uid': uid, 'email': email, 'allowed': body.allowed, 'emails': listed}
+
     @router.get('/catalog')
     async def catalog(current_user: str = Depends(get_current_user)):
-        return {'strategies': read_catalog(), 'execution': 'paper_only'}
+        full = is_owner(current_user)
+        rows = read_catalog()
+        return {'strategies': rows if full else [public(row) for row in rows], 'execution': 'paper_only',
+                'detail': 'full' if full else 'public'}
 
     @router.get('/paper')
     async def paper(current_user: str = Depends(get_current_user)):
-        """Per-poll cost: the user's follows plus one state document per catalogued strategy."""
+        """Per-poll cost: the user's follows plus one state document per catalogued strategy.
+        Without access the trades are stripped from every account before it leaves."""
+        allowed = is_allowed(current_user)
         names = [item['id'] for item in read_catalog()]
         try:
             followed = db.collection('users').document(current_user).collection('algo_follows')
@@ -61,14 +268,16 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
             states = {}
             for name in names:
                 doc = db.collection('algo_paper_state').document(name).get()
-                states[name] = doc.to_dict() if doc.exists else None
+                state = doc.to_dict() if doc.exists else None
+                states[name] = state if allowed else without_trades(state)
         except Exception as exc:
             unavailable('paper', exc, 'Paper account data is unavailable')
-        return {'following': subscriptions, 'strategies': states, 'execution': 'paper_only'}
+        return {'following': subscriptions, 'strategies': states, 'execution': 'paper_only', 'access': allowed}
 
     @router.get('/backtest/{strategy_id}')
     async def backtest(strategy_id: str, current_user: str = Depends(get_current_user)):
         """One strategy's backtest trade ledger: a single document read, fetched on demand by the browser."""
+        require_access(current_user)
         require_db()
         if not re.fullmatch(r'[a-z0-9_]{1,64}', strategy_id):
             raise HTTPException(404, 'Unknown strategy')
@@ -87,7 +296,7 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
             raise HTTPException(404, 'Unknown strategy')
         try:
             db.collection('users').document(current_user).collection('algo_follows').document(strategy_id).set({
-                'enabled': body.enabled, 'updated_at': datetime.now(timezone.utc).isoformat()})
+                'enabled': body.enabled, 'updated_at': now_iso()})
         except Exception as exc:
             unavailable('follow', exc, 'Could not save your selection')
         return {'strategy_id': strategy_id, 'enabled': body.enabled, 'execution': 'paper_only'}

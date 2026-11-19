@@ -3,8 +3,10 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Activity, AlertCircle, ArrowLeft, ArrowUpDown, Banknote, ChevronRight, Eye, EyeOff, RefreshCw, Search, ShieldCheck, Star, TrendingUp, Wallet } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { AccessBanner, AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import AlgoDetail from './AlgoDetail';
-import { PERIODS, algoState, clock, equityPoints, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
+import { useAlgoAccess } from './useAlgoAccess';
+import { PERIODS, algoState, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Sparkline, tone } from './algoUi';
 import styles from './algos.module.css';
 
@@ -14,6 +16,7 @@ const VIEWS: View[] = ['algos', 'positions', 'orders'];
 
 export default function AlgoDashboard() {
   const { currentUser } = useAuth();
+  const access = useAlgoAccess();
   const [catalog, setCatalog] = useState<Strategy[]>([]);
   const [paper, setPaper] = useState<PaperResponse | null>(null);
   const [error, setError] = useState('');
@@ -79,6 +82,10 @@ export default function AlgoDashboard() {
     return () => { controller.abort(); window.clearInterval(timer); window.clearInterval(clockTimer); };
   }, [run, loadCatalog, loadPaper]);
 
+  // A grant takes effect on the next paper poll, which then carries the trades.
+  const requestAccess = access.requestAccess;
+  const labAccess = useMemo<LabAccess>(() => ({ allowed: access.allowed, request: access.request, requestAccess }), [access.allowed, access.request, requestAccess]);
+
   async function follow(id: string, enabled: boolean) {
     if (!currentUser || saving || !paper) return;
     setSaving(true);
@@ -101,13 +108,14 @@ export default function AlgoDashboard() {
     const link = document.createElement('a'); link.href = url; link.download = `${strategyId}-paper-trades.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
-  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} />;
+  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} access={labAccess} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} />;
 }
 
-export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null> };
+export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; access?: LabAccess; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null> };
 
-/** Everything on screen, given data. Holds only view state: the open tab, the open algo and the return period. */
-export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, onRefresh, onFollow, onDownload, loadBacktest }: AlgoLabProps) {
+/** Everything on screen, given data. Holds only view state: the open tab, the open algo and the return period.
+ *  Cards and backtest figures show for everyone; the trades sections show only when `access.allowed`. */
+export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, access = openAccess, onRefresh, onFollow, onDownload, loadBacktest }: AlgoLabProps) {
   const [view, setView] = useState<View>('algos');
   const [algoId, setAlgoId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('1y');
@@ -134,14 +142,15 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, onRe
   }, []);
 
   const detail = algoId ? catalog.find(item => item.id === algoId) : undefined;
-  const openCount = catalog.filter(item => paper?.strategies[item.id]?.open_position).length * 2;
+  const openCount = catalog.filter(item => inTrade(paper?.strategies[item.id])).length * 2;
 
   let main;
   if (!catalog.length) main = <div className={styles.card}><EmptyRow>{loading ? 'Loading strategies…' : error || 'No strategies are listed in the catalogue yet.'}</EmptyRow>{!loading && <button className={styles.outlineButton} onClick={onRefresh}>Refresh catalogue</button>}</div>;
   else if (algoId) main = <div className={styles.split}>
     <AlgoRail catalog={catalog} activeId={algoId} period={period} onPeriod={setPeriod} onOpen={id => go(view, id)} />
-    <div className={styles.splitMain}>{detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} period={period} onFollow={enabled => onFollow(detail.id, enabled)} onDownload={() => onDownload(detail.id)} loadBacktest={loadBacktest} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>}</div>
+    <div className={styles.splitMain}>{detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} period={period} onFollow={enabled => onFollow(detail.id, enabled)} onDownload={() => onDownload(detail.id)} loadBacktest={loadBacktest} access={access} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>}</div>
   </div>;
+  else if (!access.allowed && view !== 'algos') main = <AccessCard access={access} what={view === 'positions' ? 'Open positions' : 'Simulated orders'} />;
   else if (view === 'positions') main = <PositionsView catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
   else if (view === 'orders') main = <OrdersView catalog={catalog} paper={paper} />;
   else main = <MyAlgos catalog={catalog} paper={paper} period={period} onPeriod={setPeriod} onOpen={id => go(view, id)} />;
@@ -161,6 +170,7 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, onRe
       </div>
     </div>
     {error && <div className={styles.notice} role="status"><AlertCircle size={16} />{error}<button onClick={onRefresh}>Retry</button></div>}
+    {!access.allowed && catalog.length > 0 && <AccessBanner access={access} />}
     <div className={styles.content}>{main}</div>
     <footer className={styles.disclaimer}><ShieldCheck size={15} /><p>Positions, orders and P&L come from shared paper model accounts, not your brokerage account. Backtests are gross historical simulations. Following an algo saves your selection; it never places orders. All times IST.</p></footer>
   </section>;
@@ -216,8 +226,9 @@ function MyAlgos({ catalog, paper, period, onPeriod, onOpen }: { catalog: Strate
       const account = paper?.strategies[item.id];
       const state = algoState(account);
       const position = account?.open_position;
+      const holding = inTrade(account);
       const realizedValue = today ? todayRealized(account) : account?.realized_pnl;
-      const livePnl = position ? account!.unrealized_pnl : realizedValue;
+      const livePnl = holding ? account!.unrealized_pnl : realizedValue;
       return <button key={item.id} className={styles.algoCard} style={{ '--i': index } as CSSProperties} onClick={() => onOpen(item.id)} aria-label={`Open ${item.name}`}>
         {paper?.following[item.id] && <span className={styles.cornerTag}>Following</span>}
         <span className={styles.cardBody}>
@@ -235,7 +246,7 @@ function MyAlgos({ catalog, paper, period, onPeriod, onOpen }: { catalog: Strate
         </span>
         <span className={styles.cardLive}>
           <span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{stateLabel[state]}{position ? <em>{position.sell_strike}/{position.buy_strike} {position.option_type}</em> : null}</span>
-          <span className={styles.cardPnl}><small>{position ? 'Unrealized' : `${prefix} realized`}</small><b className={hidden ? '' : tone(livePnl)}>{livePnl == null ? '—' : mask(money(livePnl))}</b></span>
+          <span className={styles.cardPnl}><small>{holding ? 'Unrealized' : `${prefix} realized`}</small><b className={hidden ? '' : tone(livePnl)}>{livePnl == null ? '—' : mask(money(livePnl))}</b></span>
           <ChevronRight size={16} className={styles.cardGo} aria-hidden="true" />
         </span>
       </button>;

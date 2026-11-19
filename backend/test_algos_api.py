@@ -12,7 +12,8 @@ from algos_api import create_algos_router
 class Document:
     def __init__(self, db, path): self.db, self.path = db, path
     def collection(self, name): return Collection(self.db, self.path + '/' + name)
-    def set(self, payload): self.db[self.path] = payload
+    def set(self, payload, merge=False):
+        self.db[self.path] = {**self.db[self.path], **payload} if merge and self.path in self.db else payload
     def get(self):
         return SimpleNamespace(exists=self.path in self.db, to_dict=lambda: self.db.get(self.path))
 
@@ -46,21 +47,127 @@ async def request(app, path, method='GET', user=None, body=None, extra_headers=N
     return status, json.loads(content)
 
 
+OWNER, GUEST, OUTSIDER = 'owner@example.com', 'guest@example.com', 'outsider@example.com'
+# alice owns Algo Lab, bob is on the allow-list, carol is signed in but not listed, dave has no verified email.
+EMAILS = {'alice': OWNER, 'bob': GUEST, 'carol': OUTSIDER, 'dave': None}
+ACCESS = 'feature_access/algo_lab'
+DATA_ROUTES = [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/backtest/zen_strategy_01','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]
+ADMIN_ROUTES = [('/algos/access/admin','GET',None),('/algos/access/admin/emails','PUT',{'email': OUTSIDER, 'allowed': True}),('/algos/access/admin/requests/carol','PUT',{'allowed': True})]
+
+
+def make_app(db, user, **options):
+    options.setdefault('email_lookup', EMAILS.get)
+    options.setdefault('owner_email', ' Owner@Example.com ')
+    app = FastAPI()
+    app.include_router(create_algos_router(db, user, **options))
+    return app
+
+
 class APIAuthenticationTests(unittest.TestCase):
     def setUp(self):
-        self.db = Database({'algo_catalog/zen_strategy_01': {'name': 'One'}, 'algo_catalog/zen_strategy_02': {'name': 'Two'}})
+        self.db = Database({'algo_catalog/zen_strategy_01': {'name': 'One', 'rules': ['secret'], 'limitations': 'x', 'exit_policy': 'y', 'volatility_window': 150, 'metrics': {'trade_count': 1}},
+                            'algo_catalog/zen_strategy_02': {'name': 'Two'}, ACCESS: {'emails': [' Guest@Example.com ']}})
         self.catalog_keys = set(self.db)
         async def user(authorization: str = Header(None)):
-            if authorization not in ('Bearer alice','Bearer bob'): raise HTTPException(401)
+            if authorization not in ('Bearer alice','Bearer bob','Bearer carol','Bearer dave'): raise HTTPException(401)
             return authorization.split()[1]
-        self.app = FastAPI()
         # catalog_ttl=0: these tests change the catalogue between requests and expect to see it at once.
-        self.app.include_router(create_algos_router(self.db, user, catalog_ttl=0))
+        self.app = make_app(self.db, user, catalog_ttl=0)
 
     def test_auth_required_for_all_routes(self):
-        for path, method, body in [('/algos/catalog','GET',None),('/algos/paper','GET',None),('/algos/backtest/zen_strategy_01','GET',None),('/algos/follow/zen_strategy_01','PUT',{'enabled':True})]:
+        for path, method, body in DATA_ROUTES + ADMIN_ROUTES + [('/algos/access','GET',None),('/algos/access/request','POST',None)]:
             self.assertEqual(asyncio.run(request(self.app,path,method,body=body))[0],401)
         self.assertEqual(set(self.db), self.catalog_keys)
+
+    def test_trades_need_a_listed_or_owner_email_but_stats_are_open(self):
+        self.db['algo_backtests/zen_strategy_01'] = {'trade_count': 1, 'trades': [{'pnl': 10.0}]}
+        self.db['algo_paper_state/zen_strategy_01'] = {'capital': 1.0, 'realized_pnl': 5.0, 'ledger_limit': 50,
+                                                      'open_position': {'sell_strike': 1}, 'closed_positions': [{'pnl': 1.0}]}
+        for who in ('carol', 'dave'):                                                               # not listed / no verified email
+            self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user=who))[0],403)
+            status, body = asyncio.run(request(self.app,'/algos/catalog',user=who))
+            self.assertEqual((status, body['detail'], len(body['strategies'])), (200, 'public', 2))
+            status, body = asyncio.run(request(self.app,'/algos/paper',user=who))
+            account = body['strategies']['zen_strategy_01']
+            self.assertEqual((status, body['access']), (200, False))
+            self.assertEqual((account['realized_pnl'], account['capital']), (5.0, 1.0))                # summary numbers stay
+            self.assertEqual((account['open_position'], account['closed_positions'], account['ledger_limit']), (None, [], 0))
+            self.assertEqual((account['in_trade'], account['trades_hidden']), (True, True))
+            self.assertIsNone(body['strategies']['zen_strategy_02'])
+        self.assertEqual(asyncio.run(request(self.app,'/algos/follow/zen_strategy_01','PUT','carol',{'enabled': True}))[0],200)
+        for who in ('bob', 'alice'):                                                                 # listed / owner
+            self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user=who))[0],200)
+            status, body = asyncio.run(request(self.app,'/algos/paper',user=who))
+            self.assertEqual((status, body['access']), (200, True))
+            self.assertEqual(body['strategies']['zen_strategy_01']['closed_positions'], [{'pnl': 1.0}])
+            self.assertNotIn('trades_hidden', body['strategies']['zen_strategy_01'])
+
+    def test_only_the_owner_receives_rules_and_tuning(self):
+        _, owner = asyncio.run(request(self.app,'/algos/catalog',user='alice'))
+        _, guest = asyncio.run(request(self.app,'/algos/catalog',user='bob'))
+        full = next(row for row in owner['strategies'] if row['id']=='zen_strategy_01')
+        basic = next(row for row in guest['strategies'] if row['id']=='zen_strategy_01')
+        self.assertEqual((owner['detail'], guest['detail']), ('full', 'public'))
+        self.assertEqual(full['rules'], ['secret'])
+        for secret in ('rules','limitations','exit_policy','volatility_window'):
+            self.assertNotIn(secret, basic)
+        self.assertEqual((basic['name'], basic['metrics'], basic['execution']), ('One', {'trade_count': 1}, 'paper_only'))
+
+    def test_access_status_and_request_flow(self):
+        get = lambda who: asyncio.run(request(self.app,'/algos/access',user=who))[1]
+        self.assertEqual(get('alice'), {'allowed': True, 'owner': True, 'request': 'granted'})
+        self.assertEqual(get('bob'), {'allowed': True, 'owner': False, 'request': 'granted'})
+        self.assertEqual(get('carol'), {'allowed': False, 'owner': False, 'request': 'none'})
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/request','POST','dave'))[0], 400)
+        status, body = asyncio.run(request(self.app,'/algos/access/request','POST','carol'))
+        self.assertEqual((status, body), (200, {'allowed': False, 'request': 'pending'}))
+        self.assertEqual(self.db['algo_access_requests/carol']['email'], OUTSIDER)
+        self.assertEqual(get('carol')['request'], 'pending')
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/request','POST','bob'))[1], {'allowed': True, 'request': 'granted'})
+
+    def test_admin_routes_exist_only_for_the_owner(self):
+        for who in ('bob','carol','dave'):
+            for path, method, body in ADMIN_ROUTES:
+                self.assertEqual(asyncio.run(request(self.app,path,method,who,body=body))[0],404)
+        self.assertEqual(set(self.db), self.catalog_keys)
+
+    def test_owner_grants_declines_and_revokes(self):
+        asyncio.run(request(self.app,'/algos/access/request','POST','carol'))
+        _, body = asyncio.run(request(self.app,'/algos/access/admin',user='alice'))
+        self.assertEqual((body['owner'], body['emails']), (OWNER, [GUEST]))
+        self.assertEqual([(row['uid'], row['email'], row['status']) for row in body['requests']], [('carol', OUTSIDER, 'pending')])
+        # Grant: the email joins the list and the data routes open at once.
+        status, body = asyncio.run(request(self.app,'/algos/access/admin/requests/carol','PUT','alice',{'allowed': True}))
+        self.assertEqual((status, body['emails']), (200, [GUEST, OUTSIDER]))
+        self.assertEqual(self.db[ACCESS]['emails'], [GUEST, OUTSIDER])
+        self.assertEqual(self.db['algo_access_requests/carol']['status'], 'granted')
+        self.db['algo_backtests/zen_strategy_01'] = {'trade_count': 0, 'trades': []}
+        self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user='carol'))[0], 200)
+        self.assertNotIn('rules', asyncio.run(request(self.app,'/algos/catalog',user='carol'))[1]['strategies'][0])
+        # Revoke by email: the request shows as revoked and the trades close again.
+        asyncio.run(request(self.app,'/algos/access/admin/emails','PUT','alice',{'email': ' Outsider@Example.com', 'allowed': False}))
+        self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user='carol'))[0], 403)
+        _, body = asyncio.run(request(self.app,'/algos/access/admin',user='alice'))
+        self.assertEqual(body['requests'][0]['status'], 'revoked')
+        # Decline: recorded on the request, nothing added to the list.
+        asyncio.run(request(self.app,'/algos/access/admin/requests/carol','PUT','alice',{'allowed': False}))
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access',user='carol'))[1]['request'], 'denied')
+        self.assertEqual(self.db[ACCESS]['emails'], [GUEST])
+        # Direct grant without a request; bad input is rejected; the owner cannot be listed.
+        asyncio.run(request(self.app,'/algos/access/admin/emails','PUT','alice',{'email': 'new@example.com', 'allowed': True}))
+        self.assertEqual(self.db[ACCESS]['emails'], [GUEST, 'new@example.com'])
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/admin/emails','PUT','alice',{'email': 'nope', 'allowed': True}))[0], 422)
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/admin/emails','PUT','alice',{'email': OWNER, 'allowed': True}))[0], 400)
+        self.assertEqual(asyncio.run(request(self.app,'/algos/access/admin/requests/nobody','PUT','alice',{'allowed': True}))[0], 404)
+
+    def test_missing_access_document_admits_only_the_owner_to_trades(self):
+        del self.db[ACCESS]
+        self.db['algo_backtests/zen_strategy_01'] = {'trade_count': 0, 'trades': []}
+        self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user='bob'))[0], 403)
+        self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user='alice'))[0], 200)
+        asyncio.run(request(self.app,'/algos/access/admin/emails','PUT','alice',{'email': GUEST, 'allowed': True}))
+        self.assertEqual(self.db[ACCESS], {'emails': [GUEST]})
+        self.assertEqual(asyncio.run(request(self.app,'/algos/backtest/zen_strategy_01',user='bob'))[0], 200)
 
     def test_follow_is_user_scoped_idempotent_and_does_not_start_worker(self):
         for _ in range(2):
@@ -101,7 +208,7 @@ class APIAuthenticationTests(unittest.TestCase):
                 streams.append(name);return Database.collection(self,name)
         db=Counting(self.db)
         async def user(authorization: str = Header(None)): return 'alice'
-        app=FastAPI();app.include_router(create_algos_router(db,user,catalog_ttl=60,clock=lambda:clock[0]))
+        app=make_app(db,user,catalog_ttl=60,clock=lambda:clock[0])
         for _ in range(3): self.assertEqual(asyncio.run(request(app,'/algos/paper',user='alice'))[0],200)
         asyncio.run(request(app,'/algos/catalog',user='alice'))
         self.assertEqual(streams.count('algo_catalog'),1)                 # one stream serves every poll
@@ -117,7 +224,7 @@ class APIAuthenticationTests(unittest.TestCase):
                     def stream(self): raise RuntimeError('quota')
                 return Exploding()
         async def user(): return 'alice'
-        app=FastAPI();app.include_router(create_algos_router(Broken(),user,catalog_ttl=0))
+        app=make_app(Broken(),user,catalog_ttl=0)
         with self.assertLogs('algos_api',level='WARNING') as captured:
             self.assertEqual(asyncio.run(request(app,'/algos/catalog'))[0],503)
         self.assertIn('algos_api_unavailable route=catalog error=RuntimeError',' '.join(captured.output))
@@ -125,9 +232,8 @@ class APIAuthenticationTests(unittest.TestCase):
     def test_unknown_strategy_and_unavailable_storage_fail_explicitly(self):
         status, _ = asyncio.run(request(self.app,'/algos/follow/unknown','PUT','alice',{'enabled':True}))
         self.assertEqual(status,404)
-        app = FastAPI()
         async def user(): return 'alice'
-        app.include_router(create_algos_router(None,user))
+        app = make_app(None,user)
         self.assertEqual(asyncio.run(request(app,'/algos/paper'))[0],503)
         self.assertEqual(asyncio.run(request(app,'/algos/catalog'))[0],503)
         self.assertEqual(asyncio.run(request(app,'/algos/backtest/zen_strategy_01'))[0],503)

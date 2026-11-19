@@ -304,3 +304,16 @@ button.calendarCell:hover { box-shadow: inset 0 0 0 1px var(--border); }
   .algoCard, .cardGo { transition: none; }
   .algoCard:hover, .algoCard:hover .cardGo { transform: none; }
 }
+
+/* Invitation-only sections: the card replaces a trades section, the banner sits under the tabs. Nothing about the trades is on either. */
+.locked { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 520px; margin: 24px auto; padding: 40px 32px; text-align: center; }
+.lockIcon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 6px; color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); border-radius: 14px; }
+.lab .locked h2 { font-size: 17px; }
+.locked p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; color: var(--muted-foreground); }
+.locked .followButton { margin: 4px 0 0; }
+.lockError { color: var(--down); }
+.accessBanner { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 10px 14px; font-size: 12px; color: var(--muted-foreground); background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 7px; }
+.accessBanner > svg { flex-shrink: 0; color: var(--primary); }
+.accessBanner span { flex: 1; }
+.accessBanner button { padding: 5px 11px; font-size: 12px; font-weight: 500; color: var(--primary-foreground); background: var(--primary); border-radius: 6px; white-space: nowrap; }
+.accessBanner em { font-style: normal; font-weight: 500; color: var(--foreground); white-space: nowrap; }

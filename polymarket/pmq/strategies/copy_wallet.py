@@ -33,19 +33,13 @@ class CopyWallet(Strategy):
         return max(self.params["stake_usd"], self.min_order_usd * 1.1)
 
 
-class CopySubstantialService(CopyWallet):
-    """Wallet checked on 16 Nov 2026: +$6.1M all-time on $1.44B volume (about 0.4%), +$3.1M in the
-    last month, worst drawdown -$4.6M. Mostly sports, about half bought during games. Expected to
-    lose to copy delay; this account measures by how much."""
-    name = "copy_substantial_service"
-    description = "Copies the first buy in each market by Substantial-Service (0x2c33...0563), a large sports trader, at the price we could actually get after the delay."
-    origin = "wallet 0x2c335066fe58fe9237c3d3dc7b275c2a034a0563"
-    params = dict(CopyWallet.params, wallet="0x2c335066fe58fe9237c3d3dc7b275c2a034a0563")
-
-
-# Three slower pregame wallets screened on 17 Nov 2026 (copy backtest on 80 recent first entries each,
-# price-history price 10 min later plus 1c: about +61% / +28% / +24% per bet, wide error bars and
-# picked for looking good, so paper only). Their typical fill is $11-22, so the size filter is $5.
+# Removed 19 Nov 2026 after three days of paper trading (accounts and ledger rows purged):
+#   copy_substantial_service (0x2c33...0563, in-play sports): 51 bets, 45% won, -$13.68 of $25. Copy delay.
+#   copy_goool_esports (0xda3a...381f, CS2/LoL pregame): 7 bets, 2 won, -$4.61. Its screen was 80 entries
+#     picked for looking good; research/screen_copy_wallets.py rejects it (t 1.3, older half +3%).
+#   copy_6e82_nba (0x6e82...752c): had stopped trading; its profit was old bets settling.
+# The same screen found no replacement: the two wallets that passed on the last 45 days lost money when
+# copied on their bets from 45-120 days earlier. Run that script before adding a wallet here.
 
 class CopyC8b9Politics(CopyWallet):
     """Elections/politics, about 3 new markets a day, holds about 2 weeks: more open markets, smaller bets."""
@@ -54,23 +48,3 @@ class CopyC8b9Politics(CopyWallet):
     origin = "wallet 0xc8b9a30184244d427169cf62485dde6041b2b836"
     max_open_markets = 18
     params = dict(CopyWallet.params, wallet="0xc8b9a30184244d427169cf62485dde6041b2b836", min_their_usd=5.0, stake_usd=1.1)
-
-
-class CopyGooolEsports(CopyWallet):
-    """CS2/LoL before the match, about 6 new markets a day."""
-    name = "copy_goool_esports"
-    description = "Copies the first buy in each market by Gooooooollllllllll (0xda3a...381f), a CS2 and League of Legends pregame trader."
-    origin = "wallet 0xda3a9b7afff7b44ad4fd75308723194e0a11381f"
-    params = dict(CopyWallet.params, wallet="0xda3a9b7afff7b44ad4fd75308723194e0a11381f", min_their_usd=5.0)
-
-
-class Copy6e82Nba(CopyWallet):
-    """NBA/WNBA before the game, about 2 new markets a day.
-
-    Paused 17 Nov 2026: the wallet made no buys at all in the 30 days before. Its recent profit was old
-    bets settling, which is why it passed the screen. Nothing to copy."""
-    name = "copy_6e82_nba"
-    halted = True
-    description = "Copies the first buy in each market by wallet 0x6e82...752c, an NBA pregame trader."
-    origin = "wallet 0x6e82b93eb57b01a63027bd0c6d2f3f04934a752c"
-    params = dict(CopyWallet.params, wallet="0x6e82b93eb57b01a63027bd0c6d2f3f04934a752c", min_their_usd=5.0)

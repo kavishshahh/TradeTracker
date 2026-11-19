@@ -10,8 +10,8 @@ order-placement code anywhere in this folder.
 | Piece | Location |
 |---|---|
 | Feed-driven paper trader | `polymarket/worker.py`, `feed.py`, `store.py`, `pmq/` |
-| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`, `updown_latency_2bp`, `updown_latency_1bp`, `copy_substantial_service`, `copy_c8b9_politics`, `copy_goool_esports`, `copy_6e82_nba`, `long_dated_no`) |
-| Copy trading | `polymarket/copy_algo.py` (watches Polymarket's live activity feed for copied wallets, paper fills against the book at the copy order's arrival time), wallets in `pmq/strategies/copy_wallet.py` |
+| Strategies | `polymarket/pmq/strategies/` (`crypto_fair_value`, `sports_pregame_underdog`, `updown_leader_3m`, `updown_leader_early`, `updown_latency_2bp`, `updown_latency_1bp`, `copy_c8b9_politics`, `long_dated_no`) |
+| Copy trading | `polymarket/copy_algo.py` (watches Polymarket's live activity feed for copied wallets, paper fills against the book at the copy order's arrival time), wallets in `pmq/strategies/copy_wallet.py`, screened with `research/screen_copy_wallets.py` |
 | Latency rule and probe | `polymarket/latency_algo.py` (paper fills against the book at the order's arrival time), `latency.py` (network delay probe, every 10 minutes) |
 | Research scripts | `polymarket/research/` |
 | Page and nav hook | `polymarket/frontend/`, route `src/app/poly-algos/page.tsx` |
@@ -86,7 +86,7 @@ How it reacts:
 - No stream exists for these, so they refresh on a timer: the list of open markets and the shortlist (3 min),
   hourly candles for the volatility estimate (10 min), and resolution of held markets (2 min).
 - Copy algos: Polymarket's live activity WebSocket (`wss://ws-live-data.polymarket.com`, every trade on the exchange with the trader's wallet) triggers a copy as soon as a copied wallet buys. Each copy opens a short book connection for that token and fetches the market's settings once (`clob-markets/{condition_id}`). That feed names only the taker of each trade, so a wallet's resting (maker) orders being filled never show there. Those come from Polygon: an `eth_subscribe` log subscription for the exchange's fill event with maker = a copied wallet (`wss://polygon-bor-rpc.publicnode.com`, then `wss://polygon.drpc.org`; override with `POLYGON_WS`). Chain fills arrive after the block, about 2 s later; the market is looked up from the token (`markets-by-token/{token}`).
-- `copy_6e82_nba` is paused (17 Nov 2026): the wallet had made no buys in 30 days.
+- Copy accounts removed on 19 Nov 2026 (accounts and ledger rows purged): `copy_substantial_service` (-$13.68 on 51 bets, copy delay on in-play sports), `copy_goool_esports` (-$4.61 on 7 bets) and `copy_6e82_nba` (wallet had stopped trading). Results and reasons are in `copy_wallet.py`.
 - 5-minute BTC/ETH up/down markets are always streamed (the current window and the next two) and re-checked every second, because time left is part of the rule. They are found by their fixed slugs (`btc-updown-5m-<start>`), not by the scan.
 - If the book feed goes quiet for 45 s, trading pauses until it reconnects and re-snapshots.
 
@@ -118,12 +118,11 @@ The free tier allows 20,000 a day, shared with the main app.
 | `sports_pregame_underdog` | Match-winner markets, 10-240 min before start | Buy the side priced 10-40c | +25% per bet held out, ~0% in the tuning period |
 | `updown_leader_3m` (v2) | BTC/ETH 5-minute up/down | Last 3 minutes; a real trade at 70-90c in the last 10 s and the ask within 3c of it | see `backtests/` |
 | `updown_leader_early` (v2) | BTC/ETH 5-minute up/down | Same, any time after the first 15 s | see `backtests/` |
-| `copy_substantial_service` | Whatever wallet 0x2c33...0563 buys (mostly sports, half in-play) | Its first buy of $20+ under 97c in each market: limit at its price +2c, arriving 350 ms after the trade shows on the live feed plus the market's in-play delay (`sd`) or 250 ms (`itode`); fills only at the asks there then; held to resolution. $1.50 a bet, at most 15 open markets | wallet: +$6.1M on $1.44B volume (~0.4%) |
-| `copy_c8b9_politics`, `copy_goool_esports`, `copy_6e82_nba` | Wallets 0xc8b9...b836 (politics, holds weeks), 0xda3a...381f (CS2/LoL pregame), 0x6e82...752c (NBA pregame) | Same copy rule, first buy of $5+ per market; politics account $1.10 a bet, up to 18 open markets | copy backtest on 80 first entries each, price 10 min later +1c: +61% / +28% / +24% per bet (wide error bars, picked for looking good) |
+| `copy_c8b9_politics` | Wallet 0xc8b9...b836 (elections and politics, holds about 2 weeks) | Its first buy of $5+ under 97c in each market: limit at its price +2c, arriving 350 ms after the trade shows on the live feed; fills only at the asks there then; held to resolution. $1.10 a bet, up to 18 open markets | copy backtest on 80 first entries, price 10 min later +1c: +61% per bet (wide error bars) |
 | `updown_latency_2bp_real` | BTC/ETH 5-minute up/down | The 2 bp rule with a 350 ms order delay, the figure measured on real orders | first live test, 16 Nov 2026 |
 | `updown_latency_2bp`, `updown_latency_1bp` | BTC/ETH 5-minute up/down | Binance perp moves 2 bp (or 1 bp) in 200 ms: buy the matching side with a limit at the ask seen; the simulated order arrives 100 ms later and fills only if that ask is still there (`latency_algo.py`) | tick research, see `research/README.md` |
 
-Paused (`halted = True` on the class): all of them except the four `copy_` algos (added 17 Nov 2026). The three `updown_latency` algos were paused on
+Paused (`halted = True` on the class): all of them except `copy_c8b9_politics` and `long_dated_no`. The three `updown_latency` algos were paused on
 16 Nov 2026 after a real-order test: Polymarket holds taker orders on these markets for 250 ms, so the
 quotes the paper accounts assumed are gone before a real order is matched. Also paused: `crypto_fair_value`,
 `sports_pregame_underdog` and both `updown_leader` algos. They place no new bets; open bets still settle.

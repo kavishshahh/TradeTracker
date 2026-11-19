@@ -412,6 +412,11 @@ class Store:
                 (ev.exit_ts, ev.exit_value, ev.reason, ev.pnl, ev.pnl_pct, row_id))
             return self._record(cur.fetchone())
 
+    def update_stop_loss(self, row_id: int, stop_loss: float) -> None:
+        """Persist a moved stop (profit lock) on the open position."""
+        with self._cursor() as cur:
+            cur.execute("UPDATE zc_positions SET stop_loss = %s WHERE id = %s AND status = 'open'", (stop_loss, row_id))
+
     def set_email_status(self, row_id: int, kind: str, status: str) -> None:
         if kind not in ("entry", "exit"):
             raise ValueError(kind)

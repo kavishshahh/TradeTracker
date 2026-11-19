@@ -285,6 +285,16 @@ class FirestoreStore:
             return row
         return self._record(self._write(close))
 
+    def update_stop_loss(self, row_id, stop_loss):
+        """Persist a moved stop (profit lock) on the open position; one write, only when the stop moves."""
+        ref = self.root.collection('positions').document(str(row_id))
+        def update(tx):
+            row = self._get(ref,tx)
+            if not row or row['status'] != 'open': return None
+            row['stop_loss'] = clean(stop_loss); tx.set(ref,row)
+            return row
+        return self._record(self._write(update))
+
     def closed_positions(self, limit=50):
         query = self.root.collection('closed').order_by('id',direction='DESCENDING').limit(limit)
         return [self._record(snap.to_dict()) for snap in self._stream(query)]

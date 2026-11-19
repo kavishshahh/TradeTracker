@@ -274,13 +274,16 @@ class Runner:
             self._lock.release()
 
     def _restore_cooldown(self) -> None:
-        """After a restart, rebuild the post-stop cooldown from the last closed trade (one read, once)."""
-        if getattr(self, "_cooldown_restored", False) or not self.cfg.strategy.stop_cooldown_sessions:
+        """After a restart, rebuild the post-stop cooldown and today's re-entry count from the last closed
+        trades (one read, once)."""
+        st = self.cfg.strategy
+        daily = st.max_entries_per_day is not None or st.reentry_after_stop_only
+        if getattr(self, "_cooldown_restored", False) or not (st.stop_cooldown_sessions or daily):
             return
         self._cooldown_restored = True
-        last = self.store.closed_positions(limit=1)
-        if last and last[0].exit_ts is not None:
-            self.engine.note_exit(last[0].exit_ts, last[0].exit_reason)
+        last = self.store.closed_positions(limit=max(1, st.max_entries_per_day or 2) if daily else 1)
+        for row in sorted((r for r in last if r.exit_ts is not None), key=lambda r: r.exit_ts):
+            self.engine.note_exit(row.exit_ts, row.exit_reason)
 
     def _evaluate(self, now: datetime, minute: datetime) -> dict:
         self._restore_cooldown()
@@ -332,6 +335,10 @@ class Runner:
                                       "expiry": chain.expiry.isoformat() if chain else None,
                                       "position_open": position is not None,
                                       **{k: v for k, v in res.diagnostics.items()}})
+        moved_stop = res.diagnostics.get("stop_moved_to") if res.diagnostics else None
+        if moved_stop is not None and open_row is not None and res.action != "exit":
+            self.store.update_stop_loss(open_row.id, moved_stop)        # profit lock: keep it across restarts
+            log.info("stop_moved", extra={"signal_id": open_row.signal_id, "stop_loss": moved_stop})
         if res.action == "exit" and open_row is not None:
             closed = self.store.close_position(open_row.id, res.exit)
             if closed is not None:

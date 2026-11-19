@@ -231,3 +231,15 @@ def test_dashboard_inputs_reread_ledger_only_after_a_close(setup,monkeypatch):
         held,totals,mark,closed=store.dashboard_inputs()
         assert held is None and mark is None and totals['closed_trades']==1 and len(closed)==1
         store.dashboard_inputs();assert streams.count(ledger)==2
+
+
+def test_moved_stop_is_persisted_on_the_open_position_only(setup):
+    db,clock,factory=setup;store=factory()
+    row=store.insert_position(position(),'BEARISH')
+    assert store.open_position_row().stop_loss==145
+    assert store.update_stop_loss(row.id,100.0).stop_loss==100.0
+    assert store.open_position_row().stop_loss==100.0
+    from strategy.engine import ExitEvent
+    store.close_position(row.id,ExitEvent('Profit lock',clock[0],100.5,-32.5,-0.01))
+    assert store.update_stop_loss(row.id,90.0) is None          # closed: nothing changes
+    assert store.closed_positions()[0].stop_loss==100.0

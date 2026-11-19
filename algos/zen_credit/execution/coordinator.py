@@ -8,7 +8,7 @@ from data.providers.dhan import DhanLiveProvider
 from execution.firestore_store import SnapshotHistory
 from main import Runner, configure_paper_logging
 from paper_worker import run_round
-from strategy.registry import STRATEGIES
+from strategy.registry import RESEARCH_ONLY, STRATEGIES
 from utils.time import now_ist
 
 log = logging.getLogger('paper.coordinator')
@@ -39,9 +39,10 @@ class PaperCoordinator:
             log.info('paper_catalog_start minute=%s', now.isoformat())
             catalog = {doc.id: doc.to_dict() for doc in self.db.collection('algo_catalog').stream(timeout=15)}
             log.info('paper_catalog_loaded minute=%s strategies=%s', now.isoformat(),
-                     {name: bool(catalog.get(name, {}).get('enabled', False)) for name in STRATEGIES if name != 'description'})
+                     {name: bool(catalog.get(name, {}).get('enabled', False)) for name in STRATEGIES
+                      if name != 'description' and name not in RESEARCH_ONLY})
             for name in STRATEGIES:
-                if name == 'description' or name in self.runners:
+                if name == 'description' or name in RESEARCH_ONLY or name in self.runners:
                     continue
                 record = catalog.get(name, {})
                 cfg = replace(CONFIG, strategy=replace(CONFIG.strategy, capital=float(record.get('capital', CONFIG.strategy.capital))),

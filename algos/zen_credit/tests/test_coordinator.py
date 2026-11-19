@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from execution.coordinator import PaperCoordinator
-from strategy.registry import STRATEGIES
+from strategy.registry import RESEARCH_ONLY, STRATEGIES   # research-only strategies get no paper runner
 from utils.time import IST
 
 
@@ -59,7 +59,7 @@ class CoordinatorTests(unittest.TestCase):
         result = coordinator.run_once(now)
         self.assertEqual(result['strategies']['zen_strategy_01']['status'], 'exit')
         # one runner per registered strategy, in registry order; catalogue rows are optional
-        self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description'])
+        self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description' and name not in RESEARCH_ONLY])
         self.assertTrue(all(item[2] == 'dhan' and item[3] is provider for item in seen))
         self.assertEqual(seen[1][1], 120000)
         coordinator.lock.acquire()
@@ -69,7 +69,7 @@ class CoordinatorTests(unittest.TestCase):
             coordinator.lock.release()
         coordinator.run_once(now)
         # one runner per registered strategy, in registry order; catalogue rows are optional
-        self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description'])
+        self.assertEqual([item[0] for item in seen], [name for name in STRATEGIES if name != 'description' and name not in RESEARCH_ONLY])
 
 
 if __name__ == '__main__': unittest.main()

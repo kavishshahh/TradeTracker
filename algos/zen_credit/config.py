@@ -88,6 +88,11 @@ class StrategyConfig:
     stop_cooldown_sessions: int = 0            # >0: after a stop, no entries for the rest of that session and this many more
     time_exit: time = time(14, 53)             # next-trading-day square-off time
     time_exit_on_expiry: bool = False          # True: scheduled exit is on the expiry day, not the next session
+    time_exit_same_day: bool = False           # True: scheduled exit is on the entry day (intraday strategy)
+    max_entries_per_day: int | None = None     # no new entry once this many trades have closed today
+    reentry_after_stop_only: bool = False      # after a non-stop exit today, no new entry until tomorrow
+    profit_lock_trigger_fraction: float | None = None  # once open profit reaches this fraction of the credit ...
+    profit_lock_keep_fraction: float = 0.0     # ... the stop moves to keep this fraction of it (0 = break-even)
     max_days_to_expiry: int | None = None      # no new entry when the nearest expiry is further than this
     allow_expiry_day_entry: bool = True        # False: never open a position on the expiry date itself
     # Optional provider-history replay profile, inferred from timestamp clusters.

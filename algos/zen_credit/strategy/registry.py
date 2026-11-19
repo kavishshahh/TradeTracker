@@ -10,7 +10,13 @@ STRATEGIES={'description':'Original supplied-description interpretation',
             'ratio_strategy_04':'ratio_strategy_03 with drawdown-tuned execution',
             'zen_strategy_05':'zen_strategy_01 with drawdown-capped risk rules',
             'zen_strategy_06':'zen_strategy_02 with drawdown-capped risk rules',
-            'ratio_strategy_08':'ratio_strategy_04 without the put volatility cap, short strike 50 points in the money'}
+            'zen_strategy_07':'Damper replica: zen_strategy_01 signal traded intraday',
+            'ratio_strategy_08':'ratio_strategy_04 without the put volatility cap, short strike 50 points in the money',
+            'zen_strategy_09':'zen_strategy_02 signal traded intraday with a 30% target and capped lots'}
+
+# Researched and kept in the code for replays, but never run by the paper worker (see execution/coordinator.py)
+# and not in the catalogue: their edge does not survive trading costs. Shown under Algo Lab > Research.
+RESEARCH_ONLY=frozenset({'zen_strategy_07','zen_strategy_09'})
 
 
 def strategy_names():
@@ -37,9 +43,15 @@ def get_strategy(name='description'):
     if name=='zen_strategy_06':
         from strategy import zen_strategy_06_variance_capped
         return zen_strategy_06_variance_capped
+    if name=='zen_strategy_07':
+        from strategy import zen_strategy_07_damper
+        return zen_strategy_07_damper
     if name=='ratio_strategy_08':
         from strategy import ratio_strategy_08_fluxer_itm
         return ratio_strategy_08_fluxer_itm
+    if name=='zen_strategy_09':
+        from strategy import zen_strategy_09_intraday_capped
+        return zen_strategy_09_intraday_capped
     raise ValueError(f'Unknown strategy: {name}')
 
 

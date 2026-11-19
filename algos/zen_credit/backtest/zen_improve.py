@@ -39,9 +39,11 @@ BASE = dict(
     width=400, strike_off=0,
     target_mode="points", target_pts=10.0, target_frac=0.5, target_day_only=False,
     stop_pts=45.0, stop_delay=0, hard_stop_pts=None, stop_mode="premium",
-    exit_mode="next_day", exit_time=time(14, 53),
+    exit_mode="next_day", exit_time=time(14, 53), hist_exit_time=time(15, 0),
     alloc=1.0, monday_frac=0.8, expiry_margin_mult=1.54, max_loss_frac=None,
     after_stop_frac=1.0, cooldown=0, max_per_day=None, daily_loss_stop=None,
+    reentry_after_stop_only=False, target_from=None,
+    lock_trigger=None, lock_keep=0.0,   # once profit reaches lock_trigger x credit, the stop moves to keep lock_keep x credit
     rank_lo=0.2, rank_hi=0.8, rv_max=None, eq_window=None, eq_frac=0.5,
 )
 
@@ -75,7 +77,7 @@ def simulate(mkt, sig, start=START, end=END, **kw) -> pd.DataFrame:
     cand_idx = np.flatnonzero(cand); cand_idx = cand_idx[(cand_idx >= start_i) & (cand_idx <= end_i)]
     sessions = sorted(set(mkt.dates)); sess_pos = {d: k for k, d in enumerate(sessions)}
     trades, i, size_mult, blocked_until = [], start_i, 1.0, None
-    day_count, day_pnl = {}, {}
+    day_count, day_pnl, day_last = {}, {}, {}
     rv = ri.daily_features(mkt)["rv20"].to_numpy() if c["rv_max"] is not None else None
     pnls = []
     width = c["width"]
@@ -87,6 +89,8 @@ def simulate(mkt, sig, start=START, end=END, **kw) -> pd.DataFrame:
         if blocked_until is not None and sess_pos[d] < blocked_until:
             i += 1; continue
         if c["max_per_day"] is not None and day_count.get(d, 0) >= c["max_per_day"]:
+            i += 1; continue
+        if c["reentry_after_stop_only"] and day_count.get(d, 0) and day_last.get(d) != "stop":
             i += 1; continue
         if c["daily_loss_stop"] is not None and day_pnl.get(d, 0.0) <= -c["daily_loss_stop"] * CAPITAL:
             i += 1; continue
@@ -109,27 +113,45 @@ def simulate(mkt, sig, start=START, end=END, **kw) -> pd.DataFrame:
             lots = min(lots, int(CAPITAL * c["max_loss_frac"] // (c["stop_pts"] * lot)))
         if lots <= 0:
             i += 1; continue
-        if c["exit_mode"] == "expiry" or d >= expiry:
+        if c["exit_mode"] == "same_day":          # intraday (Stratzy's Damper): flat by the scheduled exit
+            exit_day = d
+        elif c["exit_mode"] == "expiry" or d >= expiry:
             exit_day = expiry
         else:
             exit_day = min(_next_session(sessions, sess_pos, d), expiry)
-        clock_t = time(15, 0) if (c["exit_mode"] == "next_day" and HIST_START <= d <= HIST_END) else c["exit_time"]
-        target = (c["target_pts"] if c["target_mode"] == "points" else
-                  round(credit * (1 - c["target_frac"]), 2) if c["target_mode"] == "frac" else -np.inf)
+        clock_t = c["hist_exit_time"] if (c["exit_mode"] in ("next_day", "same_day") and HIST_START <= d <= HIST_END) else c["exit_time"]
+        if c["target_from"] is not None and d < c["target_from"]:
+            target = -np.inf
+        else:
+            target = (c["target_pts"] if c["target_mode"] == "points" else
+                      round(credit * (1 - c["target_frac"]), 2) if c["target_mode"] == "frac" else -np.inf)
         pos = dict(entry=mkt.clock[i], side=side, sell=sell, buy=buy, expiry=expiry, credit=credit, units=lots * lot,
                    lots=lots, target=target, stop=round(credit + c["stop_pts"], 2))
-        exit_rec = None
+        exit_rec, last_s, last_b = None, ps, pb
+        intraday = c["exit_mode"] == "same_day"
         for j in range(i + 1, mkt.n):
             dj = mkt.dates[j]
             if dj > expiry:
                 spot = mkt.close[mkt.last_idx_of_date[expiry]]
                 sv = (max(spot - sell, 0) - max(spot - buy, 0)) if side == 0 else (max(sell - spot, 0) - max(buy - spot, 0))
                 exit_rec = (j, sv, "expiry"); break
-            sv = mkt.price(j, sell, side) - mkt.price(j, buy, side)
-            if not np.isfinite(sv):
-                continue
+            s_now, b_now = mkt.price(j, sell, side), mkt.price(j, buy, side)
+            if intraday:
+                # The cache keeps only ATM +/-10 strikes, so the far hedge leg drops out after a ~500-point move and
+                # quiet strikes print no trade some minutes: carry each leg's own last price instead of skipping.
+                if np.isfinite(s_now): last_s = s_now
+                if np.isfinite(b_now): last_b = b_now
+                if not np.isfinite(s_now) and not (dj > exit_day or (dj == exit_day and mkt.times[j] >= clock_t)):
+                    continue
+                sv = last_s - last_b
+            else:
+                sv = s_now - b_now
+                if not np.isfinite(sv):
+                    continue
             if c["stop_mode"] == "premium" and sv >= pos["stop"] and (j - i) >= c["stop_delay"]:
-                exit_rec = (j, sv, "stop"); break
+                exit_rec = (j, sv, "lock" if pos["stop"] < credit + c["stop_pts"] else "stop"); break
+            if c["lock_trigger"] is not None and sv <= credit * (1 - c["lock_trigger"]):
+                pos["stop"] = min(pos["stop"], round(credit * (1 - c["lock_keep"]), 2))
             if c["hard_stop_pts"] is not None and sv >= credit + c["hard_stop_pts"]:
                 exit_rec = (j, sv, "stop"); break
             if sv <= target and not (c["target_day_only"] and dj != d):
@@ -143,6 +165,7 @@ def simulate(mkt, sig, start=START, end=END, **kw) -> pd.DataFrame:
         trades.append({**pos, "exit": mkt.clock[j], "exit_value": sv, "pnl": pnl, "reason": reason})
         pnls.append(pnl)
         day_count[d] = day_count.get(d, 0) + 1
+        day_last[d] = reason
         dx = mkt.dates[j]; day_pnl[dx] = day_pnl.get(dx, 0.0) + pnl
         if reason == "stop":
             size_mult = c["after_stop_frac"]

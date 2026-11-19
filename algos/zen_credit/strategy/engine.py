@@ -19,7 +19,7 @@ from config import StrategyConfig
 from data.providers.base import ExpirySettlement, OptionChainSnapshot
 from strategy.alpha import calculate_alpha, observed_price_change
 from strategy.alpha2 import build_atm_panel, calculate_alpha2
-from risk.exits import STOP_LOSS, ExitDecision, evaluate_exit, time_exit_due
+from risk.exits import PROFIT_LOCK, STOP_LOSS, ExitDecision, evaluate_exit, time_exit_due
 from risk.position_sizing import RiskPlan, allocated_capital, build_risk_plan, spread_pnl
 from strategy.signals import Signal, evaluate_signal, in_signal_window
 from strategy.spreads import SpreadLegs, build_spread, select_expiry
@@ -175,16 +175,45 @@ class StrategyEngine:
             return None
         s = self._leg_price(chain, pos.sell_strike, pos.option_type, "BUY")
         b = self._leg_price(chain, pos.buy_strike, pos.option_type, "SELL")
+        self._carried_hedge = None
+        if self.carry_missing_hedge and s is not None:
+            key = (pos.signal_id, to_ist(chain.timestamp).date())
+            if b is not None:
+                self._hedge_memory = (key, b, chain.spot, chain.timestamp)
+            elif self._hedge_memory is not None and self._hedge_memory[0] == key:
+                b = self._carried_hedge = self._hedge_memory[1]
+                self._carried_from = self._hedge_memory[2:]
+            elif pos.buy_price is not None and to_ist(pos.entry_ts).date() == key[1]:
+                b = self._carried_hedge = float(pos.buy_price)
+                self._carried_from = (pos.spot_at_entry, pos.entry_ts)
         if s is None or b is None:
             return None
         return round_price(s - b)
 
+    # Historical replays only (never set by the live runner, whose chain has every strike): the cached history
+    # keeps strikes within ATM +/-10, so a 400-point hedge leg has no price after the index moves away from it,
+    # and an intraday position could then not be valued or closed on schedule. With this on, a hedge leg with
+    # no print reuses its last price of the same session for the stop and target checks, and the exit itself
+    # books that leg at zero (the worst case for the position).
+    carry_missing_hedge: bool = False
+    _hedge_memory: tuple | None = None
+    _carried_hedge: float | None = None
+    _carried_from: tuple | None = None          # (spot, time) of the price being reused, for the replay report
+
     # ---------------------------------------------------------------- evaluation
     # Set after a stop-loss exit when stop_cooldown_sessions > 0: first date entries are allowed again.
     cooldown_until: date | None = None
+    # Exits per session date: (count, last exit reason), for max_entries_per_day / reentry_after_stop_only.
+    day_exits: dict | None = None
 
     def note_exit(self, exit_ts: datetime, reason: str | None) -> None:
-        """Start the post-stop cooldown (also used by the live runner to restore it after a restart)."""
+        """Record an exit: per-day re-entry bookkeeping and the post-stop cooldown (also used by the live
+        runner to restore both after a restart)."""
+        day = to_ist(exit_ts).date()
+        if self.day_exits is None:
+            self.day_exits = {}
+        count, _ = self.day_exits.get(day, (0, None))
+        self.day_exits = {day: (count + 1, reason)}           # only the current session matters
         sessions = self.cfg.stop_cooldown_sessions
         if not sessions or reason != STOP_LOSS:
             return
@@ -215,6 +244,16 @@ class StrategyEngine:
             return math.inf
         return pos.net_credit + (pos.stop_loss - pos.net_credit) * hard / self.cfg.stop_loss_margin_fraction
 
+    def _profit_lock_stop(self, pos: Position, value: float | None) -> float | None:
+        """The new, lower stop once the open profit has reached profit_lock_trigger_fraction of the credit."""
+        trigger = self.cfg.profit_lock_trigger_fraction
+        if trigger is None or value is None or pos.net_credit is None:
+            return None
+        if value > pos.net_credit * (1.0 - trigger):
+            return None
+        locked = round_price(pos.net_credit * (1.0 - self.cfg.profit_lock_keep_fraction))
+        return locked if pos.stop_loss is None or locked < pos.stop_loss else None
+
     def _evaluate_exit(self, view: MarketView, pos: Position, now: datetime) -> EngineResult:
         chain = view.position_chain or view.chain
         if chain is not None and self._stale(chain.timestamp, now):
@@ -231,7 +270,14 @@ class StrategyEngine:
             diag["stop_in_grace"] = stop_level if math.isfinite(stop_level) else None
         if target_until is not None:
             diag["target_active"] = now.date() <= target_until
+        if (decision is not None and decision.reason == STOP_LOSS and pos.stop_loss is not None
+                and pos.net_credit is not None and pos.stop_loss <= pos.net_credit):
+            decision = ExitDecision(PROFIT_LOCK, decision.spread_value)     # a moved stop closes at a profit or flat
         if decision is None:
+            moved = self._profit_lock_stop(pos, value)
+            if moved is not None:
+                pos.stop_loss = moved               # the caller persists it (see diagnostics["stop_moved_to"])
+                diag["stop_moved_to"] = moved
             return EngineResult("none", "position held", position=pos, diagnostics=diag)
         if decision.reason == "Expiry":
             settlement = view.settlement
@@ -245,6 +291,11 @@ class StrategyEngine:
         if decision.spread_value is None and self.require_quotes:
             return EngineResult("none", f"{decision.reason} due but no valid quotes", position=pos,
                                 diagnostics=diag)
+        if self._carried_hedge is not None and decision.spread_value is not None and decision.reason != "Expiry":
+            decision = ExitDecision(decision.reason, round_price(decision.spread_value + self._carried_hedge))
+            diag["hedge_leg_booked_at_zero"] = True
+            diag["hedge_carried_value"] = self._carried_hedge
+            diag["hedge_carried_spot"], diag["hedge_carried_ts"] = self._carried_from or (None, None)
         pnl = pct = None
         if decision.spread_value is not None and pos.net_credit is not None:
             pnl = spread_pnl(pos.net_credit, decision.spread_value, pos.units)
@@ -265,6 +316,11 @@ class StrategyEngine:
             return EngineResult("none", "outside signal window")
         if self.cooldown_until is not None and now.date() < self.cooldown_until:
             return EngineResult("none", f"cooldown after stop until {self.cooldown_until.isoformat()}")
+        exits_today, last_exit = (self.day_exits or {}).get(now.date(), (0, None))
+        if self.cfg.max_entries_per_day is not None and exits_today >= self.cfg.max_entries_per_day:
+            return EngineResult("none", f"{exits_today} trades already today (limit {self.cfg.max_entries_per_day})")
+        if self.cfg.reentry_after_stop_only and exits_today and last_exit != STOP_LOSS:
+            return EngineResult("none", f"no re-entry today after a {last_exit} exit")
         problems = self.data_problems(view) if self.require_quotes else []
         if not self.require_quotes and (view.spot_bars is None or view.spot_bars.empty):
             problems = ["no spot bars"]

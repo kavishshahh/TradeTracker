@@ -323,7 +323,7 @@ def prepare_option_quotes(options):
 class DhanReplay(Backtester):
     def __init__(self, cfg, bars, options, slippage_points=0, settlement_loader=None,
                  calendar=None, expiry_resolver=expiries_for, lot_resolver=lot_size,
-                 prepared_quotes=None, strategy_name="description"):
+                 prepared_quotes=None, strategy_name="description", carry_missing_hedge=False):
         cfg = registry.apply_profile(strategy_name, cfg)
         self.strategy_name = strategy_name
         super().__init__(cfg, calendar or Nifty2024Calendar(), bars, expiry_resolver,
@@ -337,6 +337,7 @@ class DhanReplay(Backtester):
         self.slippage_points = slippage_points
         self.engine = registry.create_engine(strategy_name, cfg, self.calendar,
             entry_price_source="bidask", max_data_age_seconds=None, require_quotes=True)
+        self.engine.carry_missing_hedge = carry_missing_hedge
         self.reasons = Counter()
         self.coverage_events = []
         self.decisions = []
@@ -409,6 +410,8 @@ class DhanReplay(Backtester):
         elif result.action == "exit" and position is not None:
             details = self.trade_details[position.entry_ts]
             details["spot_at_exit"] = view.chain.spot
+            for key in ("hedge_carried_value", "hedge_carried_spot", "hedge_carried_ts"):
+                details[key] = result.diagnostics.get(key)
             details["exit_observed_ts"] = result.exit.exit_ts
             if result.exit.reason == "Expiry" and view.settlement is not None:
                 details["settlement_spot"] = view.settlement.spot
@@ -465,6 +468,9 @@ def run_cli():
     parser.add_argument("--slippage-points", type=float, default=0.0, help="assumed adverse points per leg execution")
     parser.add_argument("--fee-per-leg", type=float, default=0.0, help="assumed rupees per leg order; not an all-tax estimate")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--carry-missing-hedge", action="store_true",
+                        help="intraday strategies: a held hedge leg with no cached price reuses its last price of the "
+                             "session for stop/target checks and is booked at zero on exit (see StrategyEngine)")
     parser.add_argument("--exit-tail-days", type=int, default=7,
                         help="extra calendar days for exits; use 0 for P&L strictly through --end")
     args = parser.parse_args()
@@ -507,14 +513,15 @@ def run_cli():
     settlements = NSESettlementClient(client.cache_dir, offline=args.offline)
     replay = DhanReplay(cfg, bars, options, args.slippage_points, settlement_loader=settlements.get,
                         calendar=calendar, expiry_resolver=expiry_resolver, lot_resolver=lot_resolver,
-                        strategy_name=args.strategy)
+                        strategy_name=args.strategy, carry_missing_hedge=args.carry_missing_hedge)
     result = replay.run(start=datetime.combine(args.start, time.min, IST),
                         entry_end=datetime.combine(args.end, time.max, IST))
     result.mode = "dhan-minute-close"
     trades = result.to_frame()
     if not trades.empty:
         for col in ("sell_leg_entry", "buy_leg_entry", "scheduled_exit", "sell_leg_exit", "buy_leg_exit",
-                    "spot_at_exit", "exit_observed_ts", "settlement_spot", "settlement_source"):
+                    "spot_at_exit", "exit_observed_ts", "settlement_spot", "settlement_source",
+                    "hedge_carried_value", "hedge_carried_spot", "hedge_carried_ts"):
             trades[col] = [replay.trade_details[t].get(col) for t in trades["entry_ts"]]
         trades["exit_ts"] = [replay.trade_details[t].get("effective_exit_ts", e)
                               for t,e in zip(trades["entry_ts"],trades["exit_ts"])]
@@ -553,6 +560,7 @@ def run_cli():
     report = {"entry_start": str(args.start), "entry_end_inclusive": str(args.end),
               "download_start": str(start), "download_end_exclusive": str(stop), "config": asdict(cfg),
               "mode": result.mode, "strategy": args.strategy, "provider_history_rules": args.provider_history_rules,
+              "carry_missing_hedge": args.carry_missing_hedge,
               "coverage_complete_for_open_positions": coverage_ok,
               "missing_position_quote_minutes": len(replay.coverage_events), "open_positions_at_end": open_count,
               "missing_index_session_dates": missing_days, "index_candles": len(bars),

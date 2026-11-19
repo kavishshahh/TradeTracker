@@ -22,6 +22,7 @@ from config import StrategyConfig
 from utils.time import combine_ist, to_ist
 
 STOP_LOSS = "Stop loss"
+PROFIT_LOCK = "Profit lock"      # the stop after it was moved to or below the entry credit
 TARGET = "Target"
 TIME_EXIT = "Time exit"
 EXPIRY = "Expiry"
@@ -36,7 +37,9 @@ class ExitDecision:
 def time_exit_due(entry_ts: datetime, expiry: date, calendar: TradingCalendar,
                   cfg: StrategyConfig) -> datetime:
     entry_day = to_ist(entry_ts).date()
-    if entry_day >= expiry or cfg.time_exit_on_expiry:
+    if cfg.time_exit_same_day:
+        exit_day = entry_day
+    elif entry_day >= expiry or cfg.time_exit_on_expiry:
         exit_day = expiry
     else:
         exit_day = min(calendar.next_trading_day(entry_day), expiry)

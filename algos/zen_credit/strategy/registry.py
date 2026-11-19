@@ -9,7 +9,8 @@ STRATEGIES={'description':'Original supplied-description interpretation',
             'ratio_strategy_03':'Ratio-Fluxer style IV-skew expiry credit spread',
             'ratio_strategy_04':'ratio_strategy_03 with drawdown-tuned execution',
             'zen_strategy_05':'zen_strategy_01 with drawdown-capped risk rules',
-            'zen_strategy_06':'zen_strategy_02 with drawdown-capped risk rules'}
+            'zen_strategy_06':'zen_strategy_02 with drawdown-capped risk rules',
+            'ratio_strategy_08':'ratio_strategy_04 without the put volatility cap, short strike 50 points in the money'}
 
 
 def strategy_names():
@@ -36,6 +37,9 @@ def get_strategy(name='description'):
     if name=='zen_strategy_06':
         from strategy import zen_strategy_06_variance_capped
         return zen_strategy_06_variance_capped
+    if name=='ratio_strategy_08':
+        from strategy import ratio_strategy_08_fluxer_itm
+        return ratio_strategy_08_fluxer_itm
     raise ValueError(f'Unknown strategy: {name}')
 
 

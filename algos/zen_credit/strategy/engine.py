@@ -289,7 +289,8 @@ class StrategyEngine:
             return EngineResult("none", f"expiry {days_to_expiry} days away exceeds maximum", diagnostics=diag)
         strikes = view.chain.strikes if view.chain is not None else []
         try:
-            legs = build_spread(signal, reference_spot, strikes, expiry, self.cfg.spread_distance)
+            legs = build_spread(signal, reference_spot, strikes, expiry, self.cfg.spread_distance,
+                                self.cfg.short_strike_otm_points)
         except ValueError as exc:
             return EngineResult("none", f"spread: {exc}", diagnostics=diag)
         sell_px = buy_px = None

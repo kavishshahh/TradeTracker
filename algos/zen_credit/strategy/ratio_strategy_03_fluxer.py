@@ -226,8 +226,9 @@ def realised_vol(close: pd.Series, sessions, window: int = RV_SESSIONS) -> pd.Se
     return pd.Series(rv.reindex(sessions).to_numpy(), index=close.index)
 
 
-def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFrame:
-    """Completed start-indexed bars + decision-indexed near panel -> alpha/alpha2 frame."""
+def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame, put_rv_max: float | None = PUT_RV_MAX) -> pd.DataFrame:
+    """Completed start-indexed bars + decision-indexed near panel -> alpha/alpha2 frame.
+    ``put_rv_max`` None removes the realised-volatility cap on put spreads (ratio_strategy_08)."""
     bars = _bars(bars); clock = bars.index + pd.Timedelta(minutes=1)
     if not isinstance(panel.index, pd.DatetimeIndex) or panel.index.tz is None:
         raise ValueError('Option panel needs a timezone-aware decision clock')
@@ -243,7 +244,7 @@ def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame) -> pd.DataFram
     weekend = np.array([d.weekday() >= 5 for d in clock.date])
     # Put spreads only in a calm market: unknown realised volatility (too little history) blocks them.
     rv = realised_vol(pd.Series(bars.close.to_numpy(), index=clock), clock.date, RV_SESSIONS)
-    put_gate = (skew_s >= SKEW_PUT_MIN) & (rv <= PUT_RV_MAX)
+    put_gate = (skew_s >= SKEW_PUT_MIN) if put_rv_max is None else (skew_s >= SKEW_PUT_MIN) & (rv <= put_rv_max)
     gate = ((skew_s <= SKEW_CALL_MAX) | put_gate) & ~weekend
     alpha2 = pd.Series(np.where(gate & alpha.notna(), alpha, 0.5), index=clock)
     alpha2 = alpha2.where(alpha.notna())        # unknown alpha stays unknown

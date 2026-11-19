@@ -44,15 +44,19 @@ def select_expiry(trade_date: date, expiries: list[date]) -> date:
     return future[0]
 
 
-def build_spread(signal: Signal, spot: float, strikes, expiry: date, distance: int) -> SpreadLegs:
+def build_spread(signal: Signal, spot: float, strikes, expiry: date, distance: int, otm_points: int = 0) -> SpreadLegs:
+    """Short strike = ATM moved ``otm_points`` out of the money (negative = in the money: a lower call
+    strike, a higher put strike); the hedge sits ``distance`` further out of the money."""
     listed = set(float(s) for s in strikes)
     atm = atm_strike(spot, sorted(listed))
     if signal == Signal.BULLISH:
-        legs = SpreadLegs("PE", atm, atm - distance, expiry)
+        legs = SpreadLegs("PE", atm - otm_points, atm - otm_points - distance, expiry)
     elif signal == Signal.BEARISH:
-        legs = SpreadLegs("CE", atm, atm + distance, expiry)
+        legs = SpreadLegs("CE", atm + otm_points, atm + otm_points + distance, expiry)
     else:
         raise ValueError("no spread for Signal.NONE")
+    if otm_points and legs.sell_strike not in listed:
+        raise ValueError(f"short strike {legs.sell_strike} not listed")
     if legs.buy_strike not in listed:
         raise ValueError(f"hedge strike {legs.buy_strike} not listed")
     return legs

@@ -70,6 +70,7 @@ class StrategyConfig:
     signal_end: time = time(14, 15)
     spread_distance: int = 400                 # "400 points below/above"
     strike_reference: str = "spot"             # ATM at decision time, as described
+    short_strike_otm_points: int = 0           # short strike this far out of the money from ATM (negative = in the money)
     max_short_premium: float | None = None     # description supplies no premium cap
     # --- alpha2 details not stated by the provider (documented choices) -------
     volume_short_window: int = 5               # same horizon as the price change

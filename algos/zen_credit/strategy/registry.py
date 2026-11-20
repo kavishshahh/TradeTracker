@@ -12,7 +12,8 @@ STRATEGIES={'description':'Original supplied-description interpretation',
             'zen_strategy_06':'zen_strategy_02 with drawdown-capped risk rules',
             'zen_strategy_07':'Damper replica: zen_strategy_01 signal traded intraday',
             'ratio_strategy_08':'ratio_strategy_04 without the put volatility cap, short strike 50 points in the money',
-            'zen_strategy_09':'zen_strategy_02 signal traded intraday with a 30% target and capped lots'}
+            'zen_strategy_09':'zen_strategy_02 signal traded intraday with a 30% target and capped lots',
+            'zen_strategy_10':'45-minute price momentum rank traded from 11:45 with capped lots'}
 
 # Researched and kept in the code for replays, but never run by the paper worker (see execution/coordinator.py)
 # and not in the catalogue: their edge does not survive trading costs. Shown under Algo Lab > Research.
@@ -52,6 +53,9 @@ def get_strategy(name='description'):
     if name=='zen_strategy_09':
         from strategy import zen_strategy_09_intraday_capped
         return zen_strategy_09_intraday_capped
+    if name=='zen_strategy_10':
+        from strategy import zen_strategy_10_momentum
+        return zen_strategy_10_momentum
     raise ValueError(f'Unknown strategy: {name}')
 
 

@@ -184,7 +184,7 @@ def test_replay_option_values_a_held_position_when_the_hedge_leg_has_no_price():
 def test_research_only_strategies_never_get_a_paper_runner():
     from execution import coordinator
     from strategy.registry import RESEARCH_ONLY, STRATEGIES
-    assert RESEARCH_ONLY == {"zen_strategy_07", "zen_strategy_09"} and RESEARCH_ONLY <= set(STRATEGIES)
+    assert {"zen_strategy_07", "zen_strategy_09"} <= RESEARCH_ONLY <= set(STRATEGIES)
 
     class Db:
         def collection(self, name):

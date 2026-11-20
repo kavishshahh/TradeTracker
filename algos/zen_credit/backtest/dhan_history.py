@@ -52,6 +52,87 @@ class DhanHistoryClient:
             return result["response"]
         if self.offline:
             raise RuntimeError(f"Missing offline cache: {endpoint} {payload['fromDate']}")
+        if endpoint == "rollingoption" and self._span_days(payload) > 1:
+            data = self._rolling_by_day(payload)
+            self._store(path, endpoint, payload, data)
+            return data
+        data = self._fetch(endpoint, payload)
+        self._store(path, endpoint, payload, data)
+        return data
+
+    @staticmethod
+    def _store(path, endpoint, payload, data):
+        temp = path.with_suffix(".tmp")
+        with gzip.open(temp, "wt", encoding="utf-8") as f:
+            json.dump({"endpoint": endpoint, "request": payload, "response": data}, f)
+        temp.replace(path)
+
+    # ------------------------------------------------------------------ one day per rolling-option request
+    # Since November 2026 Dhan serves at most one day of expired-options data per request (a longer range
+    # returns HTTP 400 DH-905). A multi-day request is therefore answered from one request per session day
+    # and merged back into the old response shape, so callers and the cache of earlier ranges are unchanged.
+    DAY_SPANS = (1, 0)      # toDate = day + span; the first span Dhan accepts is kept for the session
+    _day_span = None
+
+    @staticmethod
+    def _span_days(payload):
+        try:
+            first, last = (date.fromisoformat(str(payload[k])[:10]) for k in ("fromDate", "toDate"))
+        except (KeyError, ValueError):
+            return 0
+        return (last - first).days
+
+    def _session_days(self, first, last):
+        """Dates in [first, last) that have index candles (one intraday request, normally already cached)."""
+        stamps = self.request("intraday", spot_payload(first, last)).get("timestamp") or []
+        days = sorted({date.fromordinal(_EPOCH_ORDINAL + int((int(t) + IST_OFFSET) // 86400)) for t in stamps})
+        return [d for d in days if first <= d < last]
+
+    def _rolling_by_day(self, payload):
+        first, last = (date.fromisoformat(str(payload[k])[:10]) for k in ("fromDate", "toDate"))
+        merged = {"ce": None, "pe": None}
+        for day in self._session_days(first, last):
+            part = self._rolling_day(payload, day).get("data") or {}
+            for side in merged:
+                rows = _rows_of_day(part.get(side), day)
+                if rows is None:
+                    continue
+                if merged[side] is None:
+                    merged[side] = rows
+                    continue
+                for field, values in rows.items():
+                    if isinstance(values, list):
+                        merged[side].setdefault(field, []).extend(values)
+        return {"data": merged}
+
+    def _rolling_day(self, payload, day):
+        """One session day of a rolling-option series, cached under its own (day, day + 1) request. The
+        current IST date is never cached: its candles are still arriving."""
+        canonical = {**payload, "fromDate": day.isoformat(), "toDate": (day + timedelta(days=1)).isoformat()}
+        key = hashlib.sha256(json.dumps(["rollingoption", canonical], sort_keys=True).encode()).hexdigest()
+        path = self.cache_dir / (key + ".json.gz")
+        if path.exists():
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                result = json.load(f)
+            if result["request"] != canonical or result["endpoint"] != "rollingoption":
+                raise RuntimeError("Historical cache metadata mismatch")
+            self.cached += 1
+            return result["response"]
+        spans = (self._day_span,) if self._day_span is not None else self.DAY_SPANS
+        for position, span in enumerate(spans):
+            try:
+                data = self._fetch("rollingoption", {**canonical, "toDate": (day + timedelta(days=span)).isoformat()})
+            except DhanHTTPError as exc:
+                if exc.status == 400 and position + 1 < len(spans):
+                    continue        # Dhan refused this one-day form; try the other
+                raise
+            DhanHistoryClient._day_span = span
+            if day < _today_ist():
+                self._store(path, "rollingoption", canonical, data)
+            return data
+        raise RuntimeError("Dhan historical API retries exhausted")
+
+    def _fetch(self, endpoint, payload):
         reauthorised = False
         for attempt in range(5):
             with self._rate_lock:
@@ -74,7 +155,7 @@ class DhanHistoryClient:
                     time.sleep(2 ** attempt)
                     continue
             if response.status_code != 200:
-                raise RuntimeError(f"Dhan historical API returned HTTP {response.status_code}")
+                raise DhanHTTPError(response.status_code)
             try:
                 data = response.json()
             except ValueError:
@@ -84,13 +165,40 @@ class DhanHistoryClient:
             expected = "timestamp" if endpoint == "intraday" else "data"
             if expected not in data:
                 raise RuntimeError("Dhan historical response has an unexpected schema")
-            temp = path.with_suffix(".tmp")
-            with gzip.open(temp, "wt", encoding="utf-8") as f:
-                json.dump({"endpoint": endpoint, "request": payload, "response": data}, f)
-            temp.replace(path)
             self.downloaded += 1
             return data
         raise RuntimeError("Dhan historical API retries exhausted")
+
+
+class DhanHTTPError(RuntimeError):
+    """Non-200 answer from a historical endpoint; the message carries the status only, never the body."""
+
+    def __init__(self, status):
+        super().__init__(f"Dhan historical API returned HTTP {status}")
+        self.status = status
+
+
+IST_OFFSET = 19800                                  # seconds; Dhan timestamps are epoch seconds
+_EPOCH_ORDINAL = date(1970, 1, 1).toordinal()
+
+
+def _today_ist():
+    return date.fromordinal(_EPOCH_ORDINAL + int((time.time() + IST_OFFSET) // 86400))
+
+
+def _rows_of_day(series, day):
+    """The rows of one side's arrays whose IST date is ``day`` (Dhan's toDate is inclusive, so a one-day
+    request can also return the next day). None when the side is absent or has no row that day."""
+    if not series or not series.get("timestamp"):
+        return None
+    stamps = series["timestamp"]
+    start = (day.toordinal() - _EPOCH_ORDINAL) * 86400 - IST_OFFSET
+    keep = [i for i, t in enumerate(stamps) if start <= int(t) < start + 86400]
+    if not keep:
+        return None
+    count = len(stamps)
+    return {field: ([values[i] for i in keep] if isinstance(values, list) and len(values) == count else values)
+            for field, values in series.items()}
 
 
 def chunks(start: date, end: date, days=28):

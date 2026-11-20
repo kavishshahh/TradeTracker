@@ -219,6 +219,8 @@ def test_original_contract_quotes_and_slippage():
 def test_cache_does_not_contain_credentials(tmp_path, monkeypatch):
     monkeypatch.setenv("DHAN_CLIENT_ID", "test-client-private")
     monkeypatch.setenv("DHAN_ACCESS_TOKEN", "test-token-private")
+    monkeypatch.setenv("DHAN_PIN", "")              # fixed token: never the TOTP login with backend/.env secrets
+    monkeypatch.setenv("DHAN_TOTP_SECRET", "")
     client = DhanHistoryClient(tmp_path)
     class Response:
         status_code = 200

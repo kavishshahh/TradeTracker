@@ -16,7 +16,9 @@ EXPIRY = date(2026, 10, 13)
 
 
 def provider():
-    with patch.dict('os.environ', {'DHAN_CLIENT_ID': 'test', 'DHAN_ACCESS_TOKEN': 'test'}):
+    # Blank PIN/TOTP: a fixed test token, never the TOTP login with secrets a local backend/.env may hold.
+    with patch.dict('os.environ', {'DHAN_CLIENT_ID': 'test', 'DHAN_ACCESS_TOKEN': 'test', 'DHAN_PIN': '',
+                                   'DHAN_TOTP_SECRET': ''}):
         result = DhanLiveProvider(clock=lambda: NOW, sleeper=lambda *_: None)
     result.master_date = NOW.date()
     result.contracts = pd.DataFrame({'expiry': [EXPIRY] * 3, 'SECURITY_ID': [1, 2, 3],

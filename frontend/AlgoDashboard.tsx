@@ -8,7 +8,7 @@ import AlgoDetail from './AlgoDetail';
 import AlgoResearch from './AlgoResearch';
 import type { Research } from './researchData';
 import { useAlgoAccess } from './useAlgoAccess';
-import { PERIODS, algoState, blurb, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
+import { PERIODS, algoSlug, algoState, blurb, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Sparkline, tone } from './algoUi';
 import styles from './algos.module.css';
 
@@ -120,7 +120,7 @@ export default function AlgoDashboard() {
     const cell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const csv = [fields.join(','), ...rows.map(row => fields.map(field => cell(row[field])).join(','))].join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const link = document.createElement('a'); link.href = url; link.download = `${strategyId}-paper-trades.csv`; link.click(); URL.revokeObjectURL(url);
+    const link = document.createElement('a'); link.href = url; const listed = catalog.find(item => item.id === strategyId); link.download = `${listed ? algoSlug(listed) : 'algo'}-paper-trades.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
   return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} access={labAccess} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} loadResearch={loadResearch} />;
@@ -132,31 +132,34 @@ export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; e
  *  Cards and backtest figures show for everyone; the trades sections show only when `access.allowed`. */
 export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, access = openAccess, onRefresh, onFollow, onDownload, loadBacktest, loadResearch }: AlgoLabProps) {
   const [view, setView] = useState<View>('algos');
-  const [algoId, setAlgoId] = useState<string | null>(null);
+  const [algoKey, setAlgoKey] = useState<string | null>(null);   // the ?algo= value: a name slug (or an id from an old link)
   const [period, setPeriod] = useState<Period>('1y');
 
-  // The open tab and algo live in the query string (?tab=positions, ?algo=zen_strategy_01) so reloads and back/forward keep them.
+  // The open tab and algo live in the query string (?tab=positions, ?algo=skew-afternoon-credit) so reloads and back/forward keep them.
   useEffect(() => {
     const read = () => {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get('tab') as View | null;
       setView(tab && VIEWS.includes(tab) ? tab : 'algos');
-      setAlgoId(params.get('algo'));
+      setAlgoKey(params.get('algo'));
     };
     read();
     window.addEventListener('popstate', read);
     return () => window.removeEventListener('popstate', read);
   }, []);
-  const go = useCallback((next: View, algo: string | null = null) => {
-    setView(next); setAlgoId(algo);
+  const go = useCallback((next: View, id: string | null = null) => {
+    const opened = id ? catalog.find(item => item.id === id) : undefined;
+    const algo = opened ? algoSlug(opened) : id;
+    setView(next); setAlgoKey(algo);
     const params = new URLSearchParams();
     if (next !== 'algos') params.set('tab', next);
     if (algo) params.set('algo', algo);
     const query = params.toString();
     window.history.pushState(null, '', window.location.pathname + (query ? `?${query}` : ''));
-  }, []);
+  }, [catalog]);
 
-  const detail = algoId ? catalog.find(item => item.id === algoId) : undefined;
+  const detail = algoKey ? catalog.find(item => algoSlug(item) === algoKey || item.id === algoKey) : undefined;
+  const algoId = detail?.id ?? algoKey;
   const openCount = catalog.filter(item => inTrade(paper?.strategies[item.id])).length * 2;
 
   let main;

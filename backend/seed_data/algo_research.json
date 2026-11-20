@@ -3,9 +3,9 @@
   "notes": [
     {
       "id": "zen_strategy_09",
-      "name": "Damper Intraday, low drawdown",
-      "tag": "Z9",
-      "source": "Tuned from Stratzy’s Damper Credit Spread",
+      "name": "Momentum Intraday Capped",
+      "tag": "IC",
+      "source": "Momentum Variance signal, traded intraday",
       "researched": "Nov 2026",
       "code": "algos/zen_credit/strategy/zen_strategy_09_intraday_capped.py",
       "verdict": "Not listed: the profit per trade is smaller than realistic trading costs.",
@@ -48,7 +48,7 @@
       ],
       "costs": [
         {
-          "name": "Damper Intraday, low drawdown",
+          "name": "Momentum Intraday Capped",
           "note": "This research · 24 trades a month",
           "edge_points": 2.6,
           "gross": 41.6,
@@ -56,7 +56,7 @@
           "high": -42.9
         },
         {
-          "name": "Ratio-Fluxer Afternoon Credit",
+          "name": "Skew Afternoon Credit",
           "note": "Listed, for comparison · about 1 trade a month",
           "edge_points": 60.0,
           "gross": 104.8,
@@ -66,7 +66,7 @@
         }
       ],
       "findings": [
-        "Uses the Zen Variance signal with Damper’s same-day exit, a stop at credit + 40 and one re-entry after a stop.",
+        "Uses the Momentum Variance signal with a same-day exit, a stop at credit + 40 and one re-entry after a stop.",
         "A profit lock moves the stop to break-even once 20% of the credit is earned; the target is 50% of the credit. This raised average win ÷ average loss from 0.65 to about 1.4.",
         "Lots are capped so one stop loses at most 2.5% of capital, which brought the drawdown from 31% to under 18%.",
         "About 10% of exits had no cached price for the hedge leg. The figures value it from its last trade; booking it at zero gives 16% a year with a 20.2% drawdown.",
@@ -75,13 +75,13 @@
     },
     {
       "id": "zen_strategy_07",
-      "name": "Damper replica",
-      "tag": "Z7",
-      "source": "Replica of Stratzy’s Damper Credit Spread (Dhan Algos)",
+      "name": "Momentum Intraday",
+      "tag": "MI",
+      "source": "Momentum Geometric signal, traded intraday",
       "researched": "Nov 2026",
       "code": "algos/zen_credit/strategy/zen_strategy_07_damper.py",
       "verdict": "Not listed: an 84% drawdown over three years and a losing second year.",
-      "summary": "Damper’s 316 published trades turned out to be the Zen Geometric signal traded intraday. The replica takes the same side on the same day for 220 of the 275 published trades in the year they overlap, but the year before Damper went live is a heavy loss.",
+      "summary": "The Momentum Geometric signal with a same-day exit and one re-entry after a stop. Its most recent year is strong, but the year before it is a heavy loss.",
       "stats": [
         {
           "label": "Return per year, before costs",
@@ -121,7 +121,7 @@
       ],
       "costs": [
         {
-          "name": "Damper replica",
+          "name": "Momentum Intraday",
           "note": "This research · 25 trades a month",
           "edge_points": 1.5,
           "gross": 40.9,
@@ -129,7 +129,7 @@
           "high": -101.1
         },
         {
-          "name": "Ratio-Fluxer Afternoon Credit",
+          "name": "Skew Afternoon Credit",
           "note": "Listed, for comparison · about 1 trade a month",
           "edge_points": 60.0,
           "gross": 104.8,
@@ -139,10 +139,9 @@
         }
       ],
       "findings": [
-        "Rules found from the published trades: 400-point hedge, entries from 10:15, stop near credit + 40, target when the spread is worth 10 or less, everything closed at 14:54.",
+        "Rules: 400-point hedge, entries from 10:15, stop near credit + 40, target when the spread is worth 10 or less, everything closed at 14:54.",
         "After a stop it enters once more that day, usually on the other side two minutes later. After a target or a time exit it stops for the day.",
-        "On the 178 trades matched to the minute and strike, the simulation made ₹4.39L against Damper’s published ₹4.31L.",
-        "Damper’s published record starts in September 2025, so it never shows the losing year before.",
+        "Almost all of the profit comes from the first and third years; the second year loses about a third of the capital.",
         "The seven weeks after the three-year study (1 Oct to 19 Nov 2026, 42 trades) added 19% of capital before costs."
       ]
     }

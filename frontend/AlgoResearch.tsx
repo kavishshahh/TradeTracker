@@ -65,7 +65,6 @@ function ResearchCard({ note }: { note: ResearchNote }) {
       <section aria-label="What we found">
         <h3>What we found</h3>
         <ul className={styles.findings}>{note.findings.map(text => <li key={text}>{text}</li>)}</ul>
-        <p className={styles.code}>Rules and reasoning: <code>{note.code}</code></p>
       </section>
     </div>
   </article>;

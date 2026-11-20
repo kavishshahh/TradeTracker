@@ -65,6 +65,9 @@ export function scanMessage(account: Paper | null | undefined) {
   return `Scanning for an entry · last evaluation ${time(account.last_evaluation)} (${account.status.replaceAll('_', ' ')}).`;
 }
 
+/** The algo's name as a URL and file-name slug ("Skew Afternoon Credit" -> "skew-afternoon-credit"); internal ids never reach the address bar. */
+export const algoSlug = (strategy: Pick<Strategy, 'name'>) => strategy.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
 /** Trailing backtest return on fixed capital. 1y sums the last 12 monthly rows, as the catalogue stores no 1y metric. */
 export function periodReturn(strategy: Strategy, period: Period | 'all') {
   if (period === '1m') return strategy.metrics.return_1m_pct;

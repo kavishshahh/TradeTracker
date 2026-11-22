@@ -1,4 +1,5 @@
-"""Protected Cloudflare-to-backend paper evaluation; no broker order routes."""
+"""Protected Cloudflare-to-backend evaluation round. It runs the paper engine and, for strategies the
+owner switched to live, the order desk (algos/zen_credit/execution/live.py); no route takes an order."""
 from datetime import datetime, timezone
 import hmac
 import os

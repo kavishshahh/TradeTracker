@@ -5,7 +5,9 @@ import { Activity, AlertCircle, ArrowLeft, ArrowUpDown, Banknote, ChevronRight, 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AccessBanner, AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import AlgoDetail from './AlgoDetail';
+import AlgoLive from './AlgoLive';
 import AlgoResearch from './AlgoResearch';
+import type { LiveActions, LiveResponse } from './liveData';
 import type { Research } from './researchData';
 import { useAlgoAccess } from './useAlgoAccess';
 import { PERIODS, algoSlug, algoState, blurb, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
@@ -13,8 +15,10 @@ import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Sparklin
 import styles from './algos.module.css';
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
-type View = 'algos' | 'positions' | 'orders' | 'research';
-const VIEWS: View[] = ['algos', 'positions', 'orders', 'research'];
+type View = 'algos' | 'positions' | 'orders' | 'live' | 'research';
+const VIEWS: View[] = ['algos', 'positions', 'orders', 'live', 'research'];
+// The 'live' view is the order desk. Live trading is switched off, so it is shown as what it does today: dry run.
+const VIEW_NAMES: Record<View, string> = { algos: 'My Algos', positions: 'Positions', orders: 'Orders', live: 'Dry run', research: 'Research' };
 
 export default function AlgoDashboard() {
   const { currentUser } = useAuth();
@@ -86,6 +90,28 @@ export default function AlgoDashboard() {
     return researchNotes.current;
   }, [authed]);
 
+  // Live trading (owner only): settings are stored through the API; the worker's order desk acts on them.
+  const liveActions = useMemo<LiveActions>(() => {
+    const send = async (path: string, method: 'PUT' | 'POST', body?: unknown) => {
+      const token = await currentUser!.getIdToken();
+      const response = await fetch(`${apiBase}${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => ({})) as { detail?: unknown }).detail;
+        throw new Error(typeof detail === 'string' ? detail : 'Could not save live settings. Please retry.');
+      }
+    };
+    return {
+      load: async () => {
+        const response = await authed('/algos/live');
+        if (!response.ok) throw new Error('Live trading status unavailable');
+        return await response.json() as LiveResponse;
+      },
+      saveStrategy: (id, setting) => send(`/algos/live/strategies/${encodeURIComponent(id)}`, 'PUT', setting),
+      saveAccount: change => send('/algos/live/account', 'PUT', change),
+      exitStrategy: id => send(`/algos/live/strategies/${encodeURIComponent(id)}/exit`, 'POST'),
+    };
+  }, [authed, currentUser]);
+
   const refresh = useCallback(() => { backtests.current.clear(); return run(() => Promise.all([loadCatalog(), loadPaper()])); }, [run, loadCatalog, loadPaper]);
 
   useEffect(() => {
@@ -123,14 +149,14 @@ export default function AlgoDashboard() {
     const link = document.createElement('a'); link.href = url; const listed = catalog.find(item => item.id === strategyId); link.download = `${listed ? algoSlug(listed) : 'algo'}-paper-trades.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
-  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} access={labAccess} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} loadResearch={loadResearch} />;
+  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} access={labAccess} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} loadResearch={loadResearch} live={liveActions} />;
 }
 
-export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; access?: LabAccess; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null>; loadResearch?: () => Promise<Research> };
+export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; access?: LabAccess; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null>; loadResearch?: () => Promise<Research>; live?: LiveActions };
 
 /** Everything on screen, given data. Holds only view state: the open tab, the open algo and the return period.
  *  Cards and backtest figures show for everyone; the trades sections show only when `access.allowed`. */
-export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, access = openAccess, onRefresh, onFollow, onDownload, loadBacktest, loadResearch }: AlgoLabProps) {
+export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, access = openAccess, onRefresh, onFollow, onDownload, loadBacktest, loadResearch, live }: AlgoLabProps) {
   const [view, setView] = useState<View>('algos');
   const [algoKey, setAlgoKey] = useState<string | null>(null);   // the ?algo= value: a name slug (or an id from an old link)
   const [period, setPeriod] = useState<Period>('1y');
@@ -169,6 +195,8 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, acce
     <div className={styles.splitMain}>{detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} period={period} onFollow={enabled => onFollow(detail.id, enabled)} onDownload={() => onDownload(detail.id)} loadBacktest={loadBacktest} access={access} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>}</div>
   </div>;
   // Research names the rules of unlisted strategies: the owner's only, like the rules on an algo's page.
+  // The order desk's settings are the owner's alone (the API refuses everyone else).
+  else if (view === 'live') main = access.owner && live ? <AlgoLive catalog={catalog} actions={live} /> : <div className={styles.card}><EmptyRow>Dry run is not available on this account.</EmptyRow></div>;
   else if (view === 'research') main = access.owner && loadResearch ? <AlgoResearch load={loadResearch} /> : <div className={styles.card}><EmptyRow>Research notes are not shared.</EmptyRow></div>;
   else if (!access.allowed && view !== 'algos') main = <AccessCard access={access} what={view === 'positions' ? 'Open positions' : 'Simulated orders'} />;
   else if (view === 'positions') main = <PositionsView catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
@@ -181,8 +209,8 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, acce
       <span className={styles.paperBadge}><ShieldCheck size={16} /><span><b>Paper trading only</b>No broker orders</span></span>
     </div>
     <div className={styles.tabs}>
-      {algoId ? <button className={styles.back} onClick={() => go(view)}><ArrowLeft size={15} />Back to {view === 'algos' ? 'My Algos' : view === 'positions' ? 'Positions' : view === 'orders' ? 'Orders' : 'Research'}</button> : <nav aria-label="Algo Lab sections">
-        {([['algos', 'My Algos', catalog.length], ['positions', 'Positions', openCount], ['orders', 'Orders', null], ...(access.owner && loadResearch ? [['research', 'Research', null] as const] : [])] as const).map(([id, label, count]) => <button key={id} className={view === id ? styles.tabActive : ''} aria-current={view === id ? 'page' : undefined} onClick={() => go(id)}>{label}{count ? <span>{count}</span> : null}</button>)}
+      {algoId ? <button className={styles.back} onClick={() => go(view)}><ArrowLeft size={15} />Back to {VIEW_NAMES[view]}</button> : <nav aria-label="Algo Lab sections">
+        {([['algos', 'My Algos', catalog.length], ['positions', 'Positions', openCount], ['orders', 'Orders', null], ...(access.owner && live ? [['live', VIEW_NAMES.live, null] as const] : []), ...(access.owner && loadResearch ? [['research', 'Research', null] as const] : [])] as const).map(([id, label, count]) => <button key={id} className={view === id ? styles.tabActive : ''} aria-current={view === id ? 'page' : undefined} onClick={() => go(id)}>{label}{count ? <span>{count}</span> : null}</button>)}
       </nav>}
       <div className={styles.tabMeta}>
         <span className={styles.market}><i className={marketOpen() ? styles.marketOpen : ''} />Market {marketOpen() ? 'open' : 'closed'}</span>

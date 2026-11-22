@@ -1,0 +1,73 @@
+/* Algo Lab > Live. Colours and elevation come from the tokens algos.module.css defines on .lab. */
+.live { display: flex; flex-direction: column; gap: 16px; }
+.intro { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
+.intro svg { flex-shrink: 0; color: var(--primary); }
+.spacer { flex: 1; }
+
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; overflow: hidden; background: var(--border); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--lift); }
+.statusItem { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; padding: 14px 16px; background: var(--card); }
+.statusLabel { font-size: 11px; color: var(--muted-foreground); }
+.statusItem b { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--foreground); }
+.statusItem b svg { flex-shrink: 0; color: var(--up); }
+.statusItem small { font-size: 11px; line-height: 1.45; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.statusItem button { display: inline-flex; align-items: center; gap: 6px; }
+.warn b svg { color: var(--warn); }
+.bad { background: color-mix(in srgb, var(--down) 5%, var(--card)); }
+.bad b { color: var(--down); }
+.bad b svg { color: var(--down); }
+
+.accountRow { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; padding: 14px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--lift); }
+.accountRow > small { max-width: 44ch; padding-bottom: 6px; font-size: 11px; line-height: 1.45; color: var(--muted-foreground); }
+.danger { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; font-size: 12px; font-weight: 500; color: #fff; background: var(--down); border: 1px solid var(--down); border-radius: 7px; white-space: nowrap; }
+.danger:disabled { opacity: .55; }
+
+.rows { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--lift); }
+.rowLive { border-left: 3px solid var(--down); }
+.rowHead { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.rowHead h3 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: -.01em; color: var(--foreground); }
+.tradeState { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.modeTag { flex-shrink: 0; padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; border-radius: 4px; white-space: nowrap; border: 1px solid transparent; }
+.tag_off { color: var(--muted-foreground); background: var(--muted); }
+.tag_dry_run { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.tag_live { color: var(--down); background: var(--down-soft); border-color: color-mix(in srgb, var(--down) 45%, transparent); }
+
+.controls { display: grid; grid-template-columns: auto minmax(180px, 1.3fr) minmax(130px, 1fr) minmax(120px, .8fr) auto; align-items: start; gap: 18px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 11px; color: var(--muted-foreground); }
+.field small { font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
+.inputWrap { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; background: var(--card); border: 1px solid var(--border); border-radius: 7px; transition: border-color .15s ease; }
+.inputWrap:focus-within { border-color: var(--primary); }
+.inputWrap:has(input[aria-invalid="true"]) { border-color: var(--down); }
+.inputWrap i { font-style: normal; font-size: 12px; color: var(--muted-foreground); }
+.inputWrap input { flex: 1; min-width: 0; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--foreground); background: transparent; border: 0; outline: 0; }
+.slider { width: 100%; accent-color: var(--primary); }
+.saveCell { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 17px; }
+.saveCell small { font-size: 11px; }
+
+.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; background: var(--border); border: 1px solid var(--border); border-radius: 8px; }
+.stats > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 10px 14px; background: var(--card); }
+.stats dt { font-size: 11px; color: var(--muted-foreground); }
+.stats dd { display: flex; align-items: baseline; gap: 6px; margin: 0; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--foreground); }
+.stats dd small { font-size: 11px; font-weight: 400; color: var(--muted-foreground); }
+.skip { margin: -4px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted-foreground); }
+
+.heading { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 10px; font-size: 14px; font-weight: 500; color: var(--foreground); }
+.heading small { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+.alerts { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--lift); overflow: hidden; }
+.alerts li { display: grid; grid-template-columns: 120px 190px minmax(0, 1fr); gap: 12px; padding: 10px 16px; font-size: 12px; line-height: 1.5; border-top: 1px solid var(--border); }
+.alerts li:first-child { border-top: 0; }
+.alerts time { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.alerts b { font-weight: 500; color: var(--foreground); }
+.alerts span { color: var(--muted-foreground); overflow-wrap: anywhere; }
+
+@media (max-width: 1180px) {
+  .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .status { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .controls, .status { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .alerts li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .row { padding: 14px; }
+}

@@ -74,6 +74,7 @@ class APIAuthenticationTests(unittest.TestCase):
             return authorization.split()[1]
         # catalog_ttl=0: these tests change the catalogue between requests and expect to see it at once.
         self.app = make_app(self.db, user, catalog_ttl=0)
+        self.live_app = make_app(self.db, user, catalog_ttl=0, live_available=True)   # the dormant live option
 
     def test_auth_required_for_all_routes(self):
         for path, method, body in DATA_ROUTES + ADMIN_ROUTES + [('/algos/access','GET',None),('/algos/access/request','POST',None)]:
@@ -138,6 +139,63 @@ class APIAuthenticationTests(unittest.TestCase):
             for path, method, body in ADMIN_ROUTES:
                 self.assertEqual(asyncio.run(request(self.app,path,method,who,body=body))[0],404)
         self.assertEqual(set(self.db), self.catalog_keys)
+
+    def test_as_shipped_live_mode_cannot_be_saved(self):
+        import algos_api
+        self.assertIs(algos_api.LIVE_TRADING_AVAILABLE, False)
+        strategy = '/algos/live/strategies/zen_strategy_01'
+        status, body = asyncio.run(request(self.app, '/algos/live', user='alice'))
+        self.assertEqual(body['limits']['modes'], ['off', 'dry_run'])
+        status, body = asyncio.run(request(self.app, strategy, 'PUT', 'alice', {'mode': 'live', 'capital': 120000}))
+        self.assertEqual(status, 422)
+        self.assertIn('switched off', body['detail'])
+        self.assertNotIn('algo_live/account', self.db)
+        status, body = asyncio.run(request(self.app, strategy, 'PUT', 'alice', {'mode': 'dry_run', 'capital': 120000}))
+        self.assertEqual((status, self.db['algo_live/account']['strategies']['zen_strategy_01']['mode']), (200, 'dry_run'))
+
+    def test_live_settings_are_the_owners_only_and_validated(self):
+        self.app = self.live_app
+        strategy = '/algos/live/strategies/zen_strategy_01'
+        routes = [('/algos/live', 'GET', None), (strategy, 'PUT', {'mode': 'live', 'capital': 200000}),
+                  (strategy + '/exit', 'POST', None), ('/algos/live/account', 'PUT', {'kill_switch': True})]
+        for path, method, body in routes:
+            self.assertEqual(asyncio.run(request(self.app, path, method, body=body))[0], 401)
+            for user in ('bob', 'carol', 'dave', 'erin'):
+                self.assertEqual(asyncio.run(request(self.app, path, method, user, body))[0], 404, (path, user))
+        self.assertNotIn('algo_live/account', self.db)
+        status, body = asyncio.run(request(self.app, '/algos/live', user='alice'))
+        self.assertEqual((status, body['account'], body['states'], body['desk']), (200, {}, {}, None))
+        self.assertEqual(body['limits'], {'min_capital': 120000, 'max_capital': 320000, 'modes': ['off', 'dry_run', 'live']})
+        for bad in ({'mode': 'live', 'capital': 119999}, {'mode': 'live', 'capital': 320001}, {'mode': 'on', 'capital': 200000},
+                    {'mode': 'live', 'capital': 200000, 'max_lots': 0}, {'mode': 'live', 'capital': 200000, 'slippage_cap': -1}):
+            self.assertEqual(asyncio.run(request(self.app, strategy, 'PUT', 'alice', bad))[0], 422, bad)
+        self.assertEqual(asyncio.run(request(self.app, '/algos/live/strategies/unknown_one', 'PUT', 'alice', {'mode': 'off', 'capital': 200000}))[0], 404)
+        self.assertEqual(asyncio.run(request(self.app, strategy + '/exit', 'POST', 'alice'))[0], 404)   # nothing configured yet
+        self.assertNotIn('algo_live/account', self.db)
+        status, saved = asyncio.run(request(self.app, strategy, 'PUT', 'alice', {'mode': 'dry_run', 'capital': 120000, 'max_lots': 2}))
+        self.assertEqual((status, saved['mode'], saved['capital'], saved['max_lots']), (200, 'dry_run', 120000.0, 2))
+        asyncio.run(request(self.app, '/algos/live/strategies/zen_strategy_02', 'PUT', 'alice', {'mode': 'live', 'capital': 320000}))
+        status, done = asyncio.run(request(self.app, strategy + '/exit', 'POST', 'alice'))
+        self.assertEqual(status, 200)
+        asyncio.run(request(self.app, strategy, 'PUT', 'alice', {'mode': 'live', 'capital': 150000}))
+        account = self.db['algo_live/account']
+        self.assertEqual(account['strategies']['zen_strategy_01']['mode'], 'live')
+        self.assertEqual(account['strategies']['zen_strategy_01']['exit_now'], done['exit_now'])    # an old request is not lost or renewed
+        self.assertEqual((account['strategies']['zen_strategy_02']['mode'], account['strategies']['zen_strategy_02']['capital']), ('live', 320000.0))
+        self.assertEqual(account['updated_by'], OWNER)
+        status, body = asyncio.run(request(self.app, '/algos/live/account', 'PUT', 'alice', {'kill_switch': True, 'daily_loss_limit': 8000}))
+        self.assertEqual((status, body['kill_switch'], body['daily_loss_limit'], body['exit_all']), (200, True, 8000.0, None))
+        status, body = asyncio.run(request(self.app, '/algos/live/account', 'PUT', 'alice', {'daily_loss_limit': 0, 'exit_all': True}))
+        self.assertEqual((body['kill_switch'], body['daily_loss_limit']), (True, None))
+        self.assertTrue(body['exit_all'])
+        self.assertEqual(asyncio.run(request(self.app, '/algos/live/account', 'PUT', 'alice', {'daily_loss_limit': -5}))[0], 422)
+        self.db['algo_live_state/zen_strategy_01'] = {'open_trade': {'state': 'open'}}
+        self.db['algo_live_state/_desk'] = {'live_unlocked': False}
+        status, body = asyncio.run(request(self.app, '/algos/live', user='alice'))
+        self.assertEqual(body['states'], {'zen_strategy_01': {'open_trade': {'state': 'open'}}, 'zen_strategy_02': None})
+        self.assertEqual(body['desk'], {'live_unlocked': False})
+        # nobody else learns that a strategy trades live: the catalogue they get is unchanged
+        self.assertNotIn('algo_live', json.dumps(asyncio.run(request(self.app, '/algos/catalog', user='bob'))[1]))
 
     def test_research_notes_are_the_owners_only_and_cost_no_database_read(self):
         for who in ('bob','carol','dave'):                                   # listed guests included: notes name rules

@@ -1,4 +1,5 @@
-"""Authenticated algo catalogue and paper account views; no broker order routes.
+"""Authenticated algo catalogue and paper account views. No route here sends an order: the owner's
+live settings (/algos/live) are only stored, and the worker's live desk acts on them.
 
 Three tiers, decided by Firestore, not code:
 - Every signed-in user sees the catalogue's public fields (names, descriptions, backtest
@@ -10,6 +11,11 @@ Three tiers, decided by Firestore, not code:
 
 Anyone may ask for access: POST /algos/access/request writes one document to
 `algo_access_requests/{uid}` (email, requested_at, status) for the owner to grant or decline.
+
+Live trading (owner only): `algo_live/account` holds, per strategy, the mode (off, dry_run, live), the
+capital to deploy and optional limits, plus the account-wide kill switch and daily loss limit. The worker
+(algos/zen_credit/execution/live.py) reads that document every round and publishes what it did to
+`algo_live_state/{strategy}`; these routes read those and never talk to the broker.
 """
 from datetime import datetime, timezone
 import json
@@ -37,6 +43,14 @@ EMAIL_TTL_SECONDS = 600.0
 PUBLIC_FIELDS = ('id', 'name', 'version', 'summary', 'underlying', 'category', 'capital',
                  'period_start', 'period_end', 'metrics', 'monthly', 'order', 'enabled', 'execution')
 EMAIL_PATTERN = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+# Deployed capital per strategy; the same bounds are enforced again by the desk before any order.
+LIVE_MIN_CAPITAL, LIVE_MAX_CAPITAL = 120_000, 320_000
+LIVE_MODES = ('off', 'dry_run', 'live')
+# Live trading is switched off (owner's decision, 22 Nov 2026): only off and dry_run can be saved. The
+# worker has its own switch (LIVE_ORDERS in algos/zen_credit/execution/broker.py); both must change to go live.
+LIVE_TRADING_AVAILABLE = False
+LIVE_ACCOUNT = ('algo_live', 'account')
+LIVE_STATE = 'algo_live_state'
 # Write-ups of strategies that were researched and not listed. A file shipped with the API: no Firestore read.
 RESEARCH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seed_data', 'algo_research.json')
 
@@ -54,17 +68,31 @@ class Decision(BaseModel):
     allowed: bool
 
 
+class LiveStrategy(BaseModel):
+    mode: str
+    capital: float
+    max_lots: int | None = None
+    slippage_cap: float | None = None
+
+
+class LiveAccount(BaseModel):
+    kill_switch: bool | None = None
+    daily_loss_limit: float | None = None      # 0 clears the limit
+    exit_all: bool = False
+
+
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
 def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, clock=time.monotonic,
-                        email_lookup=None, owner_email=None):
+                        email_lookup=None, owner_email=None, live_available=None):
     router = APIRouter(prefix='/algos', tags=['Paper algorithms'])
     cache = {'rows': None, 'at': None}
     access = {'emails': None, 'at': 0.0}
     emails = {}
     owner = (owner_email or os.environ.get('ALGO_LAB_OWNER_EMAIL') or DEFAULT_OWNER_EMAIL).strip().lower()
+    live_modes = LIVE_MODES if (LIVE_TRADING_AVAILABLE if live_available is None else live_available) else LIVE_MODES[:2]
 
     def unavailable(route, exc, detail):
         # Firestore errors were invisible behind a bare 503; the type name says
@@ -277,6 +305,107 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
                 return json.load(handle)
         except (OSError, ValueError) as exc:
             unavailable('research', exc, 'Research notes unavailable')
+
+    # --- live trading (owner only) --------------------------------------------------------------
+    def live_account():
+        doc = db.collection(LIVE_ACCOUNT[0]).document(LIVE_ACCOUNT[1]).get()
+        return (doc.to_dict() or {}) if doc.exists else {}
+
+    def save_live_account(account, uid):
+        account.update(updated_at=now_iso(), updated_by=email_of(uid))
+        db.collection(LIVE_ACCOUNT[0]).document(LIVE_ACCOUNT[1]).set(account)
+        return account
+
+    def known_strategy(strategy_id):
+        if not re.fullmatch(r'[a-z0-9_]{1,64}', strategy_id) or strategy_id not in {item['id'] for item in read_catalog()}:
+            raise HTTPException(404, 'Unknown strategy')
+
+    @router.get('/live')
+    async def live(current_user: str = Depends(get_current_user)):
+        """The owner's live settings and what the desk last reported: the account document, the desk
+        heartbeat and one state document per configured strategy."""
+        require_owner(current_user)
+        require_db()
+        try:
+            account = live_account()
+            states = {}
+            for name in (account.get('strategies') or {}):
+                doc = db.collection(LIVE_STATE).document(name).get()
+                states[name] = doc.to_dict() if doc.exists else None
+            desk = db.collection(LIVE_STATE).document('_desk').get()
+        except Exception as exc:
+            unavailable('live', exc, 'Live trading status is unavailable')
+        return {'account': account, 'states': states, 'desk': desk.to_dict() if desk.exists else None,
+                'limits': {'min_capital': LIVE_MIN_CAPITAL, 'max_capital': LIVE_MAX_CAPITAL, 'modes': list(live_modes)}}
+
+    @router.put('/live/strategies/{strategy_id}')
+    async def set_live_strategy(strategy_id: str, body: LiveStrategy, current_user: str = Depends(get_current_user)):
+        require_owner(current_user)
+        require_db()
+        known_strategy(strategy_id)
+        if body.mode == 'live' and 'live' not in live_modes:
+            raise HTTPException(422, 'Live trading is switched off. Only Off and Dry run are available.')
+        if body.mode not in live_modes:
+            raise HTTPException(422, 'Mode must be off, dry_run or live')
+        if not LIVE_MIN_CAPITAL <= body.capital <= LIVE_MAX_CAPITAL:
+            raise HTTPException(422, f'Capital must be between {LIVE_MIN_CAPITAL:,} and {LIVE_MAX_CAPITAL:,}')
+        if body.max_lots is not None and not 1 <= body.max_lots <= 20:
+            raise HTTPException(422, 'Maximum lots must be between 1 and 20')
+        if body.slippage_cap is not None and not 0 <= body.slippage_cap <= 20:
+            raise HTTPException(422, 'Slippage cap must be between 0 and 20 points')
+        try:
+            account = live_account()
+            strategies = dict(account.get('strategies') or {})
+            # exit_now is a past request; it stays so an already answered one is not replayed as new.
+            strategies[strategy_id] = {**(strategies.get(strategy_id) or {}), 'mode': body.mode, 'capital': float(body.capital),
+                                       'max_lots': body.max_lots, 'slippage_cap': body.slippage_cap, 'updated_at': now_iso()}
+            account['strategies'] = strategies
+            save_live_account(account, current_user)
+        except Exception as exc:
+            unavailable('live', exc, 'Could not save live settings')
+        log.warning('algo_live_setting strategy=%s mode=%s capital=%s', strategy_id, body.mode, body.capital)
+        return {'strategy_id': strategy_id, **strategies[strategy_id]}
+
+    @router.post('/live/strategies/{strategy_id}/exit')
+    async def exit_live_strategy(strategy_id: str, current_user: str = Depends(get_current_user)):
+        """Ask the desk to close this strategy's live trade on its next round. Stores a request; sends nothing."""
+        require_owner(current_user)
+        require_db()
+        known_strategy(strategy_id)
+        try:
+            account = live_account()
+            strategies = dict(account.get('strategies') or {})
+            if strategy_id not in strategies:
+                raise HTTPException(404, 'This strategy has no live settings')
+            strategies[strategy_id] = {**strategies[strategy_id], 'exit_now': now_iso()}
+            account['strategies'] = strategies
+            save_live_account(account, current_user)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            unavailable('live', exc, 'Could not record the exit request')
+        log.warning('algo_live_exit_requested strategy=%s', strategy_id)
+        return {'strategy_id': strategy_id, 'exit_now': strategies[strategy_id]['exit_now']}
+
+    @router.put('/live/account')
+    async def set_live_account(body: LiveAccount, current_user: str = Depends(get_current_user)):
+        require_owner(current_user)
+        require_db()
+        if body.daily_loss_limit is not None and not 0 <= body.daily_loss_limit <= 10_000_000:
+            raise HTTPException(422, 'Daily loss limit must be zero or a positive amount')
+        try:
+            account = live_account()
+            if body.kill_switch is not None:
+                account['kill_switch'] = body.kill_switch
+            if body.daily_loss_limit is not None:
+                account['daily_loss_limit'] = body.daily_loss_limit or None
+            if body.exit_all:
+                account['exit_all'] = now_iso()
+            save_live_account(account, current_user)
+        except Exception as exc:
+            unavailable('live', exc, 'Could not save live settings')
+        log.warning('algo_live_account kill_switch=%s exit_all=%s', account.get('kill_switch'), body.exit_all)
+        return {key: account.get(key) for key in ('kill_switch', 'daily_loss_limit', 'exit_all')}
 
     @router.get('/paper')
     async def paper(current_user: str = Depends(get_current_user)):

@@ -32,6 +32,7 @@ from data.providers.base import MarketDataError, MarketDataProvider
 from data.providers.http import HttpClient
 from data.providers.nse import NSEMarketDataProvider
 from data.providers.yahoo import YahooSpotSource
+from execution.live import paper_view
 from execution.store import (PositionRecord, Store, StoreUnavailable, SNAPSHOT_HISTORY_DAYS, is_db_error,
                              row_to_position)
 from notifications.email import EmailNotifier
@@ -161,6 +162,10 @@ class Runner:
         self.strategy_name = getattr(self.engine, "strategy_name", cfg.runtime.strategy_name)
         self.cycles = 0
         self.last_context: dict = {}
+        # Live order desk (execution/live.py), attached by the coordinator. After each cycle it is told
+        # what the paper account holds (live_view); None means this cycle did not evaluate the position.
+        self.live = None
+        self.live_view: dict | None = None
         self._lock = threading.Lock()
         self._namespace_bound = False
 
@@ -200,6 +205,7 @@ class Runner:
         now = to_ist(now) if now else now_ist()
         minute = minute_bucket(now)
         self.cycles += 1
+        self.live_view = None
         self.last_context = {"minute": minute.isoformat(), "strategy": self.strategy_name}
         # Each strategy has its own Firestore namespace and minute ledger. The
         # binding never changes once verified, so it is read once per process.
@@ -255,6 +261,15 @@ class Runner:
                         log.warning("paper_strategy_busy strategy=%s reason=lease_not_acquired", self.strategy_name)
                         return {"status": "busy", "strategy": self.strategy_name, "reason": "another cycle is running"}
                     result = self.cycle(now, force)
+                    if self.live is not None:
+                        # Real orders follow the paper decision already committed above; a failure here
+                        # is the desk's to retry next minute and never undoes or blocks the paper cycle.
+                        try:
+                            self.live.step(self.strategy_name, self.cfg.strategy, self.live_view,
+                                           result.get("status") not in ("market_closed", "calendar_unavailable"),
+                                           to_ist(now) if now else now_ist())
+                        except Exception as exc:
+                            log.error("live_step_failed strategy=%s error=%s", self.strategy_name, type(exc).__name__)
                     # Optional dashboard mirror; durable paper state precedes export.
                     try:
                         from execution.firebase_paper import publish_paper_snapshot
@@ -344,6 +359,7 @@ class Runner:
             if closed is not None:
                 log.info("exit_signal", extra={"reason": res.exit.reason, "exit_value": res.exit.exit_value,
                                                "pnl": res.exit.pnl, "signal_id": closed.signal_id})
+            self.live_view = paper_view(None, closed)
             result = {"status": "exit", "reason": res.exit.reason}
         elif res.action == "entry":
             row = self.store.insert_position(res.position, res.reason)
@@ -354,8 +370,10 @@ class Runner:
                                             "sell_strike": row.sell_strike, "buy_strike": row.buy_strike,
                                             "option_type": row.option_type, "net_credit": row.net_credit,
                                             "stop_loss": row.stop_loss, "lots": row.lots})
+            self.live_view = paper_view(row, None, entered=True)
             result = {"status": "entry", "signal_id": row.signal_id}
         else:
+            self.live_view = paper_view(open_row)
             result = {"status": "no_action", "detail": res.reason}
         # History collection and SMTP cannot prevent the exit decision/persistence.
         if position is not None:

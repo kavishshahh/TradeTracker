@@ -1,8 +1,9 @@
-"""One persistent paper-only backend worker for both registered strategies.
+"""One persistent backend worker for every registered strategy.
 
 Run from TradeTracker: python algos/zen_credit/paper_worker.py
 Reads backend/.env locally; hosting injects the same backend environment.
-No external cron and no broker order endpoint. Decisions/MTM are minute-based.
+No external cron. Decisions/MTM are minute-based and always paper; real orders are sent only by the
+live desk (execution/live.py) for strategies the owner switched to live.
 """
 import argparse
 from dataclasses import replace
@@ -31,6 +32,11 @@ def run_round(runners, catalog, now):
             if not catalog.get(name, {}).get('enabled', False) and runner.store.open_position_row() is None:
                 log.info('paper_strategy_skipped strategy=%s minute=%s reason=disabled_and_flat duration_s=%.2f',
                          name, now.isoformat(), time.monotonic() - started)
+                desk = getattr(runner, 'live', None)
+                if desk is not None and desk.has_trade(name):
+                    # The paper account is flat, so a live trade still open for it has to be closed.
+                    from execution.live import paper_view
+                    desk.step(name, None, paper_view(None), True, now)
                 continue
             result = runner.locked_cycle(now)
             results[name] = result
@@ -69,7 +75,7 @@ def main():
     stopped = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopped.set())
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
-    log.info('Paper worker started. Provider=Dhan, interval=one minute, orders=disabled')
+    log.info('Paper worker started. Provider=Dhan, interval=one minute, orders=only for strategies switched to live')
     while not stopped.is_set():
         now = now_ist()
         try:

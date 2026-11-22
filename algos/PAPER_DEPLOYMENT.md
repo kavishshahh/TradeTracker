@@ -7,7 +7,7 @@ Every minute it obtains Dhan NIFTY index/option data, evaluates the strategies,
 records virtual entries/exits in Firestore, and publishes each paper account to
 `algo_paper_state`. The existing authenticated backend serves the records to
 Algo Lab; its UI refreshes every 30 seconds. For production, Cloudflare triggers the API each minute; the standalone loop remains a local alternative.
-No Dhan order endpoints exist in the live provider.
+The data provider has no order endpoints; real orders are sent only by the live desk (see Live trading below), and only for strategies the owner switched to live.
 
 The strategy decisions, stops, targets and P&L marks are evaluated once per minute,
 not on every tick. This worker polls Dhan REST quotes; it is not a WebSocket stream.
@@ -42,7 +42,7 @@ when it has no token, 30 minutes before expiry, and once after Dhan rejects a to
 generation pauses further attempts for 15 minutes, so a wrong PIN or key cannot hammer the login and
 lock the account; the error then appears in the paper status as a data error. The PIN and key give
 full account login, so keep them only in the hosting provider's secret environment variables. Orders
-also require Dhan's static-IP whitelist, and the worker has no order code at all. Generating a token on
+also require Dhan's static-IP whitelist and the live desk's own switches (see Live trading below). Generating a token on
 another machine (for example a local research replay with the same credentials) may invalidate the
 worker's token; the worker then regenerates on its next rejected request.
 
@@ -53,6 +53,64 @@ Strategy formula settings are pinned in versioned Python. Model capital is read
 from each Firestore catalogue record when the worker starts that strategy.
 Changing capital requires a worker restart; do not change it midway through an
 open position if you want comparable statistics. The standalone loop needs no cron secret; the Cloudflare/API deployment needs one shared scheduler secret. SMTP settings, strategy selectors and database URLs are optional or unnecessary.
+
+## Live trading
+
+**Status: switched off.** Since 22 Nov 2026 only paper and dry run exist. `LIVE_ORDERS = False` in
+`execution/broker.py` makes the real broker client impossible to construct and its `place` refuse, and
+the desk treats a stored `live` mode as `off`; `LIVE_TRADING_AVAILABLE = False` in `backend/algos_api.py`
+makes the API refuse to save `live` and the page offer only Off and Dry run. No environment variable or
+page setting can turn orders on: going live means changing both constants in code, then steps 1 to 3
+below. `tests/test_live.py::test_as_shipped_no_order_can_reach_dhan` pins this. The rest of this section
+describes the order flow as built, which today runs only against the simulated dry-run broker.
+
+`execution/live.py` (the live desk) mirrors a strategy's paper position with real Dhan orders through
+`execution/broker.py`. The paper engine stays the only decision maker: paper enters, the desk enters the
+same spread at the owner's deployed capital; paper exits, the desk exits. Nothing is sent unless all of
+these hold:
+
+1. The owner set the strategy to **Live** in Algo Lab > Live (stored in Firestore `algo_live/account`),
+   with a capital between 1,20,000 and 3,20,000.
+2. The backend environment has `LIVE_TRADING_ENABLED=true`. Without it a live strategy's entries are
+   skipped and reported. **Dry run** needs neither this nor a static IP: it runs the same flow against a
+   simulated broker that fills at the live bid/ask, and records the slippage versus the paper price.
+3. The server's outbound IP is whitelisted in Dhan (Dhan Web > DhanHQ Trading APIs, or
+   `POST /v2/ip/setIP`). Dhan requires an IP unique to the account and allows one change every 7 days.
+   A host that shares its outbound addresses with other customers does not qualify; an order from an
+   unlisted IP comes back as a rejection, which the desk reports as a failed entry.
+
+What the desk does (each case has a test in `tests/test_live.py`):
+
+- **Sizing**: lots come from the strategy's own rules applied to the deployed capital (margin estimate,
+  the Monday allocation, the per-stop loss cap), further capped by the owner's maximum lots. The paper
+  account keeps its 3,20,000 model capital.
+- **Entry**: funds are checked against the estimated margin, then the hedge is bought and the short leg
+  sold, both as limit orders at the touch. An entry that would give up more than the slippage cap
+  (default 3 points of credit) is skipped. A short leg that is rejected or does not fill has its hedge
+  sold back and the entry recorded as failed with its cost.
+- **Exit**: the short leg is bought back first, with the limit widened each attempt and a market order
+  last, retried every minute until done; then the hedge is sold. A hedge nobody bids for is left to
+  expire after three minutes and tracked. An expired trade is booked at intrinsic value.
+- **Restarts and timeouts**: the trade and each order's correlation id are stored before the request is
+  sent. A request with no answer is looked up by that id on the next cycle, never re-sent blindly. A
+  live trade whose paper position is gone is closed on the next cycle, however the exit minute was missed.
+- **Account checks**: every minute with a live trade open, the desk checks that Dhan still holds at
+  least the quantities its trades need; a shortfall lasting two rounds blocks new entries and alerts. The
+  kill switch and the daily loss limit block new entries; open trades still exit. "Exit now" closes a
+  live trade while paper holds.
+- **Shared account**: the kill switch, loss limit and exit buttons are the desk's own (Firestore) and
+  act only on its trades. It never calls Dhan's kill switch, P&L exit or exit-all-positions APIs, and
+  only places, reads and cancels orders carrying its own tag, so algos run from Dhan's portal and manual
+  trades are not touched. They do share the account's funds: keep enough for both, or one side's entries
+  will be refused for margin.
+- **Alerts**: entries, exits, skips, failures, unfilled exits and mismatches are logged, shown in
+  Algo Lab > Live, and emailed when `EMAIL_ENABLED=true` with SMTP settings.
+
+Not covered: brokerage and taxes are not in the desk's P&L; there is no stop order resting at the
+exchange, so if the worker is down a stop is acted on only when it is back (the Live tab shows the desk
+as stale after three minutes without an update); evaluation stays once a minute. Before real money, run
+dry run for some days, then one lot live and compare the fills. The order code has been tested against
+a fake broker only, never against Dhan's order API.
 
 ## Local check
 

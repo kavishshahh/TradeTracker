@@ -144,6 +144,16 @@ class DhanLiveProvider(MarketDataProvider):
             raise MarketDataError('Missing or inconsistent Dhan contract lot size')
         return values.pop()
 
+    def security_id(self, expiry, strike, option_type):
+        """Dhan security id of one NIFTY option contract (the live desk's orders are addressed by it)."""
+        self.refresh_master()
+        rows = self.contracts
+        found = set(rows.loc[rows.expiry.eq(expiry) & rows.STRIKE_PRICE.astype(float).eq(float(strike))
+                             & rows.OPTION_TYPE.eq(option_type), 'SECURITY_ID'].astype(int))
+        if len(found) != 1:
+            raise MarketDataError('Contract missing or ambiguous in the Dhan instrument master')
+        return str(found.pop())
+
     def get_option_chain(self, expiry):
         if expiry in self.cache:
             return self.cache[expiry]

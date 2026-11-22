@@ -8,8 +8,11 @@ import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import styles from './algos.module.css';
 
 type Tab = 'performance' | 'trades' | 'monthly' | 'rules';
-type Range = '1m' | '3m' | '6m' | '1y' | 'all';
-const RANGES: { id: Range; label: string; months: number }[] = [{ id: '1m', label: '1M', months: 1 }, { id: '3m', label: '3M', months: 3 }, { id: '6m', label: '6M', months: 6 }, { id: '1y', label: '1Y', months: 12 }, { id: 'all', label: 'All', months: Infinity }];
+type Preset = '1m' | '3m' | '6m' | '1y' | '2y' | '3y' | 'all';
+type Range = Preset | 'custom';
+/** Chart ranges in monthly rows. 2Y and 3Y appear only when the backtest is longer than that. */
+const RANGES: { id: Preset; label: string; months: number }[] = [{ id: '1m', label: '1M', months: 1 }, { id: '3m', label: '3M', months: 3 }, { id: '6m', label: '6M', months: 6 }, { id: '1y', label: '1Y', months: 12 }, { id: '2y', label: '2Y', months: 24 }, { id: '3y', label: '3Y', months: 36 }, { id: 'all', label: 'All', months: Infinity }];
+const rowsReturn = (rows: Month[], capital: number) => rows.reduce((total, row) => total + row.pnl, 0) / capital * 100;
 
 type LoadBacktest = (id: string) => Promise<BacktestLedger | null>;
 type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; access?: LabAccess; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
@@ -73,17 +76,36 @@ function EquityChart({ points }: { points: { label: string; value: number }[] })
 
 function Performance({ strategy, account }: { strategy: Strategy; account: Paper | null | undefined }) {
   const [range, setRange] = useState<Range>('all');
+  const [span, setSpan] = useState<{ from: string; to: string } | null>(null);
   const points = equityPoints(strategy);
-  const months = RANGES.find(item => item.id === range)!.months;
-  const visible = Number.isFinite(months) ? points.slice(-(months + 1)) : points;
+  const rows = strategy.monthly;
+  const presets = RANGES.filter(item => item.months <= 12 || !Number.isFinite(item.months) || rows.length > item.months);
+  const lastYear = { from: rows[Math.max(0, rows.length - 12)].month, to: rows[rows.length - 1].month };
+  const wanted = span || lastYear;                                    // Custom opens on the last 12 months
+  const to = rows.reduce((found, row, index) => row.month <= wanted.to ? index : found, 0);
+  const from = Math.min(to, Math.max(0, rows.findIndex(row => row.month >= wanted.from)));
+  const months = RANGES.find(item => item.id === range)?.months ?? Infinity;
+  const [first, last] = range === 'custom' ? [from, to] : [Number.isFinite(months) ? Math.max(0, rows.length - months) : 0, rows.length - 1];
+  const visible = points.slice(first, last + 2);                      // the point before the first month is its starting equity
+  const shown = rows.slice(first, last + 1);
+  const rangeReturn = (id: Preset, count: number) => id === 'all' || count <= 12 ? periodReturn(strategy, id as Period | 'all') : rowsReturn(rows.slice(-count), strategy.capital);
+  const customReturn = rowsReturn(rows.slice(from, to + 1), strategy.capital);
   const capital = account?.capital ?? strategy.capital;
   const up = strategy.monthly.filter(month => month.pnl > 0);
   return <>
     <div className={styles.card}>
       <div className={styles.chartHead}>
-        <div><h3>Backtest equity</h3><p className={styles.caption}>{money(strategy.capital)} model capital · {shortDate(strategy.period_start, true)} – {shortDate(strategy.period_end, true)}</p></div>
-        <div className={styles.rangePills}>{RANGES.map(item => { const value = periodReturn(strategy, item.id); return <button key={item.id} className={range === item.id ? styles.rangeActive : ''} aria-pressed={range === item.id} onClick={() => setRange(item.id)}>{item.label}<span className={tone(value)}>{signedPercent(value)}</span></button>; })}</div>
+        <div><h3>Backtest equity</h3><p className={styles.caption}>{money(strategy.capital)} model capital · {shortDate(visible[0].label, true)} – {shortDate(visible[visible.length - 1].label, true)}</p></div>
+        <div className={styles.rangePills} role="group" aria-label="Chart range">
+          {presets.map(item => { const value = rangeReturn(item.id, item.months); return <button key={item.id} className={range === item.id ? styles.rangeActive : ''} aria-pressed={range === item.id} onClick={() => setRange(item.id)}>{item.label}<span className={tone(value)}>{signedPercent(value)}</span></button>; })}
+          <button className={range === 'custom' ? styles.rangeActive : ''} aria-pressed={range === 'custom'} onClick={() => setRange('custom')}>Custom{range === 'custom' ? <span className={tone(customReturn)}>{signedPercent(customReturn)}</span> : <span>Pick months</span>}</button>
+        </div>
       </div>
+      {range === 'custom' && <div className={styles.rangeCustom}>
+        <label>From<select className={styles.select} value={rows[from].month} onChange={event => setSpan({ from: event.target.value, to: rows[to].month })}>{rows.slice(0, to + 1).map(row => <option key={row.month} value={row.month}>{monthLabel(row.month, 'long')}</option>)}</select></label>
+        <label>To<select className={styles.select} value={rows[to].month} onChange={event => setSpan({ from: rows[from].month, to: event.target.value })}>{rows.slice(from).map(row => <option key={row.month} value={row.month}>{monthLabel(row.month, 'long')}</option>)}</select></label>
+        <span>{shown.length} {shown.length === 1 ? 'month' : 'months'} · {shown.reduce((total, row) => total + row.closed_trades, 0)} trades · P&L <b className={tone(customReturn)}>{money(shown.reduce((total, row) => total + row.pnl, 0))}</b></span>
+      </div>}
       <EquityChart points={visible} />
     </div>
     <div className={styles.twoCol}>

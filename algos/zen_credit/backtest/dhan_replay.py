@@ -19,7 +19,8 @@ from typing import Mapping
 import numpy as np
 import pandas as pd
 
-from backtest.dhan_history import DhanHistoryClient, chunks, download, option_payload, spot_payload
+from backtest.dhan_history import (DhanHistoryClient, NEAR_EXPIRY_OFFSETS, OPTION_OFFSETS, chunks, download,
+                                   option_payload, spot_payload)
 from backtest.engine import Backtester
 from backtest.metrics import compute_metrics,compute_period_performance
 from backtest.nifty_2024 import Nifty2024Calendar, SOURCES, expiries_for, lot_size
@@ -84,7 +85,7 @@ def prepend_index_history(client, bars, start, earliest, calendar, progress=prin
 
 
 def load_history(client, start, end, progress=print, calendar=None, expiry_resolver=expiries_for,
-                 option_offsets=((1, range(-10, 11)), (2, range(-3, 4)))):
+                 option_offsets=OPTION_OFFSETS):
     calendar = calendar or Nifty2024Calendar()
     spots, options = [], []
     for first, last in chunks(start, end):
@@ -471,6 +472,10 @@ def run_cli():
     parser.add_argument("--carry-missing-hedge", action="store_true",
                         help="intraday strategies: a held hedge leg with no cached price reuses its last price of the "
                              "session for stop/target checks and is booked at zero on exit (see StrategyEngine)")
+    parser.add_argument("--near-expiry-only", action="store_true",
+                        help="load only the nearest-expiry option series; for strategies that never use the next "
+                             "expiry (the ratio strategies), on dates whose next-expiry series are not cached "
+                             "(before 13 Sep 2023)")
     parser.add_argument("--exit-tail-days", type=int, default=7,
                         help="extra calendar days for exits; use 0 for P&L strictly through --end")
     args = parser.parse_args()
@@ -498,8 +503,10 @@ def run_cli():
     output = args.output or REPO_ROOT / "reports" / f"dhan_{args.start}_{args.end}"
     output.mkdir(parents=True, exist_ok=True)
     client = DhanHistoryClient(offline=args.offline)
-    download(client, start, stop)
-    bars, options, conflicts = load_history(client, start, stop, calendar=calendar, expiry_resolver=expiry_resolver)
+    offsets = NEAR_EXPIRY_OFFSETS if args.near_expiry_only else OPTION_OFFSETS
+    download(client, start, stop, option_offsets=offsets)
+    bars, options, conflicts = load_history(client, start, stop, calendar=calendar, expiry_resolver=expiry_resolver,
+                                            option_offsets=offsets)
     history_days = getattr(registry.get_strategy(args.strategy), "HISTORY_DAYS", 0)
     if history_days > (args.start - start).days:     # e.g. ratio_strategy_03's 20-session realised volatility
         bars = prepend_index_history(client, bars, start, args.start - timedelta(days=history_days), calendar)
@@ -559,7 +566,7 @@ def run_cli():
     performance=write_replay_performance(output,trades,cfg.capital,args.start,pd.Timestamp(result.last_decision).date())
     report = {"entry_start": str(args.start), "entry_end_inclusive": str(args.end),
               "download_start": str(start), "download_end_exclusive": str(stop), "config": asdict(cfg),
-              "mode": result.mode, "strategy": args.strategy, "provider_history_rules": args.provider_history_rules,
+              "mode": result.mode, "strategy": args.strategy, "provider_history_rules": args.provider_history_rules, "near_expiry_only": args.near_expiry_only,
               "carry_missing_hedge": args.carry_missing_hedge,
               "coverage_complete_for_open_positions": coverage_ok,
               "missing_position_quote_minutes": len(replay.coverage_events), "open_positions_at_end": open_count,

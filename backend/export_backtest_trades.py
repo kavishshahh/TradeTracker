@@ -23,7 +23,7 @@ LEDGERS = {
     'ratio_strategy_04': 'ratio_strategy_04_2023-10-04_2026-11-19/trades.csv',
     'zen_strategy_05': 'zen_strategy_05_2023-10-04_2026-11-19/trades.csv',
     'zen_strategy_06': 'zen_strategy_06_2023-10-04_2026-11-19/trades.csv',
-    'ratio_strategy_08': 'ratio_strategy_08_2023-10-04_2026-11-19/trades.csv',
+    'ratio_strategy_08': 'ratio_strategy_08_2022-01-26_2026-11-19/trades.csv',
     'zen_strategy_10': 'zen_strategy_10_2023-10-04_2026-11-19/trades.csv',
 }
 

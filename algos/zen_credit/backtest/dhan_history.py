@@ -228,11 +228,15 @@ def spot_payload(start, end):
             "fromDate": f"{start} 00:00:00", "toDate": f"{end} 00:00:00"}
 
 
-def download(client, start, end, progress=print):
+OPTION_OFFSETS = ((1, range(-10, 11)), (2, range(-3, 4)))      # (expiry code, ATM offsets): nearest and next expiry
+NEAR_EXPIRY_OFFSETS = OPTION_OFFSETS[:1]
+
+
+def download(client, start, end, progress=print, option_offsets=OPTION_OFFSETS):
     for first, last in chunks(start, end):
         progress(f"Historical chunk {first} to {last} (end excluded)", flush=True)
         client.request("intraday", spot_payload(first, last))
-        for code, offsets in ((1, range(-10, 11)), (2, range(-3, 4))):
+        for code, offsets in option_offsets:
             for offset in offsets:
                 for side in ("CALL", "PUT"):
                     client.request("rollingoption", option_payload(first, last, code, offset, side))

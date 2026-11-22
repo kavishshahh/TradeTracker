@@ -1,4 +1,4 @@
-"""ratio_strategy_08: R4's execution, no put realised-volatility cap, short strike 50 points in the money."""
+"""ratio_strategy_08: R4's signal and execution, short strike 50 points in the money."""
 from dataclasses import fields
 from datetime import date
 
@@ -26,7 +26,10 @@ def test_profile_differs_from_r4_only_in_the_short_strike():
     assert s8.panel_from_snapshots is s3.panel_from_snapshots and s4.calculate_indicators is s3.calculate_indicators
 
 
-def test_put_spreads_ignore_the_realised_volatility_cap(monkeypatch):
+def test_put_spreads_keep_the_realised_volatility_cap(monkeypatch):
+    """The cap was removed when the strategy was listed and restored on 22 Nov 2026 (see the strategy file)."""
+    assert s8.calculate_indicators is s3.calculate_indicators and s8.PUT_RV_MAX == s3.PUT_RV_MAX == 16.0
+    assert any(line.startswith("Put spreads need 21 completed sessions") for line in s8.LIMITATIONS)
     monkeypatch.setattr(s3, "SMOOTH_WINDOW", 1)
     monkeypatch.setattr(s3, "RANK_WINDOW", 20)
     monkeypatch.setattr(s3, "RANK_MIN_PERIODS", 10)
@@ -37,13 +40,12 @@ def test_put_spreads_ignore_the_realised_volatility_cap(monkeypatch):
     clock = bars.index + pd.Timedelta(minutes=1)
     steps = np.arange(len(clock), dtype=float)
     panel = pd.DataFrame({"skew": s3.SKEW_PUT_MIN + 1 + steps / 100, "iv_ce_atm": 13.0}, index=clock)
-    capped = s3.calculate_indicators(bars, panel).iloc[-2:]
-    free = s8.calculate_indicators(bars, panel).iloc[-2:]
-    assert (capped["rv"] > s3.PUT_RV_MAX).all() and (capped["gate"] == 0.0).all() and (capped["alpha2"] == 0.5).all()
+    wild = s8.calculate_indicators(bars, panel).iloc[-2:]              # put skew, but volatility above the cap
+    assert (wild["rv"] > s8.PUT_RV_MAX).all() and (wild["gate"] == 0.0).all() and (wild["alpha2"] == 0.5).all()
+    free = s3.calculate_indicators(bars, panel, put_rv_max=None).iloc[-2:]      # research replays can still lift it
     assert (free["gate"] == 1.0).all() and (free["alpha2"] > s3.BULLISH_RANK).all()
-    assert free["rv"].equals(capped["rv"]) and free["alpha"].equals(capped["alpha"])    # only the gate changes
-    early = s8.calculate_indicators(bars.iloc[:6], panel.iloc[:6])                       # no volatility history yet
-    assert early["rv"].isna().all() and (early["gate"] == 1.0).all()
+    early = s8.calculate_indicators(bars.iloc[:6], panel.iloc[:6])   # no volatility history yet: no put spread
+    assert early["rv"].isna().all() and (early["gate"] == 0.0).all()
 
 
 def test_build_spread_moves_the_short_strike_into_the_money():

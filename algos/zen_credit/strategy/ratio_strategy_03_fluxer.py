@@ -228,7 +228,7 @@ def realised_vol(close: pd.Series, sessions, window: int = RV_SESSIONS) -> pd.Se
 
 def calculate_indicators(bars: pd.DataFrame, panel: pd.DataFrame, put_rv_max: float | None = PUT_RV_MAX) -> pd.DataFrame:
     """Completed start-indexed bars + decision-indexed near panel -> alpha/alpha2 frame.
-    ``put_rv_max`` None removes the realised-volatility cap on put spreads (ratio_strategy_08)."""
+    ``put_rv_max`` None removes the realised-volatility cap on put spreads (research replays only)."""
     bars = _bars(bars); clock = bars.index + pd.Timedelta(minutes=1)
     if not isinstance(panel.index, pd.DatetimeIndex) or panel.index.tz is None:
         raise ValueError('Option panel needs a timezone-aware decision clock')

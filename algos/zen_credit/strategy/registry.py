@@ -11,7 +11,7 @@ STRATEGIES={'description':'Original supplied-description interpretation',
             'zen_strategy_05':'zen_strategy_01 with drawdown-capped risk rules',
             'zen_strategy_06':'zen_strategy_02 with drawdown-capped risk rules',
             'zen_strategy_07':'Damper replica: zen_strategy_01 signal traded intraday',
-            'ratio_strategy_08':'ratio_strategy_04 without the put volatility cap, short strike 50 points in the money',
+            'ratio_strategy_08':'ratio_strategy_04 with the short strike 50 points in the money',
             'zen_strategy_09':'zen_strategy_02 signal traded intraday with a 30% target and capped lots',
             'zen_strategy_10':'45-minute price momentum rank traded from 11:45 with capped lots'}
 

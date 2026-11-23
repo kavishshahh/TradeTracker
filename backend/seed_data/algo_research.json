@@ -1,5 +1,56 @@
 {
   "method": "Engine replays on one-minute closes, 4 Oct 2023 to 19 Nov 2026, gross on ₹3,20,000 of fixed model capital. Costs are slippage plus charges per trade, per unit: 4.6 points is what real fills on a similar algo lost against its published prices. Research strategies stay in the code for replays; they are not paper traded.",
+  "checks": {
+    "basis": "Next-candle fills and real costs on ₹3,20,000, 14 Dec 2021 to 19 Nov 2026. The pass and fail rules were fixed before each run.",
+    "note": "“Unseen” is Dec 2021 to Oct 2023, which no search used; it counts as a pass only above 95%. The drawdown bar is full at 50% and turns amber past the 25% listing limit. Skew Deep Credit was scored on an earlier list of eight rules.",
+    "rows": [
+      {
+        "id": "ratio_strategy_04",
+        "checked": "22 Nov 2026",
+        "passed": 10,
+        "rules": 11,
+        "profit": 1043069,
+        "per_year": 34.2,
+        "drawdown": 21.2,
+        "placebo": 78,
+        "finding": "Holds up best. Its listed 10% drawdown becomes 21% when every fill is one minute later."
+      },
+      {
+        "id": "ratio_strategy_08",
+        "checked": "22 Nov 2026",
+        "passed": 5,
+        "rules": 8,
+        "profit": 1125224,
+        "per_year": 35.8,
+        "drawdown": 23.0,
+        "placebo": 80,
+        "finding": "Put volatility block restored: without it 2022 produced a 42.7% drawdown."
+      },
+      {
+        "id": "ratio_strategy_03",
+        "checked": "23 Nov 2026",
+        "passed": 7,
+        "rules": 11,
+        "profit": 676761,
+        "per_year": 25.9,
+        "drawdown": 36.1,
+        "placebo": 84,
+        "finding": "Depends on same-minute fills. It re-enters straight after a stop, where a minute changes the result."
+      },
+      {
+        "id": "zen_strategy_10",
+        "finding": "Not checked yet. Needs option series for 2021 to 2023 that are not downloaded."
+      },
+      {
+        "id": "zen_strategy_06",
+        "finding": "Not checked yet. Needs option series for 2021 to 2023 that are not downloaded."
+      },
+      {
+        "id": "zen_strategy_05",
+        "finding": "Not checked yet. Needs option series for 2021 to 2023 that are not downloaded."
+      }
+    ]
+  },
   "notes": [
     {
       "id": "zen_strategy_09",

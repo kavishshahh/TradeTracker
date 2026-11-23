@@ -9,4 +9,7 @@ export type ResearchNote = {
   id: string; name: string; tag: string; source: string; researched: string; code: string;
   verdict: string; summary: string; stats: ResearchStat[]; costs: CostRow[]; findings: string[];
 };
-export type Research = { method: string; notes: ResearchNote[] };
+/** One listed algo's reliability check (next-candle fills, real costs, five years). An unchecked algo has only `id` and `finding`. */
+export type CheckRow = { id: string; finding: string; checked?: string; passed?: number; rules?: number; profit?: number; per_year?: number; drawdown?: number; placebo?: number };
+export type ResearchChecks = { basis: string; note: string; rows: CheckRow[] };
+export type Research = { method: string; checks?: ResearchChecks; notes: ResearchNote[] };

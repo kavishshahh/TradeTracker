@@ -197,7 +197,7 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, acce
   // Research names the rules of unlisted strategies: the owner's only, like the rules on an algo's page.
   // The order desk's settings are the owner's alone (the API refuses everyone else).
   else if (view === 'live') main = access.owner && live ? <AlgoLive catalog={catalog} actions={live} /> : <div className={styles.card}><EmptyRow>Dry run is not available on this account.</EmptyRow></div>;
-  else if (view === 'research') main = access.owner && loadResearch ? <AlgoResearch load={loadResearch} /> : <div className={styles.card}><EmptyRow>Research notes are not shared.</EmptyRow></div>;
+  else if (view === 'research') main = access.owner && loadResearch ? <AlgoResearch load={loadResearch} catalog={catalog} /> : <div className={styles.card}><EmptyRow>Research notes are not shared.</EmptyRow></div>;
   else if (!access.allowed && view !== 'algos') main = <AccessCard access={access} what={view === 'positions' ? 'Open positions' : 'Simulated orders'} />;
   else if (view === 'positions') main = <PositionsView catalog={catalog} paper={paper} onOpen={id => go(view, id)} />;
   else if (view === 'orders') main = <OrdersView catalog={catalog} paper={paper} />;

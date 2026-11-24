@@ -95,8 +95,10 @@ def test_single_open_position_duplicate_signal_and_atomic_exit_totals(setup):
     with store.lock():
         row=store.insert_position(position(),'bearish');assert row.target is None
         assert store.insert_position(position('other'),'bearish') is None
-        exit=ExitEvent('target',clock[0],20,5200,1.625)
-        assert store.close_position(row.id,exit).pnl==5200
+        exit=ExitEvent('target',clock[0],20,5200,1.625,26.5,6.5)
+        closed=store.close_position(row.id,exit)
+        assert closed.pnl==5200 and (closed.sell_exit_price,closed.buy_exit_price)==(26.5,6.5)
+        assert [(r.sell_exit_price,r.buy_exit_price) for r in store.closed_positions()]==[(26.5,6.5)]
         assert store.close_position(row.id,exit) is None
         assert store.insert_position(position(),'bearish') is None
         next_row=store.insert_position(position('other'),'bearish');assert next_row.id==2

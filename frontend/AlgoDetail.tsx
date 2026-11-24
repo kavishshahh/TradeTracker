@@ -272,7 +272,7 @@ function ForwardPositions({ account, onDownload }: { account: Paper | null | und
     {account.open_position ? <PositionTable trades={[account.open_position]} open totalPnl={account.unrealized_pnl} /> : <div className={styles.tableCard}><EmptyRow>No open paper position.</EmptyRow></div>}
     <div className={styles.sectionHead}><h2>Forward paper · closed legs</h2><Pills label="Filter closed positions" value={filter} onChange={setFilter} items={[{ id: 'all', label: 'All', count: closed.length }, { id: 'profit', label: 'In profit', count: profits.length }, { id: 'loss', label: 'In loss', count: losses.length }]} /><button className={styles.outlineButton} onClick={onDownload} disabled={!closed.length}>Download CSV</button></div>
     {visible.length ? <PositionTable trades={visible} /> : <div className={styles.tableCard}><EmptyRow>{filter === 'all' ? 'No closed paper positions yet.' : `No closed positions ${filter === 'profit' ? 'in profit' : 'in loss'}.`}</EmptyRow></div>}
-    <p className={styles.caption}>Realized P&L across the full paper ledger: <b className={tone(account.realized_pnl)}>{money(account.realized_pnl)}</b>. Showing the latest {closed.length} closed trades (maximum {account.ledger_limit}); legs without a quote show —.</p>
+    <p className={styles.caption}>Realized P&L across the full paper ledger: <b className={tone(account.realized_pnl)}>{money(account.realized_pnl)}</b>. Showing the latest {closed.length} closed trades (maximum {account.ledger_limit}). A trade closed before each leg’s exit price was recorded shows what the whole spread closed at.</p>
   </>;
 }
 

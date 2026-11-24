@@ -76,6 +76,9 @@ class ExitEvent:
     exit_value: float | None
     pnl: float | None
     pnl_pct: float | None
+    # What each option closed at: its quote at the exit, or its settlement value at expiry. None when unknown.
+    sell_exit_price: float | None = None
+    buy_exit_price: float | None = None
 
 
 @dataclass
@@ -172,6 +175,7 @@ class StrategyEngine:
     def spread_value(self, chain: OptionChainSnapshot | None, pos: Position) -> float | None:
         """Cost to close: buy back the short leg, sell the long leg."""
         self._carried_hedge = None
+        self._leg_prices = None
         if chain is None or chain.expiry != pos.expiry:
             return None
         s = self._leg_price(chain, pos.sell_strike, pos.option_type, "BUY")
@@ -189,6 +193,7 @@ class StrategyEngine:
                 self._carried_from = (pos.spot_at_entry, pos.entry_ts)
         if s is None or b is None:
             return None
+        self._leg_prices = (s, b)           # the two quotes behind this value, kept for the exit record
         return round_price(s - b)
 
     # Historical replays only (never set by the live runner, whose chain has every strike): the cached history
@@ -202,6 +207,7 @@ class StrategyEngine:
     # implied by that last price, at the exit's spot and time, never above the last price.
     carry_missing_hedge: bool = False
     carry_hedge_overnight: bool = False
+    _leg_prices: tuple | None = None
     _hedge_memory: tuple | None = None
     _carried_hedge: float | None = None
     _carried_from: tuple | None = None          # (spot, time) of the price being reused, for the replay report
@@ -293,6 +299,7 @@ class StrategyEngine:
             diag["stop_in_grace"] = stop_level if math.isfinite(stop_level) else None
         if target_until is not None:
             diag["target_active"] = now.date() <= target_until
+        exit_legs = self._leg_prices if value is not None else None
         if (decision is not None and decision.reason == STOP_LOSS and pos.stop_loss is not None
                 and pos.net_credit is not None and pos.stop_loss <= pos.net_credit):
             decision = ExitDecision(PROFIT_LOCK, decision.spread_value)     # a moved stop closes at a profit or flat
@@ -308,6 +315,9 @@ class StrategyEngine:
                     and math.isfinite(settlement.spot) and settlement.spot > 0):
                 decision = ExitDecision("Expiry", intrinsic_spread_value(pos, settlement.spot))
                 diag["settlement_source"] = settlement.source
+                sign = 1.0 if pos.option_type == "CE" else -1.0
+                exit_legs = (round_price(max(sign * (settlement.spot - pos.sell_strike), 0.0)),
+                             round_price(max(sign * (settlement.spot - pos.buy_strike), 0.0)))
             elif self.require_quotes or pos.net_credit is not None:
                 return EngineResult("none", "Expiry due but official settlement unavailable",
                                     position=pos, diagnostics=diag)
@@ -317,6 +327,7 @@ class StrategyEngine:
         if self._carried_hedge is not None and decision.spread_value is not None and decision.reason != "Expiry":
             hedge = self._carried_hedge_model(pos, chain.spot, now) if self.carry_hedge_overnight and chain is not None else 0.0
             decision = ExitDecision(decision.reason, round_price(decision.spread_value + self._carried_hedge - hedge))
+            exit_legs = (exit_legs[0], hedge) if exit_legs else None
             diag["hedge_leg_booked_at_zero"] = hedge == 0.0
             diag["hedge_carried_exit_value"] = hedge
             diag["hedge_carried_value"] = self._carried_hedge
@@ -331,7 +342,9 @@ class StrategyEngine:
             if not math.isfinite(capital) or capital <= 0:
                 return EngineResult("none", "invalid allocated capital", position=pos, diagnostics=diag)
             pct = round_pct(100.0 * pnl / capital)
-        ev = ExitEvent(decision.reason, now, decision.spread_value, pnl, pct)
+        if decision.spread_value is None:
+            exit_legs = None
+        ev = ExitEvent(decision.reason, now, decision.spread_value, pnl, pct, *(exit_legs or (None, None)))
         return EngineResult("exit", decision.reason, position=pos, exit=ev, diagnostics=diag)
 
     def _evaluate_entry(self, view: MarketView, now: datetime) -> EngineResult:

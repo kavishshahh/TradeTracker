@@ -161,9 +161,12 @@ class PositionRecord:
     exit_email_status: str
     exit_email_attempts: int
     allocated_capital: float | None
+    # Each option's price at the exit (Firestore store only; the PostgreSQL table has no such columns).
+    sell_exit_price: float | None = None
+    buy_exit_price: float | None = None
 
 
-_POSITION_FIELDS = [f.name for f in fields(PositionRecord)]
+_POSITION_FIELDS = [f.name for f in fields(PositionRecord) if f.name not in ('sell_exit_price', 'buy_exit_price')]
 
 
 def _aware(dt: datetime | None) -> datetime | None:

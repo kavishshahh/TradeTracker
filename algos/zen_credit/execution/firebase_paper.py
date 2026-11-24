@@ -14,7 +14,7 @@ log = logging.getLogger('paper.dashboard')
 FIELDS = ('signal_id', 'status', 'direction', 'entry_ts', 'expiry', 'option_type',
           'sell_strike', 'buy_strike', 'lots', 'units', 'sell_price', 'buy_price',
           'net_credit', 'stop_loss', 'target', 'exit_due', 'alpha', 'alpha2',
-          'exit_ts', 'exit_value', 'exit_reason', 'pnl')
+          'exit_ts', 'exit_value', 'exit_reason', 'pnl', 'sell_exit_price', 'buy_exit_price')
 
 
 def public_trade(row):

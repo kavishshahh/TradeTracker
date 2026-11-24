@@ -154,4 +154,46 @@ def test_replay_closes_an_overnight_spread_on_schedule_when_the_hedge_has_no_pri
     assert out.diagnostics["hedge_carried_value"] == pytest.approx(14.0)
     assert 0.0 < hedge < 14.0                                        # further out of the money and a day older
     assert out.exit.exit_value == pytest.approx(30.0 - hedge, abs=0.01)
+    assert (out.exit.sell_exit_price, out.exit.buy_exit_price) == (pytest.approx(30.0), pytest.approx(hedge))
     assert out.diagnostics["hedge_leg_booked_at_zero"] is False
+
+
+def test_an_exit_records_what_each_option_closed_at():
+    """The paper ledger shows each leg's exit price and P&L, so the exit carries both quotes, or at expiry
+    each option's settlement value."""
+    from datetime import date
+
+    from data.market_calendar import HolidaySetCalendar
+    from data.providers.base import ExpirySettlement, OptionChainSnapshot, OptionQuote
+    from risk.exits import STOP_LOSS
+    from strategy.engine import MarketView, Position
+    from tests.conftest import ist
+
+    expiry = date(2026, 11, 24)
+    pos = Position(signal_id="x", entry_ts=ist(2026, 11, 23, 11, 55), expiry=expiry, option_type="CE",
+                   sell_strike=25550.0, buy_strike=25950.0, lots=2, lot_size=65, units=130, sell_price=53.95,
+                   buy_price=6.9, net_credit=47.05, stop_loss=92.05, target=None, max_loss=None, max_profit=None,
+                   exit_due=ist(2026, 11, 24, 14, 53), spot_at_entry=25540.0, alpha=0.05, alpha2=0.05,
+                   allocated_capital=320000.0)
+    engine = registry.create_engine("zen_strategy_10", None, HolidaySetCalendar(set()), max_data_age_seconds=None)
+
+    def view(day, hour, minute, spot, short=None, hedge=None, settlement=None):
+        now = ist(2026, 11, day, hour, minute)
+        chain = OptionChainSnapshot("NIFTY", expiry, now, spot)
+        if short is not None:
+            chain.quotes[(25550.0, "CE")] = OptionQuote(25550.0, "CE", short, short, short, None)
+            chain.quotes[(25950.0, "CE")] = OptionQuote(25950.0, "CE", hedge, hedge, hedge, None)
+        return MarketView(now=now, spot_bars=None, snapshots=None, chain=chain, expiries=[expiry], lot_size=65,
+                          position_chain=chain, settlement=settlement)
+
+    assert engine.evaluate(view(23, 12, 30, 25560.0, 60.0, 8.0), pos).action == "none"
+    stopped = engine.evaluate(view(23, 13, 0, 25700.0, 130.0, 21.5), pos)
+    assert stopped.action == "exit" and stopped.reason == STOP_LOSS
+    assert (stopped.exit.sell_exit_price, stopped.exit.buy_exit_price) == (130.0, 21.5)
+    assert stopped.exit.exit_value == pytest.approx(108.5)
+    assert stopped.exit.pnl == pytest.approx((47.05 - 108.5) * 130)
+
+    settled = engine.evaluate(view(25, 9, 16, 25600.0, settlement=ExpirySettlement(expiry, 25612.4, "official close")), pos)
+    assert settled.action == "exit" and settled.reason == "Expiry"
+    assert (settled.exit.sell_exit_price, settled.exit.buy_exit_price) == (pytest.approx(62.4), 0.0)
+    assert settled.exit.exit_value == pytest.approx(62.4)

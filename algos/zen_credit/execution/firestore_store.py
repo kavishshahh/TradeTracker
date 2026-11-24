@@ -272,6 +272,7 @@ class FirestoreStore:
             if not row or row['status'] != 'open' or runtime.get('open_id') != row_id: return None
             row.update(status='closed',strategy_state='FLAT',exit_ts=clean(ev.exit_ts),
                 exit_value=clean(ev.exit_value),exit_reason=ev.reason,pnl=clean(ev.pnl),
+                sell_exit_price=clean(getattr(ev,'sell_exit_price',None)),buy_exit_price=clean(getattr(ev,'buy_exit_price',None)),
                 pnl_pct=clean(ev.pnl_pct),exit_email_status='pending')
             stats = runtime.get('stats',{'closed_trades':0,'winners':0,'unknown_pnl':0,'realized_pnl':0.0})
             stats['closed_trades'] += 1

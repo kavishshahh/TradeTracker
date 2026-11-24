@@ -64,6 +64,8 @@ export function PositionTable({ trades, open = false, totalPnl, algo }: { trades
       const entry = sell ? trade.sell_price : trade.buy_price;
       const current = open ? (sell ? trade.sell_mark : trade.buy_mark) : (sell ? trade.sell_exit_price : trade.buy_exit_price);
       const pnl = current == null ? null : (sell ? entry - current : current - entry) * trade.units;
+      // A trade closed before each leg's exit price was recorded: show what the spread closed at and its total P&L.
+      const whole = !open && trade.sell_exit_price == null && trade.buy_exit_price == null && trade.pnl != null;
       return <tr key={trade.signal_id + side}>
         <td><b>{legName(trade, side)}</b><small><span className={sell ? styles.sellTag : styles.buyTag}>{sell ? 'SELL' : 'BUY'}</span> Entry {time(trade.entry_ts)}{!open && ` · Exit ${time(trade.exit_ts)}`}</small></td>
         {algo && <td>{algo(trade)}</td>}
@@ -71,8 +73,8 @@ export function PositionTable({ trades, open = false, totalPnl, algo }: { trades
         <td className={styles.num}>{open && sell ? '−' : ''}{trade.units}<small>{trade.lots} lots</small></td>
         <td className={styles.num}>{quote(sell ? (open ? null : current) : entry)}</td>
         <td className={styles.num}>{quote(sell ? entry : (open ? null : current))}</td>
-        <td className={styles.num}>{quote(current)}</td>
-        <td className={`${styles.num} ${tone(pnl)}`}>{money(pnl, 2)}</td>
+        {whole ? sell && <td rowSpan={2} className={styles.num}>{quote(trade.exit_value)}<small>whole spread</small></td> : <td className={styles.num}>{quote(current)}</td>}
+        {whole ? sell && <td rowSpan={2} className={`${styles.num} ${tone(trade.pnl)}`}>{money(trade.pnl, 2)}<small>both legs</small></td> : <td className={`${styles.num} ${tone(pnl)}`}>{money(pnl, 2)}</td>}
       </tr>;
     }))}</tbody>
     {totalPnl !== undefined && <tfoot><tr><td colSpan={algo ? 7 : 6}>{open ? 'Open positions P&L' : 'Total'}</td><td className={`${styles.num} ${tone(totalPnl)}`}>{money(totalPnl, 2)}</td></tr></tfoot>}

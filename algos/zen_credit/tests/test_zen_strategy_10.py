@@ -100,3 +100,58 @@ def test_live_engine_enters_from_index_candles_alone_and_only_from_1145():
     entry = engine.evaluate(bearish, None)
     assert entry.action == "entry" and entry.position.option_type == "CE"
     assert (entry.position.sell_strike, entry.position.buy_strike) == (atm, atm + 400)
+
+
+def test_replay_closes_an_overnight_spread_on_schedule_when_the_hedge_has_no_price():
+    """The cached history has no price for the 400-point hedge after a favourable move. With
+    carry_hedge_overnight the spread still closes at its next-day exit, the hedge valued by a model."""
+    from datetime import date
+
+    from data.market_calendar import HolidaySetCalendar
+    from data.providers.base import OptionChainSnapshot, OptionQuote
+    from risk.exits import TIME_EXIT
+    from strategy.engine import MarketView, Position
+    from tests.conftest import ist
+
+    expiry = date(2026, 11, 24)
+    pos = Position(signal_id="x", entry_ts=ist(2026, 11, 18, 12, 0), expiry=expiry, option_type="CE",
+                   sell_strike=25300.0, buy_strike=25700.0, lots=2, lot_size=65, units=130, sell_price=110.0,
+                   buy_price=20.0, net_credit=90.0, stop_loss=135.0, target=None, max_loss=None, max_profit=None,
+                   exit_due=ist(2026, 11, 19, 14, 53), spot_at_entry=25300.0, alpha=0.05, alpha2=0.05,
+                   allocated_capital=320000.0)
+
+    def view(day, hour, minute, spot, short, hedge):
+        now = ist(2026, 11, day, hour, minute)
+        chain = OptionChainSnapshot("NIFTY", expiry, now, spot)
+        chain.quotes[(25300.0, "CE")] = OptionQuote(25300.0, "CE", short, short, short, None)
+        if hedge is not None:
+            chain.quotes[(25700.0, "CE")] = OptionQuote(25700.0, "CE", hedge, hedge, hedge, None)
+        return MarketView(now=now, spot_bars=None, snapshots=None, chain=chain, expiries=[expiry], lot_size=65,
+                          position_chain=chain)
+
+    def engine(**flags):
+        made = registry.create_engine("zen_strategy_10", None, HolidaySetCalendar(set()), max_data_age_seconds=None)
+        for name, value in flags.items():
+            setattr(made, name, value)
+        return made
+
+    steps = [(18, 12, 30, 25250.0, 95.0, 14.0), (18, 15, 0, 25150.0, 60.0, None), (19, 11, 0, 25100.0, 40.0, None)]
+    due = (19, 14, 53, 25080.0, 30.0, None)
+
+    for flags in ({}, {"carry_missing_hedge": True}):               # live engine, and the same-session carry: still held
+        held = engine(**flags)
+        for step in steps:
+            assert held.evaluate(view(*step), pos).action == "none"
+        assert held.evaluate(view(*due), pos).action == "none"
+
+    replay = engine(carry_missing_hedge=True, carry_hedge_overnight=True)
+    for step in steps:
+        assert replay.evaluate(view(*step), pos).action == "none"
+    assert replay.evaluate(view(*steps[-1]), pos).diagnostics["spread_value"] == pytest.approx(26.0)   # 40 - 14 carried
+    out = replay.evaluate(view(*due), pos)
+    assert out.action == "exit" and out.reason == TIME_EXIT
+    hedge = out.diagnostics["hedge_carried_exit_value"]
+    assert out.diagnostics["hedge_carried_value"] == pytest.approx(14.0)
+    assert 0.0 < hedge < 14.0                                        # further out of the money and a day older
+    assert out.exit.exit_value == pytest.approx(30.0 - hedge, abs=0.01)
+    assert out.diagnostics["hedge_leg_booked_at_zero"] is False

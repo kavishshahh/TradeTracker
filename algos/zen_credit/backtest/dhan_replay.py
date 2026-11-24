@@ -324,7 +324,7 @@ def prepare_option_quotes(options):
 class DhanReplay(Backtester):
     def __init__(self, cfg, bars, options, slippage_points=0, settlement_loader=None,
                  calendar=None, expiry_resolver=expiries_for, lot_resolver=lot_size,
-                 prepared_quotes=None, strategy_name="description", carry_missing_hedge=False):
+                 prepared_quotes=None, strategy_name="description", carry_missing_hedge=False, carry_hedge_overnight=False):
         cfg = registry.apply_profile(strategy_name, cfg)
         self.strategy_name = strategy_name
         super().__init__(cfg, calendar or Nifty2024Calendar(), bars, expiry_resolver,
@@ -338,7 +338,8 @@ class DhanReplay(Backtester):
         self.slippage_points = slippage_points
         self.engine = registry.create_engine(strategy_name, cfg, self.calendar,
             entry_price_source="bidask", max_data_age_seconds=None, require_quotes=True)
-        self.engine.carry_missing_hedge = carry_missing_hedge
+        self.engine.carry_missing_hedge = carry_missing_hedge or carry_hedge_overnight
+        self.engine.carry_hedge_overnight = carry_hedge_overnight
         self.reasons = Counter()
         self.coverage_events = []
         self.decisions = []
@@ -411,7 +412,7 @@ class DhanReplay(Backtester):
         elif result.action == "exit" and position is not None:
             details = self.trade_details[position.entry_ts]
             details["spot_at_exit"] = view.chain.spot
-            for key in ("hedge_carried_value", "hedge_carried_spot", "hedge_carried_ts"):
+            for key in ("hedge_carried_value", "hedge_carried_spot", "hedge_carried_ts", "hedge_carried_exit_value"):
                 details[key] = result.diagnostics.get(key)
             details["exit_observed_ts"] = result.exit.exit_ts
             if result.exit.reason == "Expiry" and view.settlement is not None:
@@ -472,6 +473,10 @@ def run_cli():
     parser.add_argument("--carry-missing-hedge", action="store_true",
                         help="intraday strategies: a held hedge leg with no cached price reuses its last price of the "
                              "session for stop/target checks and is booked at zero on exit (see StrategyEngine)")
+    parser.add_argument("--carry-hedge-overnight", action="store_true",
+                        help="overnight strategies: as --carry-missing-hedge, but the last price is reused across "
+                             "sessions and the exit books the hedge at a Black-Scholes value from that price, so a "
+                             "spread whose hedge left the cache closes on schedule instead of at expiry")
     parser.add_argument("--near-expiry-only", action="store_true",
                         help="load only the nearest-expiry option series; for strategies that never use the next "
                              "expiry (the ratio strategies), on dates whose next-expiry series are not cached "
@@ -520,7 +525,8 @@ def run_cli():
     settlements = NSESettlementClient(client.cache_dir, offline=args.offline)
     replay = DhanReplay(cfg, bars, options, args.slippage_points, settlement_loader=settlements.get,
                         calendar=calendar, expiry_resolver=expiry_resolver, lot_resolver=lot_resolver,
-                        strategy_name=args.strategy, carry_missing_hedge=args.carry_missing_hedge)
+                        strategy_name=args.strategy, carry_missing_hedge=args.carry_missing_hedge,
+                        carry_hedge_overnight=args.carry_hedge_overnight)
     result = replay.run(start=datetime.combine(args.start, time.min, IST),
                         entry_end=datetime.combine(args.end, time.max, IST))
     result.mode = "dhan-minute-close"
@@ -528,7 +534,7 @@ def run_cli():
     if not trades.empty:
         for col in ("sell_leg_entry", "buy_leg_entry", "scheduled_exit", "sell_leg_exit", "buy_leg_exit",
                     "spot_at_exit", "exit_observed_ts", "settlement_spot", "settlement_source",
-                    "hedge_carried_value", "hedge_carried_spot", "hedge_carried_ts"):
+                    "hedge_carried_value", "hedge_carried_spot", "hedge_carried_ts", "hedge_carried_exit_value"):
             trades[col] = [replay.trade_details[t].get(col) for t in trades["entry_ts"]]
         trades["exit_ts"] = [replay.trade_details[t].get("effective_exit_ts", e)
                               for t,e in zip(trades["entry_ts"],trades["exit_ts"])]
@@ -567,7 +573,7 @@ def run_cli():
     report = {"entry_start": str(args.start), "entry_end_inclusive": str(args.end),
               "download_start": str(start), "download_end_exclusive": str(stop), "config": asdict(cfg),
               "mode": result.mode, "strategy": args.strategy, "provider_history_rules": args.provider_history_rules, "near_expiry_only": args.near_expiry_only,
-              "carry_missing_hedge": args.carry_missing_hedge,
+              "carry_missing_hedge": args.carry_missing_hedge, "carry_hedge_overnight": args.carry_hedge_overnight,
               "coverage_complete_for_open_positions": coverage_ok,
               "missing_position_quote_minutes": len(replay.coverage_events), "open_positions_at_end": open_count,
               "missing_index_session_dates": missing_days, "index_candles": len(bars),

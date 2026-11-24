@@ -171,19 +171,20 @@ class StrategyEngine:
 
     def spread_value(self, chain: OptionChainSnapshot | None, pos: Position) -> float | None:
         """Cost to close: buy back the short leg, sell the long leg."""
+        self._carried_hedge = None
         if chain is None or chain.expiry != pos.expiry:
             return None
         s = self._leg_price(chain, pos.sell_strike, pos.option_type, "BUY")
         b = self._leg_price(chain, pos.buy_strike, pos.option_type, "SELL")
-        self._carried_hedge = None
         if self.carry_missing_hedge and s is not None:
-            key = (pos.signal_id, to_ist(chain.timestamp).date())
+            day = None if self.carry_hedge_overnight else to_ist(chain.timestamp).date()
+            key = (pos.signal_id, day)
             if b is not None:
                 self._hedge_memory = (key, b, chain.spot, chain.timestamp)
             elif self._hedge_memory is not None and self._hedge_memory[0] == key:
                 b = self._carried_hedge = self._hedge_memory[1]
                 self._carried_from = self._hedge_memory[2:]
-            elif pos.buy_price is not None and to_ist(pos.entry_ts).date() == key[1]:
+            elif pos.buy_price is not None and (day is None or to_ist(pos.entry_ts).date() == day):
                 b = self._carried_hedge = float(pos.buy_price)
                 self._carried_from = (pos.spot_at_entry, pos.entry_ts)
         if s is None or b is None:
@@ -195,7 +196,12 @@ class StrategyEngine:
     # and an intraday position could then not be valued or closed on schedule. With this on, a hedge leg with
     # no print reuses its last price of the same session for the stop and target checks, and the exit itself
     # books that leg at zero (the worst case for the position).
+    # carry_hedge_overnight (with carry_missing_hedge, for strategies that hold overnight): the last price is reused
+    # across sessions too, so a spread whose hedge left the cache after a favourable move closes at its scheduled
+    # exit instead of being held to expiry, and the exit books the hedge at a Black-Scholes value: the volatility
+    # implied by that last price, at the exit's spot and time, never above the last price.
     carry_missing_hedge: bool = False
+    carry_hedge_overnight: bool = False
     _hedge_memory: tuple | None = None
     _carried_hedge: float | None = None
     _carried_from: tuple | None = None          # (spot, time) of the price being reused, for the replay report
@@ -243,6 +249,23 @@ class StrategyEngine:
         if hard is None or pos.net_credit is None or not self.cfg.stop_loss_margin_fraction:
             return math.inf
         return pos.net_credit + (pos.stop_loss - pos.net_credit) * hard / self.cfg.stop_loss_margin_fraction
+
+    def _carried_hedge_model(self, pos: Position, spot: float, now: datetime) -> float:
+        """Black-Scholes value of the hedge leg at the exit, from the volatility its last price implied."""
+        from datetime import time
+        from strategy.implied_vol import bs_price, implied_vol
+        from utils.time import IST
+        from_spot, from_ts = self._carried_from or (None, None)
+        if from_spot is None or from_ts is None or not spot or self._carried_hedge is None:
+            return 0.0
+        close = datetime.combine(pos.expiry, time(15, 30), tzinfo=IST)
+        years = lambda ts: max((close - to_ist(ts)).total_seconds(), 60.0) / (365.0 * 86400.0)
+        is_call = pos.option_type == "CE"
+        vol = float(implied_vol(self._carried_hedge, from_spot, pos.buy_strike, years(from_ts), is_call))   # a percentage
+        if not math.isfinite(vol):
+            return 0.0
+        value = float(bs_price(spot, pos.buy_strike, years(now), vol / 100.0, is_call))
+        return round_price(min(max(value, 0.0), self._carried_hedge)) if math.isfinite(value) else 0.0
 
     def _profit_lock_stop(self, pos: Position, value: float | None) -> float | None:
         """The new, lower stop once the open profit has reached profit_lock_trigger_fraction of the credit."""
@@ -292,8 +315,10 @@ class StrategyEngine:
             return EngineResult("none", f"{decision.reason} due but no valid quotes", position=pos,
                                 diagnostics=diag)
         if self._carried_hedge is not None and decision.spread_value is not None and decision.reason != "Expiry":
-            decision = ExitDecision(decision.reason, round_price(decision.spread_value + self._carried_hedge))
-            diag["hedge_leg_booked_at_zero"] = True
+            hedge = self._carried_hedge_model(pos, chain.spot, now) if self.carry_hedge_overnight and chain is not None else 0.0
+            decision = ExitDecision(decision.reason, round_price(decision.spread_value + self._carried_hedge - hedge))
+            diag["hedge_leg_booked_at_zero"] = hedge == 0.0
+            diag["hedge_carried_exit_value"] = hedge
             diag["hedge_carried_value"] = self._carried_hedge
             diag["hedge_carried_spot"], diag["hedge_carried_ts"] = self._carried_from or (None, None)
         pnl = pct = None

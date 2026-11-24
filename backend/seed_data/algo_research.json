@@ -39,7 +39,14 @@
       },
       {
         "id": "zen_strategy_10",
-        "finding": "Not checked yet. Needs option series for 2021 to 2023 that are not downloaded."
+        "checked": "24 Nov 2026",
+        "passed": 6,
+        "rules": 11,
+        "profit": 588255,
+        "per_year": 23.6,
+        "drawdown": 26.8,
+        "placebo": 92,
+        "finding": "The signal beats random entries over five years, but costs take a third of the profit and most 20% setting changes push the drawdown past 25%."
       },
       {
         "id": "zen_strategy_06",

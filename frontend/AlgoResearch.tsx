@@ -62,7 +62,7 @@ function Checks({ checks, catalog }: { checks: ResearchChecks; catalog: Strategy
 }
 
 function CheckLine({ row, strategy }: { row: CheckRow; strategy: Strategy | undefined }) {
-  const name = <td><div className={base.algoCell}><AlgoIcon version={strategy?.version || '?'} /><b>{strategy?.name || row.id}</b></div></td>;
+  const name = <td><div className={base.algoCell}><AlgoIcon version={strategy?.version || row.tag || '?'} /><b>{strategy?.name || row.name || row.id}</b></div></td>;
   if (row.passed == null || row.rules == null) return <tr className={styles.pending}>{name}<td>Not checked yet</td><td className={base.num}>—</td><td className={base.num}>—</td><td>—</td><td className={base.num}>—</td><td className={styles.finding}>{row.finding}</td></tr>;
   const over = (row.drawdown ?? 0) > DRAWDOWN_LIMIT;
   return <tr>

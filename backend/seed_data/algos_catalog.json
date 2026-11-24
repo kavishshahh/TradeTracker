@@ -4278,8 +4278,8 @@
    }
   ],
   "execution": "paper_only",
-  "limitations": "Gross 3-year historical simulation (4 Oct 2023 - 19 Nov 2026, fixed INR 320,000). The signal formula was chosen on Jul 2025 - Oct 2026 data and these risk rules on all three years, so results are in-sample; drawdown is sensitive to the trade sequence (a two-session pause is much worse). Missing option quotes, estimated margin and excluded costs make results provisional; it trades about 110-140 times a year, so costs matter. 1 Oct to 19 Nov 2026 was added on 20 Nov 2026 with no rule changed: 14 trades, -INR 95,397; the maximum drawdown went from -18.4% to -32.6%. One position entered on 19 Nov 2026 was still open at the end of the data and is not counted.",
-  "enabled": true,
+  "limitations": "Gross 3-year historical simulation (4 Oct 2023 - 19 Nov 2026, fixed INR 320,000). The signal formula was chosen on Jul 2025 - Oct 2026 data and these risk rules on all three years, so results are in-sample; drawdown is sensitive to the trade sequence (a two-session pause is much worse). Missing option quotes, estimated margin and excluded costs make results provisional; it trades about 110-140 times a year, so costs matter. 1 Oct to 19 Nov 2026 was added on 20 Nov 2026 with no rule changed: 14 trades, -INR 95,397; the maximum drawdown went from -18.4% to -32.6%. One position entered on 19 Nov 2026 was still open at the end of the data and is not counted. Taken off the mainboard on 24 Nov 2026 after its reliability check: it passed 3 of 11 rules set beforehand. With next-candle fills, real costs and exits on schedule, 26 Jan 2022 to 3 Oct 2023, which no search used, lost INR 1.10 lakh with a 60.3% drawdown and beat only 26% of random-entry runs; the five years to 19 Nov 2026 gave INR 3.48 lakh, 16.5% a year, with that same 60.3% drawdown. Overnight gap stops broke the 2.5% loss cap, the worst losing 12.3% of capital in one trade.",
+  "enabled": false,
   "order": 5,
   "schema_version": 1,
   "rules": [

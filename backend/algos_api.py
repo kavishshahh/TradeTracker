@@ -41,7 +41,7 @@ EMAIL_TTL_SECONDS = 600.0
 # full description are enough to rebuild an algo, so they are sent to the owner only; everyone
 # else reads the short `summary` as the description.
 PUBLIC_FIELDS = ('id', 'name', 'version', 'summary', 'underlying', 'category', 'capital',
-                 'period_start', 'period_end', 'metrics', 'monthly', 'order', 'enabled', 'execution')
+                 'period_start', 'period_end', 'metrics', 'monthly', 'daily', 'order', 'enabled', 'execution')
 EMAIL_PATTERN = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 # Deployed capital per strategy; the same bounds are enforced again by the desk before any order.
 LIVE_MIN_CAPITAL, LIVE_MAX_CAPITAL = 120_000, 320_000

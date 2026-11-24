@@ -1,16 +1,17 @@
 'use client';
 
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
-import { algoState, blurb, equityPoints, istParts, lakhs, money, monthLabel, pastTrades, percent, periodReturn, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
+import { useEffect, useMemo, useState } from 'react';
+import { algoState, blurb, dailyPnl, dayBefore, istParts, money, monthLabel, monthsBefore, pastTrades, percent, periodReturn, pnlBetween, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
 import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
+import EquityChart, { type EquityPoint } from './EquityChart';
 import styles from './algos.module.css';
 
 type Tab = 'performance' | 'trades' | 'monthly' | 'rules';
 type Preset = '1m' | '3m' | '6m' | '1y' | '2y' | '3y' | 'all';
 type Range = Preset | 'custom';
-/** Chart ranges in monthly rows. 2Y and 3Y appear only when the backtest is longer than that. */
+/** Chart ranges in calendar months back from the last day. 2Y and 3Y appear only when the backtest is longer than that. */
 const RANGES: { id: Preset; label: string; months: number }[] = [{ id: '1m', label: '1M', months: 1 }, { id: '3m', label: '3M', months: 3 }, { id: '6m', label: '6M', months: 6 }, { id: '1y', label: '1Y', months: 12 }, { id: '2y', label: '2Y', months: 24 }, { id: '3y', label: '3Y', months: 36 }, { id: 'all', label: 'All', months: Infinity }];
 const rowsReturn = (rows: Month[], capital: number) => rows.reduce((total, row) => total + row.pnl, 0) / capital * 100;
 
@@ -41,63 +42,59 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
 
 const shortDate = (value: string, withDay = false) => new Date(`${value}T00:00:00Z`).toLocaleDateString('en-IN', { day: withDay ? 'numeric' : undefined, month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-function EquityChart({ points }: { points: { label: string; value: number }[] }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const width = 900, height = 280, left = 8, right = 56, top = 12, bottom = height - 30;
-  const values = points.map(point => point.value);
-  const rawMin = Math.min(...values), rawMax = Math.max(...values);
-  const pad = Math.max((rawMax - rawMin) * 0.12, rawMax * 0.02, 1);
-  const min = Math.max(0, rawMin - pad), max = rawMax + pad;
-  const x = (index: number) => left + (points.length < 2 ? 0 : index / (points.length - 1)) * (width - left - right);
-  const y = (value: number) => top + (max - value) / (max - min) * (bottom - top);
-  const line = points.map((point, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)},${y(point.value).toFixed(1)}`).join(' ');
-  const ticks = Array.from({ length: 4 }, (_, index) => min + (max - min) * index / 3);
-  const labelEvery = Math.max(1, Math.ceil(points.length / 6));
-  const onMove = (event: MouseEvent<SVGSVGElement>) => {
-    const box = event.currentTarget.getBoundingClientRect();
-    const position = (event.clientX - box.left) / box.width * width;
-    setHover(Math.max(0, Math.min(points.length - 1, Math.round((position - left) / ((width - left - right) / Math.max(1, points.length - 1))))));
-  };
-  const point = hover == null ? null : points[hover];
-  const up = points[points.length - 1].value >= points[0].value;
-  return <svg className={`${styles.chartSvg} ${up ? styles.chartUp : styles.chartDown}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Cumulative backtest equity by month" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-    <defs><linearGradient id="equityFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" className={styles.fillTop} /><stop offset="100%" className={styles.fillBottom} /></linearGradient></defs>
-    {ticks.map(value => <g key={value}><line x1={left} x2={width - right} y1={y(value)} y2={y(value)} className={styles.grid} /><text x={width - right + 8} y={y(value) + 4} className={styles.axis}>{lakhs(value)}</text></g>)}
-    <path d={`${line} L${x(points.length - 1)},${bottom} L${x(0)},${bottom} Z`} fill="url(#equityFill)" />
-    <path d={line} className={styles.line} />
-    {points.map((item, index) => index % labelEvery === 0 && index > 0 && <text key={item.label} x={x(index)} y={height - 8} textAnchor="middle" className={styles.axis}>{shortDate(item.label)}</text>)}
-    {point && hover != null && <g pointerEvents="none">
-      <line x1={x(hover)} x2={x(hover)} y1={top} y2={bottom} className={styles.crosshair} />
-      <circle cx={x(hover)} cy={y(point.value)} r="4" className={styles.dot} />
-      <g transform={`translate(${Math.min(x(hover) + 10, width - right - 150)},${Math.max(top, y(point.value) - 56)})`}><rect width="140" height="44" rx="6" className={styles.tooltip} /><text x="10" y="18" className={styles.axis}>{shortDate(point.label, true)}</text><text x="10" y="35" className={styles.tooltipValue}>{money(point.value)}</text></g>
-    </g>}
-  </svg>;
-}
-
 function Performance({ strategy, account }: { strategy: Strategy; account: Paper | null | undefined }) {
   const [range, setRange] = useState<Range>('all');
   const [span, setSpan] = useState<{ from: string; to: string } | null>(null);
-  const points = equityPoints(strategy);
+  const days = useMemo(() => dailyPnl(strategy), [strategy]);
+  const detailed = !!strategy.daily?.length;                          // else one figure per month
   const rows = strategy.monthly;
-  const presets = RANGES.filter(item => item.months <= 12 || !Number.isFinite(item.months) || rows.length > item.months);
+  const end = strategy.period_end, origin = dayBefore(strategy.period_start);
+  const presets = RANGES.filter(item => item.months <= 12 || !Number.isFinite(item.months) || monthsBefore(end, item.months) > strategy.period_start);
   const lastYear = { from: rows[Math.max(0, rows.length - 12)].month, to: rows[rows.length - 1].month };
   const wanted = span || lastYear;                                    // Custom opens on the last 12 months
   const to = rows.reduce((found, row, index) => row.month <= wanted.to ? index : found, 0);
   const from = Math.min(to, Math.max(0, rows.findIndex(row => row.month >= wanted.from)));
-  const months = RANGES.find(item => item.id === range)?.months ?? Infinity;
-  const [first, last] = range === 'custom' ? [from, to] : [Number.isFinite(months) ? Math.max(0, rows.length - months) : 0, rows.length - 1];
-  const visible = points.slice(first, last + 2);                      // the point before the first month is its starting equity
-  const shown = rows.slice(first, last + 1);
-  const rangeReturn = (id: Preset, count: number) => id === 'all' || count <= 12 ? periodReturn(strategy, id as Period | 'all') : rowsReturn(rows.slice(-count), strategy.capital);
-  const customReturn = rowsReturn(rows.slice(from, to + 1), strategy.capital);
+  const shown = rows.slice(from, to + 1);
+  /** A range as (the day its equity is reset to the model capital, its last day). */
+  const bounds = (id: Range): [string, string] => {
+    if (id === 'custom') {
+      const [year, month] = rows[to].month.split('-').map(Number);
+      const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+      const start = dayBefore(`${rows[from].month}-01`);
+      return [start > origin ? start : origin, monthEnd < end ? monthEnd : end];
+    }
+    const months = RANGES.find(item => item.id === id)?.months ?? Infinity;
+    const start = Number.isFinite(months) ? monthsBefore(end, months) : origin;
+    return [start > origin ? start : origin, end];
+  };
+  const rangeReturn = (id: Range) => {
+    if (!detailed && id !== 'custom') { const count = RANGES.find(item => item.id === id)!.months; return id === 'all' || count <= 12 ? periodReturn(strategy, id as Period | 'all') : rowsReturn(rows.slice(-count), strategy.capital); }
+    const [after, until] = bounds(id);
+    return pnlBetween(days, after, until) / strategy.capital * 100;
+  };
+  const [after, until] = bounds(range);
+  // Every weekday from the reset day to the end of the range, starting again from the model capital.
+  const points = useMemo(() => {
+    const closed = new Map(days.filter(item => item.day > after && item.day <= until).map(item => [item.day, item.pnl]));
+    const curve: EquityPoint[] = [{ day: after, value: strategy.capital }];
+    let equity = strategy.capital;
+    for (let stamp = Date.parse(`${after}T00:00:00Z`) + 86_400_000; stamp <= Date.parse(`${until}T00:00:00Z`); stamp += 86_400_000) {
+      const day = new Date(stamp).toISOString().slice(0, 10), pnl = closed.get(day), weekday = new Date(stamp).getUTCDay();
+      if (pnl == null && (weekday === 0 || weekday === 6) && day !== until) continue;
+      if (pnl != null) equity += pnl;
+      curve.push(pnl == null ? { day, value: equity } : { day, value: equity, pnl });
+    }
+    return curve;
+  }, [days, after, until, strategy.capital]);
+  const customReturn = rangeReturn('custom');
   const capital = account?.capital ?? strategy.capital;
   const up = strategy.monthly.filter(month => month.pnl > 0);
   return <>
     <div className={styles.card}>
       <div className={styles.chartHead}>
-        <div><h3>Backtest equity</h3><p className={styles.caption}>{money(strategy.capital)} model capital · {shortDate(visible[0].label, true)} – {shortDate(visible[visible.length - 1].label, true)}</p></div>
+        <div><h3>Backtest equity</h3><p className={styles.caption}>Starts at {money(strategy.capital)} model capital · {shortDate(after, true)} – {shortDate(until, true)}{detailed ? ' · by trading day' : ' · by month'}</p></div>
         <div className={styles.rangePills} role="group" aria-label="Chart range">
-          {presets.map(item => { const value = rangeReturn(item.id, item.months); return <button key={item.id} className={range === item.id ? styles.rangeActive : ''} aria-pressed={range === item.id} onClick={() => setRange(item.id)}>{item.label}<span className={tone(value)}>{signedPercent(value)}</span></button>; })}
+          {presets.map(item => { const value = rangeReturn(item.id); return <button key={item.id} className={range === item.id ? styles.rangeActive : ''} aria-pressed={range === item.id} onClick={() => setRange(item.id)}>{item.label}<span className={tone(value)}>{signedPercent(value)}</span></button>; })}
           <button className={range === 'custom' ? styles.rangeActive : ''} aria-pressed={range === 'custom'} onClick={() => setRange('custom')}>Custom{range === 'custom' ? <span className={tone(customReturn)}>{signedPercent(customReturn)}</span> : <span>Pick months</span>}</button>
         </div>
       </div>
@@ -106,7 +103,8 @@ function Performance({ strategy, account }: { strategy: Strategy; account: Paper
         <label>To<select className={styles.select} value={rows[to].month} onChange={event => setSpan({ from: rows[from].month, to: event.target.value })}>{rows.slice(from).map(row => <option key={row.month} value={row.month}>{monthLabel(row.month, 'long')}</option>)}</select></label>
         <span>{shown.length} {shown.length === 1 ? 'month' : 'months'} · {shown.reduce((total, row) => total + row.closed_trades, 0)} trades · P&L <b className={tone(customReturn)}>{money(shown.reduce((total, row) => total + row.pnl, 0))}</b></span>
       </div>}
-      <EquityChart points={visible} />
+      <EquityChart points={points} base={strategy.capital} />
+      <p className={styles.caption}>Realised P&L on the day each trade closed, on fixed model capital. Drag to pan, drag the date axis to zoom, double-click it to reset.</p>
     </div>
     <div className={styles.twoCol}>
       <div className={styles.card}>

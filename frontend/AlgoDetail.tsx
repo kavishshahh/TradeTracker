@@ -176,7 +176,13 @@ function monthRange(first: string, last: string) {
   return months;
 }
 
-const spreadName = (trade: PastTrade) => `NIFTY ${trade.expiry} ${trade.sell}/${trade.buy} ${trade.type}`;
+const price = (value: number | null) => value == null ? '—' : value.toFixed(2);
+/** The two options of a spread as separate positions: the one sold, then the one bought as its hedge. */
+function tradeLegs(trade: PastTrade) {
+  const leg = (sold: boolean, strike: number, entry: number | null, exit: number | null) => ({ sold, name: `NIFTY ${trade.expiry} ${strike} ${trade.type}`, entry, exit,
+    pnl: entry == null || exit == null ? null : (sold ? entry - exit : exit - entry) * trade.units });
+  return [leg(true, trade.sell, trade.sellEntry, trade.sellExit), leg(false, trade.buy, trade.buyEntry, trade.buyExit)];
+}
 const dayLabel = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 function TradeCalendar({ trades, capital, note }: { trades: PastTrade[]; capital: number; note: string | null }) {
@@ -237,15 +243,18 @@ function TradeCalendar({ trades, capital, note }: { trades: PastTrade[]; capital
     {listed.length > 0 && <>
       <div className={styles.subHead}><h3>{day ? `Trades closed on ${dayLabel(day)}` : `Trades closed in ${monthLabel(month, 'long')}`}</h3>{day && <button className={styles.linkButton} onClick={() => setDay(null)}>Show whole month</button>}</div>
       <div className={styles.tableCard}><div className={styles.tableScroll}><table className={styles.table}>
-        <thead><tr><th>Exit</th><th>Spread</th><th>Entry</th><th className={styles.num}>Lots</th><th>Exit reason</th><th className={styles.num}>P&L</th></tr></thead>
-        <tbody>{listed.map(trade => <tr key={trade.key}>
-          <td>{trade.source === 'backtest' && <i className={styles.backtestMark} title="Backtest">B</i>}{time(trade.exit)}</td>
-          <td><b>{spreadName(trade)}</b></td>
-          <td className={styles.muted}>{time(trade.entry)}</td>
-          <td className={styles.num}>{trade.lots}</td>
-          <td className={styles.muted}>{trade.reason || '—'}</td>
-          <td className={`${styles.num} ${tone(trade.pnl)}`}>{money(trade.pnl)}</td>
-        </tr>)}</tbody>
+        <thead><tr><th>Exit</th><th>Position</th><th>Entry</th><th className={styles.num}>Qty</th><th className={styles.num}>Entry price</th><th className={styles.num}>Exit price</th><th className={styles.num}>Leg P&L</th><th>Exit reason</th><th className={styles.num}>Trade P&L</th></tr></thead>
+        <tbody>{listed.flatMap(trade => tradeLegs(trade).map((leg, index) => <tr key={trade.key + index} className={index ? styles.legSecond : styles.legFirst}>
+          {index === 0 && <td rowSpan={2}>{trade.source === 'backtest' && <i className={styles.backtestMark} title="Backtest">B</i>}{time(trade.exit)}</td>}
+          <td><span className={leg.sold ? styles.sellTag : styles.buyTag}>{leg.sold ? 'SELL' : 'BUY'}</span><b>{leg.name}</b></td>
+          {index === 0 && <td rowSpan={2} className={styles.muted}>{time(trade.entry)}</td>}
+          <td className={styles.num} title={`${trade.lots} lots`}>{trade.units}</td>
+          <td className={styles.num}>{price(leg.entry)}</td>
+          <td className={styles.num}>{price(leg.exit)}</td>
+          <td className={`${styles.num} ${tone(leg.pnl)}`}>{money(leg.pnl)}</td>
+          {index === 0 && <td rowSpan={2} className={styles.muted}>{trade.reason || '—'}</td>}
+          {index === 0 && <td rowSpan={2} className={`${styles.num} ${tone(trade.pnl)}`}><b>{money(trade.pnl)}</b></td>}
+        </tr>))}</tbody>
       </table></div></div>
     </>}
   </div>;

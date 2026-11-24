@@ -102,6 +102,10 @@
 .state_stale i { background: var(--down); opacity: .8; }
 .sellTag, .buyTag { display: inline-block; padding: 1px 6px; margin-right: 6px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .02em; }
 .sellTag { color: var(--down); background: var(--down-soft); }
+/* A spread's two legs read as one trade: no rule between them, and the shared cells sit in the middle. */
+.table tr.legFirst > td { padding-bottom: 5px; }
+.table tr.legSecond > td { border-top: 0; padding-top: 5px; }
+.table tr.legFirst > td[rowspan] { vertical-align: middle; padding-bottom: 12px; }
 .buyTag { color: var(--up); background: var(--up-soft); }
 .paperTag { padding: 2px 7px; font-size: 11px; color: var(--primary); background: var(--muted); border-radius: 4px; }
 .ret { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; white-space: nowrap; }

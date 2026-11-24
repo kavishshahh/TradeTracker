@@ -32,6 +32,27 @@ def number(value):
     return None if value in ('', None) else round(float(value), 2)
 
 
+def legs(row):
+    """Entry and exit price of the sold and the bought option, or {} unless the four reproduce the trade's P&L.
+    An expiry exit is each leg's intrinsic value at the official close; a hedge with no quote at the exit is
+    the value the replay booked for it."""
+    sell_entry, buy_entry = number(row.get('sell_leg_entry')), number(row.get('buy_leg_entry'))
+    sell_exit, buy_exit = number(row.get('sell_leg_exit')), number(row.get('buy_leg_exit'))
+    spot = number(row.get('settlement_spot'))
+    if row['exit_reason'] == 'Expiry' and spot is not None:
+        sign = 1 if row['option_type'] == 'CE' else -1
+        sell_exit = round(max(sign * (spot - float(row['sell_strike'])), 0.0), 2)
+        buy_exit = round(max(sign * (spot - float(row['buy_strike'])), 0.0), 2)
+    elif buy_exit is None:
+        buy_exit = number(row.get('hedge_carried_exit_value'))
+    if None in (sell_entry, buy_entry, sell_exit, buy_exit):
+        return {}
+    units = float(row['units'])
+    if abs(((sell_entry - buy_entry) - (sell_exit - buy_exit)) * units - float(row['pnl'])) > 0.02 * units + 1:
+        return {}
+    return {'sell_entry': sell_entry, 'buy_entry': buy_entry, 'sell_exit': sell_exit, 'buy_exit': buy_exit}
+
+
 def ledger(strategy_id, relative):
     rows = list(csv.DictReader((REPORTS / relative).open(encoding='utf-8')))
     trades = [{
@@ -39,6 +60,7 @@ def ledger(strategy_id, relative):
         'sell': int(float(row['sell_strike'])), 'buy': int(float(row['buy_strike'])),
         'units': int(float(row['units'])), 'lots': int(float(row['lots'])),
         'credit': number(row['net_credit']), 'pnl': number(row['pnl']), 'reason': row['exit_reason'] or None,
+        **legs(row),
     } for row in rows if row.get('exit_ts')]
     return {'strategy_id': strategy_id, 'source': f'algos/reports/{relative}',
             'capital': number(rows[0]['allocated_capital']) if rows else None,
@@ -55,7 +77,8 @@ def main():
         sys.exit('Unknown strategies: ' + ', '.join(sorted(unknown)))
     bodies = [ledger(strategy_id, LEDGERS[strategy_id]) for strategy_id in selected]
     for body in bodies:
-        print(body['strategy_id'], body['trade_count'], 'closed trades,', body['open_skipped'], 'open skipped, P&L', body['total_pnl'])
+        print(body['strategy_id'], body['trade_count'], 'closed trades,', body['open_skipped'], 'open skipped, P&L', body['total_pnl'],
+              '| leg prices on', sum('sell_entry' in trade for trade in body['trades']))
     if not apply:
         print('Dry run; pass --apply to write', len(bodies), 'documents to algo_backtests.')
         return

@@ -282,6 +282,31 @@ class APIAuthenticationTests(unittest.TestCase):
         self.assertEqual(asyncio.run(request(self.app, '/algos/backtest/zen_strategy_02', user='alice'))[0], 404)
         self.assertEqual(asyncio.run(request(self.app, '/algos/backtest/Bad.Id', user='alice'))[0], 404)
 
+    def test_equity_is_daily_totals_from_the_ledger_open_to_all_and_read_once_per_ttl(self):
+        self.db['algo_backtests/zen_strategy_01'] = {'trades': [
+            {'exit': '2026-11-18T14:53:00+05:30', 'pnl': 100.0, 'sell': 25300, 'type': 'CE'},
+            {'exit': '2026-11-18T09:16:00+05:30', 'pnl': -40.5, 'sell': 25300, 'type': 'PE'},
+            {'exit': '2026-11-18T19:30:00+00:00', 'pnl': 7.0},            # 01:00 IST on the 19th
+            {'exit': None, 'pnl': 3.0}]}
+        for who in ('alice', 'bob'):                                      # bob has no access to the trades themselves
+            status, body = asyncio.run(request(self.app, '/algos/equity/zen_strategy_01', user=who))
+            self.assertEqual(status, 200)
+            self.assertEqual(body, {'strategy_id': 'zen_strategy_01', 'days': [{'day': '2026-11-18', 'pnl': 59.5}, {'day': '2026-11-19', 'pnl': 7.0}]})
+        self.assertEqual(asyncio.run(request(self.app, '/algos/equity/zen_strategy_02', user='alice'))[0], 404)   # no ledger
+        self.assertEqual(asyncio.run(request(self.app, '/algos/equity/ratio_strategy_03', user='alice'))[0], 404)  # not listed
+        self.assertEqual(asyncio.run(request(self.app, '/algos/equity/zen_strategy_01'))[0], 401)
+        clock = [0.0]; reads = []
+        class Counting(Database):
+            def collection(self, name):
+                reads.append(name); return Database.collection(self, name)
+        async def user(authorization: str = Header(None)): return 'alice'
+        app = make_app(Counting(self.db), user, catalog_ttl=60, clock=lambda: clock[0])
+        for _ in range(3): asyncio.run(request(app, '/algos/equity/zen_strategy_01', user='alice'))
+        self.assertEqual(reads.count('algo_backtests'), 1)
+        clock[0] = 61.0
+        asyncio.run(request(app, '/algos/equity/zen_strategy_01', user='alice'))
+        self.assertEqual(reads.count('algo_backtests'), 2)
+
     def test_catalogue_is_cached_per_process_and_paper_poll_does_not_restream_it(self):
         clock=[0.0];streams=[]
         class Counting(Database):

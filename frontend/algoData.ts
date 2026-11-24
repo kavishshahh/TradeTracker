@@ -2,11 +2,12 @@
 // (GET /algos/catalog and GET /algos/paper); nothing adds Firestore reads.
 
 export type Rule = string | { label: string; description: string };
-/** Realised backtest P&L on one IST date (the days a trade closed). */
+/** Realised backtest P&L on one IST date (the days a trade closed), from GET /algos/equity/{id}. */
 export type Day = { day: string; pnl: number };
+export type EquityDays = { strategy_id: string; days: Day[] };
 export type Month = { month: string; pnl: number; closed_trades: number; win_rate_pct: number | null; return_pct: number; winning_trades?: number; losing_trades?: number; partial_month?: boolean };
 // rules, limitations and exit_policy arrive only for the owner; everyone else gets the public fields, with `summary` as the description.
-export type Strategy = { id: string; name: string; version: string; description: string; summary?: string; underlying: string; category: string; capital: number; period_start: string; period_end: string; limitations?: string; exit_policy?: string; rules?: Rule[]; metrics: { total_pnl: number; trade_count: number; win_rate_pct: number; cagr_pct: number; max_drawdown_pct: number; return_1m_pct: number; return_3m_pct: number; return_6m_pct: number }; monthly: Month[]; daily?: Day[] };
+export type Strategy = { id: string; name: string; version: string; description: string; summary?: string; underlying: string; category: string; capital: number; period_start: string; period_end: string; limitations?: string; exit_policy?: string; rules?: Rule[]; metrics: { total_pnl: number; trade_count: number; win_rate_pct: number; cagr_pct: number; max_drawdown_pct: number; return_1m_pct: number; return_3m_pct: number; return_6m_pct: number }; monthly: Month[] };
 export type Trade = { signal_id: string; status: string; option_type: string; sell_strike: number; buy_strike: number; units: number; lots: number; entry_ts: string; expiry: string; exit_ts: string | null; pnl: number | null; stop_loss: number; target: number | null; exit_due: string; sell_price: number; buy_price: number; exit_reason: string | null; sell_mark?: number | null; buy_mark?: number | null; sell_exit_price?: number | null; buy_exit_price?: number | null };
 // in_trade and trades_hidden arrive only for viewers without access, whose open and closed positions are stripped by the API.
 export type Paper = { in_trade?: boolean; trades_hidden?: boolean; execution: string; updated_at: string; last_evaluation: string | null; status: string; capital: number; alpha: number | null; alpha2: number | null; signal_at: string | null; realized_pnl: number | null; unrealized_pnl: number | null; valuation_ts: string | null; closed_trades: number; win_rate_pct: number | null; open_position: Trade | null; closed_positions: Trade[]; ledger_limit: number };
@@ -78,9 +79,12 @@ export function monthsBefore(day: string, count: number) {
   return isoDay(y, m, Math.min(date, new Date(Date.UTC(y, m, 0)).getUTCDate()));
 }
 export const dayBefore = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
-/** Backtest P&L by exit date. A row without `daily` falls back to one entry per month, on its last day. */
-export function dailyPnl(strategy: Strategy): Day[] {
-  if (strategy.daily?.length) return strategy.daily;
+/** The ledger's daily figures, if they add up to the catalogue's total: a ledger from another backtest is not drawn. */
+export const matchingDays = (strategy: Strategy, equity: EquityDays | null | undefined) =>
+  equity?.days.length && Math.abs(equity.days.reduce((total, item) => total + item.pnl, 0) - strategy.metrics.total_pnl) <= 1 ? equity.days : null;
+/** Backtest P&L by exit date: the ledger's days when given, else one entry per month, on its last day. */
+export function dailyPnl(strategy: Strategy, days?: Day[] | null): Day[] {
+  if (days?.length) return days;
   return strategy.monthly.map(row => {
     const [year, month] = row.month.split('-').map(Number);
     const last = isoDay(year, month, new Date(Date.UTC(year, month, 0)).getUTCDate());
@@ -90,13 +94,13 @@ export function dailyPnl(strategy: Strategy): Day[] {
 /** P&L closed after `after` and up to `to` (both YYYY-MM-DD). */
 export const pnlBetween = (days: Day[], after: string, to: string) => days.reduce((total, item) => item.day > after && item.day <= to ? total + item.pnl : total, 0);
 
-/** Trailing backtest return on fixed capital. 1y is the last 12 calendar months by exit date when the row has daily
- *  figures, else its last 12 monthly rows (the catalogue stores no 1y metric). */
-export function periodReturn(strategy: Strategy, period: Period | 'all') {
+/** Trailing backtest return on fixed capital. 1y is the last 12 calendar months by exit date when the ledger's days
+ *  are given, else the last 12 monthly rows (the catalogue stores no 1y metric). */
+export function periodReturn(strategy: Strategy, period: Period | 'all', days?: Day[] | null) {
   if (period === '1m') return strategy.metrics.return_1m_pct;
   if (period === '3m') return strategy.metrics.return_3m_pct;
   if (period === '6m') return strategy.metrics.return_6m_pct;
-  if (period === '1y' && strategy.daily?.length) return pnlBetween(strategy.daily, monthsBefore(strategy.period_end, 12), strategy.period_end) / strategy.capital * 100;
+  if (period === '1y' && days?.length) return pnlBetween(days, monthsBefore(strategy.period_end, 12), strategy.period_end) / strategy.capital * 100;
   const rows = period === '1y' ? strategy.monthly.slice(-12) : strategy.monthly;
   return period === 'all' ? strategy.metrics.total_pnl / strategy.capital * 100 : rows.reduce((total, row) => total + row.pnl, 0) / strategy.capital * 100;
 }

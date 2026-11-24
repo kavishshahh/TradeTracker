@@ -17,7 +17,7 @@ capital to deploy and optional limits, plus the account-wide kill switch and dai
 (algos/zen_credit/execution/live.py) reads that document every round and publishes what it did to
 `algo_live_state/{strategy}`; these routes read those and never talk to the broker.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
@@ -41,7 +41,8 @@ EMAIL_TTL_SECONDS = 600.0
 # full description are enough to rebuild an algo, so they are sent to the owner only; everyone
 # else reads the short `summary` as the description.
 PUBLIC_FIELDS = ('id', 'name', 'version', 'summary', 'underlying', 'category', 'capital',
-                 'period_start', 'period_end', 'metrics', 'monthly', 'daily', 'order', 'enabled', 'execution')
+                 'period_start', 'period_end', 'metrics', 'monthly', 'order', 'enabled', 'execution')
+IST = timezone(timedelta(hours=5, minutes=30))
 EMAIL_PATTERN = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
 # Deployed capital per strategy; the same bounds are enforced again by the desk before any order.
 LIVE_MIN_CAPITAL, LIVE_MAX_CAPITAL = 120_000, 320_000
@@ -89,6 +90,7 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
                         email_lookup=None, owner_email=None, live_available=None):
     router = APIRouter(prefix='/algos', tags=['Paper algorithms'])
     cache = {'rows': None, 'at': None}
+    equity_cache = {}                         # strategy id -> (read at, response)
     access = {'emails': None, 'at': 0.0}
     emails = {}
     owner = (owner_email or os.environ.get('ALGO_LAB_OWNER_EMAIL') or DEFAULT_OWNER_EMAIL).strip().lower()
@@ -439,6 +441,37 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
         if not doc.exists:
             raise HTTPException(404, 'No backtest ledger for this strategy')
         return {**doc.to_dict(), 'strategy_id': strategy_id, 'execution': 'paper_only'}
+
+    @router.get('/equity/{strategy_id}')
+    async def equity(strategy_id: str, current_user: str = Depends(get_current_user)):
+        """Realised backtest P&L per IST exit date, for the equity chart on the algo page.
+
+        Built from the same ledger document as /backtest, so a new backtest is published once. It carries
+        dates and rupee totals only (no strikes, sides or times) and, like the monthly figures, is open to
+        every signed-in user. One document read per listed strategy per catalogue TTL, whoever asks."""
+        require_db()
+        if strategy_id not in {item['id'] for item in read_catalog()}:
+            raise HTTPException(404, 'Unknown strategy')
+        now = clock()
+        held = equity_cache.get(strategy_id)
+        if held is not None and now - held[0] < catalog_ttl:
+            return held[1]
+        try:
+            doc = db.collection('algo_backtests').document(strategy_id).get()
+        except Exception as exc:
+            unavailable('equity', exc, 'Backtest equity is unavailable')
+        if not doc.exists:
+            raise HTTPException(404, 'No backtest ledger for this strategy')
+        totals = {}
+        for trade in doc.to_dict().get('trades') or []:
+            try:
+                day = datetime.fromisoformat(trade['exit']).astimezone(IST).date().isoformat()
+                totals[day] = totals.get(day, 0.0) + float(trade['pnl'])
+            except (KeyError, TypeError, ValueError):
+                continue                      # a trade without an exit time or P&L has nothing to plot
+        body = {'strategy_id': strategy_id, 'days': [{'day': day, 'pnl': round(pnl, 2)} for day, pnl in sorted(totals.items())]}
+        equity_cache[strategy_id] = (now, body)
+        return body
 
     @router.put('/follow/{strategy_id}')
     async def follow(strategy_id: str, body: FollowRequest, current_user: str = Depends(get_current_user)):

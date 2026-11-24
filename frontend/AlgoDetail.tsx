@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { algoState, blurb, dailyPnl, dayBefore, istParts, money, monthLabel, monthsBefore, pastTrades, percent, periodReturn, pnlBetween, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
+import { algoState, blurb, dailyPnl, dayBefore, istParts, money, monthLabel, monthsBefore, matchingDays, pastTrades, percent, periodReturn, pnlBetween, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Day, type EquityDays, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
 import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import EquityChart, { type EquityPoint } from './EquityChart';
@@ -16,10 +16,20 @@ const RANGES: { id: Preset; label: string; months: number }[] = [{ id: '1m', lab
 const rowsReturn = (rows: Month[], capital: number) => rows.reduce((total, row) => total + row.pnl, 0) / capital * 100;
 
 type LoadBacktest = (id: string) => Promise<BacktestLedger | null>;
-type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; access?: LabAccess; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest };
+type LoadEquity = (id: string) => Promise<EquityDays | null>;
+type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; access?: LabAccess; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest; loadEquity?: LoadEquity };
 
-export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, access = openAccess, onFollow, onDownload, loadBacktest }: Props) {
+export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, access = openAccess, onFollow, onDownload, loadBacktest, loadEquity }: Props) {
   const [tab, setTab] = useState<Tab>('performance');
+  // Day-by-day P&L for the chart, from the backtest ledger. Until it arrives, or if it is missing, the chart is monthly.
+  const [equity, setEquity] = useState<EquityDays | null>(null);
+  useEffect(() => {
+    let live = true;
+    setEquity(null);
+    loadEquity?.(strategy.id).then(body => { if (live) setEquity(body); }).catch(() => {});
+    return () => { live = false; };
+  }, [strategy.id, loadEquity]);
+  const days = matchingDays(strategy, equity);
   const state = algoState(account);
   return <>
     <div className={`${styles.card} ${styles.detailHead}`}>
@@ -29,11 +39,11 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
         <p>{strategy.underlying}<i />{strategy.category}<i /><span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{paperLoaded ? stateLabel[state] : 'Loading'}</span></p>
       </div>
       <div className={styles.detailStat}><span>Model capital</span><b>{money(account?.capital ?? strategy.capital)}</b></div>
-      <div className={styles.detailStat}><span>{periodShort[period]} returns <BacktestTag /></span><b><Return value={periodReturn(strategy, period)} /></b></div>
+      <div className={styles.detailStat}><span>{periodShort[period]} returns <BacktestTag /></span><b><Return value={periodReturn(strategy, period, days)} /></b></div>
       <button className={following ? styles.followingButton : styles.followButton} onClick={() => onFollow(!following)} disabled={saving || !paperLoaded} title={following ? 'Click to stop following' : 'Follow this algo’s paper trades'}>{following ? <Check size={15} /> : <Plus size={15} />}{saving ? 'Saving…' : following ? 'Following' : 'Follow'}</button>
     </div>
     <Tabs label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Algo performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly returns' }, { id: 'rules', label: 'About algo' }]} />
-    {tab === 'performance' && <Performance strategy={strategy} account={account} />}
+    {tab === 'performance' && <Performance strategy={strategy} account={account} ledgerDays={days} />}
     {tab === 'trades' && (access.allowed ? <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} /> : <AccessCard access={access} what="Past trades" />)}
     {tab === 'monthly' && <Monthly strategy={strategy} />}
     {tab === 'rules' && <Rules strategy={strategy} owner={access.owner} />}
@@ -42,11 +52,11 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
 
 const shortDate = (value: string, withDay = false) => new Date(`${value}T00:00:00Z`).toLocaleDateString('en-IN', { day: withDay ? 'numeric' : undefined, month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-function Performance({ strategy, account }: { strategy: Strategy; account: Paper | null | undefined }) {
+function Performance({ strategy, account, ledgerDays }: { strategy: Strategy; account: Paper | null | undefined; ledgerDays: Day[] | null }) {
   const [range, setRange] = useState<Range>('all');
   const [span, setSpan] = useState<{ from: string; to: string } | null>(null);
-  const days = useMemo(() => dailyPnl(strategy), [strategy]);
-  const detailed = !!strategy.daily?.length;                          // else one figure per month
+  const days = useMemo(() => dailyPnl(strategy, ledgerDays), [strategy, ledgerDays]);
+  const detailed = !!ledgerDays;                                      // else one figure per month
   const rows = strategy.monthly;
   const end = strategy.period_end, origin = dayBefore(strategy.period_start);
   const presets = RANGES.filter(item => item.months <= 12 || !Number.isFinite(item.months) || monthsBefore(end, item.months) > strategy.period_start);

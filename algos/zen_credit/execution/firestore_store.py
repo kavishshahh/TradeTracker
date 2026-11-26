@@ -252,7 +252,7 @@ class FirestoreStore:
             values = {field.name:None for field in fields(PositionRecord)}
             values.update({key:getattr(p,key) for key in ('signal_id','entry_ts','expiry','option_type',
                 'sell_strike','buy_strike','lots','lot_size','units','spot_at_entry','sell_price','buy_price',
-                'net_credit','stop_loss','target','max_loss','max_profit','exit_due','alpha','alpha2','allocated_capital')})
+                'net_credit','stop_loss','target','max_loss','max_profit','exit_due','alpha','alpha2','allocated_capital','structure')})
             values.update(id=row_id,status='open',strategy_state='IN_POSITION',direction=direction,
                 entry_spread_price=p.net_credit,entry_email_status='pending',entry_email_attempts=0,
                 exit_email_status='none',exit_email_attempts=0)

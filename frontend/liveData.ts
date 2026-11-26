@@ -7,14 +7,15 @@ export type LiveSetting = { mode: LiveMode; capital: number; max_lots?: number |
 export type LiveTotals = { trades: number; winners: number; realized_pnl: number; entry_slippage_points: number; exit_slippage_points: number; slippage_rupees: number; stop_trades: number; stop_slippage_points: number; failed: number; skipped: number };
 export type LiveTrade = {
   signal_id: string; mode: LiveMode; state: 'entering' | 'open' | 'exiting' | 'closed' | 'failed'; opened_at: string; closed_at: string | null;
-  expiry: string; option_type: string; sell_strike: number; buy_strike: number; lots: number; units: number; capital: number;
+  expiry: string; option_type: string; sell_strike: number; buy_strike: number; lots: number; units: number; capital: number; structure?: string;
   entry_credit: number | null; exit_value: number | null; pnl: number | null; exit_reason: string | null;
   entry_slippage: number | null; exit_slippage: number | null; paper: { net_credit: number; lots: number }; notes?: string[];
 };
 export type LiveSkip = { signal_id: string; at: string; mode: LiveMode; reason: string };
 export type LiveAlert = { at: string; subject: string; detail: string };
 export type LiveState = { open_trade: LiveTrade | null; totals: Partial<Record<LiveMode, LiveTotals>>; recent: LiveTrade[]; skipped: LiveSkip[]; alerts: LiveAlert[]; updated_at: string | null };
-export type LiveSizing = { lot_size: number; normal: number; expiry_day: number; monday: number | null };
+/** Credit spreads: lots at the deployed capital. Option buying: `premium_budget` rupees a trade and no lot counts. */
+export type LiveSizing = { lot_size: number; normal: number | null; expiry_day: number | null; monday: number | null; premium_budget?: number };
 export type LiveDesk = { at: string; live_unlocked: boolean; mismatch: string | null; broker_error: string | null; kill_switch: boolean; settings_readable: boolean; sizing?: Record<string, LiveSizing> };
 export type LiveAccount = { kill_switch?: boolean; daily_loss_limit?: number | null; exit_all?: string | null; strategies?: Record<string, LiveSetting> };
 export type LiveResponse = { account: LiveAccount; states: Record<string, LiveState | null>; desk: LiveDesk | null; limits: { min_capital: number; max_capital: number; modes: LiveMode[] } };

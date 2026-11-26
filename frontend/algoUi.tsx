@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowUpRight, FileText, History } from 'lucide-react';
 import { useId, type CSSProperties, type ReactNode } from 'react';
-import { legName, money, signedPercent, time, type Trade } from './algoData';
+import { isLongOption, legName, money, signedPercent, time, type Trade } from './algoData';
 import styles from './algos.module.css';
 
 export const tone = (value: number | null | undefined) => value == null || value === 0 ? '' : value < 0 ? styles.red : styles.green;
@@ -59,13 +59,14 @@ const quote = (value: number | null | undefined) => value == null ? '—' : valu
 export function PositionTable({ trades, open = false, totalPnl, algo }: { trades: Trade[]; open?: boolean; totalPnl?: number | null; algo?: (trade: Trade) => string }) {
   return <div className={styles.tableCard}><div className={styles.tableScroll}><table className={styles.table}>
     <thead><tr><th>Name</th>{algo && <th>Algo</th>}<th>Product</th><th className={styles.num}>Qty</th><th className={styles.num}>Buy avg</th><th className={styles.num}>Sell avg</th><th className={styles.num}>{open ? 'LTP' : 'Exit price'}</th><th className={styles.num}>P&L</th></tr></thead>
-    <tbody>{trades.flatMap(trade => (['sell', 'buy'] as const).map(side => {
+    <tbody>{trades.flatMap(trade => (isLongOption(trade) ? ['buy'] as const : ['sell', 'buy'] as const).map(side => {
       const sell = side === 'sell';
+      const rows = isLongOption(trade) ? 1 : 2;
       const entry = sell ? trade.sell_price : trade.buy_price;
       const current = open ? (sell ? trade.sell_mark : trade.buy_mark) : (sell ? trade.sell_exit_price : trade.buy_exit_price);
       const pnl = current == null ? null : (sell ? entry - current : current - entry) * trade.units;
       // A trade closed before each leg's exit price was recorded: show what the spread closed at and its total P&L.
-      const whole = !open && trade.sell_exit_price == null && trade.buy_exit_price == null && trade.pnl != null;
+      const whole = rows === 2 && !open && trade.sell_exit_price == null && trade.buy_exit_price == null && trade.pnl != null;
       return <tr key={trade.signal_id + side}>
         <td><b>{legName(trade, side)}</b><small><span className={sell ? styles.sellTag : styles.buyTag}>{sell ? 'SELL' : 'BUY'}</span> Entry {time(trade.entry_ts)}{!open && ` · Exit ${time(trade.exit_ts)}`}</small></td>
         {algo && <td>{algo(trade)}</td>}

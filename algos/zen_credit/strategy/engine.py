@@ -67,6 +67,10 @@ class Position:
     alpha: float | None = None
     alpha2: float | None = None
     allocated_capital: float | None = None
+    # "credit_spread" (sell sell_strike, buy buy_strike) or "long_option": one bought option at buy_strike, stored
+    # with sell_strike = buy_strike, sell_price 0 and net_credit = -premium, so the spread arithmetic still holds:
+    # value = -option price, P&L = (net_credit - value) x units, stop and target are negative levels.
+    structure: str = "credit_spread"
 
 
 @dataclass

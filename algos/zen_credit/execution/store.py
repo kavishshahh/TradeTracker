@@ -164,9 +164,11 @@ class PositionRecord:
     # Each option's price at the exit (Firestore store only; the PostgreSQL table has no such columns).
     sell_exit_price: float | None = None
     buy_exit_price: float | None = None
+    # 'credit_spread' (None on older rows) or 'long_option' (Firestore store only, see strategy.engine.Position).
+    structure: str | None = None
 
 
-_POSITION_FIELDS = [f.name for f in fields(PositionRecord) if f.name not in ('sell_exit_price', 'buy_exit_price')]
+_POSITION_FIELDS = [f.name for f in fields(PositionRecord) if f.name not in ('sell_exit_price', 'buy_exit_price', 'structure')]
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -452,7 +454,8 @@ def row_to_position(row: PositionRecord) -> Position:
         buy_price=row.buy_price, net_credit=row.net_credit, stop_loss=row.stop_loss, target=row.target,
         max_loss=row.max_loss, max_profit=row.max_profit, exit_due=_aware(row.exit_due),
         spot_at_entry=row.spot_at_entry, alpha=row.alpha, alpha2=row.alpha2,
-        allocated_capital=row.allocated_capital)
+        allocated_capital=row.allocated_capital,
+        structure=getattr(row, 'structure', None) or 'credit_spread')
 
 
 def row_exit_ts(row: PositionRecord) -> datetime | None:

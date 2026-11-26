@@ -2,7 +2,7 @@
 
 import { AlertTriangle, ChevronDown, ChevronUp, Lock, OctagonX, Power } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { marketOpen, money, time, type Strategy } from './algoData';
+import { marketOpen, money, strikesLabel, time, type Strategy } from './algoData';
 import { deskStale, modeLabel, points, stateWord, type LiveActions, type LiveMode, type LiveResponse, type LiveSetting, type LiveSizing, type LiveState, type LiveTotals, type LiveTrade } from './liveData';
 import { AlgoIcon, EmptyRow, tone } from './algoUi';
 import base from './algos.module.css';
@@ -147,7 +147,7 @@ function Tile({ label, value, unit, note, valueClass = '' }: { label: string; va
   return <div className={styles.tile}><span>{label}</span><b className={valueClass}>{value}{unit ? <em>{unit}</em> : null}</b><small>{note}</small></div>;
 }
 
-const lotsLine = (sizing: LiveSizing) => [sizing.monday != null && sizing.monday !== sizing.normal ? `${plural(sizing.monday, 'lot')} on Mondays` : '', sizing.expiry_day !== sizing.normal ? `${plural(sizing.expiry_day, 'lot')} on expiry day` : ''].filter(Boolean).join(' · ');
+const lotsLine = (sizing: LiveSizing) => [sizing.monday != null && sizing.monday !== sizing.normal ? `${plural(sizing.monday, 'lot')} on Mondays` : '', sizing.expiry_day != null && sizing.expiry_day !== sizing.normal ? `${plural(sizing.expiry_day, 'lot')} on expiry day` : ''].filter(Boolean).join(' · ');
 
 function LiveRow({ strategy, setting, state, sizing, limits, unlocked, busy, act, actions, open, onToggle }: { strategy: Strategy; setting: LiveSetting | undefined; state: LiveState | null; sizing: LiveSizing | undefined; limits: LiveResponse['limits']; unlocked: boolean; busy: string; act: Act; actions: LiveActions; open: boolean; onToggle: () => void }) {
   const saved = { mode: setting?.mode ?? 'off' as LiveMode, capital: setting?.capital ?? limits.min_capital, max_lots: setting?.max_lots ?? null, slippage_cap: setting?.slippage_cap ?? null };
@@ -181,8 +181,8 @@ function LiveRow({ strategy, setting, state, sizing, limits, unlocked, busy, act
       <td><div className={base.algoCell}><AlgoIcon version={strategy.version} /><b id={id}>{strategy.name}</b></div></td>
       <td><span className={`${styles.modeTag} ${styles[`tag_${saved.mode}`]}`}>{modeLabel[saved.mode]}</span></td>
       <td className={base.num}>{money(saved.capital)}</td>
-      <td className={base.num}>{on && sizing ? sizing.normal : '—'}</td>
-      <td>{trade ? <>{stateWord[trade.state]} · {trade.sell_strike}/{trade.buy_strike} {trade.option_type}<small>{trade.entry_credit != null ? `Filled ${trade.entry_credit.toFixed(2)} · paper ${trade.paper.net_credit.toFixed(2)}` : `${plural(trade.lots, 'lot')} · paper ${trade.paper.net_credit.toFixed(2)}`}</small></> : on ? 'Flat · waiting for a signal' : 'Not running'}</td>
+      <td className={base.num}>{on && sizing?.normal != null ? sizing.normal : '—'}</td>
+      <td>{trade ? <>{stateWord[trade.state]} · {strikesLabel(trade)} {trade.option_type}<small>{trade.entry_credit != null ? `Filled ${trade.entry_credit.toFixed(2)} · paper ${trade.paper.net_credit.toFixed(2)}` : `${plural(trade.lots, 'lot')} · paper ${trade.paper.net_credit.toFixed(2)}`}</small></> : on ? 'Flat · waiting for a signal' : 'Not running'}</td>
       <td className={base.num}>{totals?.trades ?? 0}{totals?.trades ? <small>{totals.winners} won</small> : null}</td>
       <td className={`${base.num} ${tone(totals?.realized_pnl)}`}>{totals?.trades ? money(totals.realized_pnl) : '—'}</td>
       <td className={base.num}>{slip == null ? '—' : `${slip.toFixed(1)} pts`}</td>
@@ -201,7 +201,9 @@ function LiveRow({ strategy, setting, state, sizing, limits, unlocked, busy, act
           <small className={styles.range}><span>{money(limits.min_capital)}</span><span>{money(limits.max_capital)}</span></small>
         </div>
         <div className={styles.field}><span>What this capital trades</span>
-          {sizing && !dirty && on
+          {sizing?.premium_budget != null && !dirty && on
+            ? <><b className={styles.lots}>{money(sizing.premium_budget)}<em>· premium a trade</em></b><small>Buys one option; lots follow its price at the entry.</small></>
+            : sizing?.normal != null && !dirty && on
             ? <><b className={styles.lots}>{plural(sizing.normal, 'lot')}<em>· {sizing.normal * sizing.lot_size} units</em></b>{lotsLine(sizing) && <small>{lotsLine(sizing)}</small>}</>
             : <><b className={styles.lots}>—</b><small>Lots follow the capital and the algo’s own rules. The count shows here within a minute of saving{on || mode !== 'off' ? '' : ' in Dry run'}.</small></>}
         </div>
@@ -233,7 +235,7 @@ function LiveRow({ strategy, setting, state, sizing, limits, unlocked, busy, act
 function TradeRow({ trade, name, cap, showMode }: { trade: LiveTrade; name: string; cap: number; showMode: boolean }) {
   const slip = trade.entry_slippage == null ? null : trade.entry_slippage + (trade.exit_slippage ?? 0);
   return <tr>
-    <td><b>NIFTY {trade.expiry} {trade.sell_strike}/{trade.buy_strike} {trade.option_type}</b><small>{name} · {time(trade.opened_at)}{trade.closed_at ? ` to ${time(trade.closed_at)}` : ', open'}</small></td>
+    <td><b>NIFTY {trade.expiry} {strikesLabel(trade)} {trade.option_type}</b><small>{name} · {time(trade.opened_at)}{trade.closed_at ? ` to ${time(trade.closed_at)}` : ', open'}</small></td>
     {showMode && <td><span className={`${styles.modeTag} ${styles[`tag_${trade.mode}`]}`}>{modeLabel[trade.mode]}</span></td>}
     <td className={base.num}>{trade.lots}{trade.lots !== trade.paper.lots ? <small>paper {trade.paper.lots}</small> : null}</td>
     <td className={base.num}>{trade.paper.net_credit.toFixed(2)}</td>

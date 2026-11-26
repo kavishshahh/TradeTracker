@@ -96,6 +96,25 @@ def correlation(strategy: str, signal_id: str, leg: str, attempt: int) -> str:
     return f'L{zlib.crc32(strategy.encode()) & 0xffff:04x}{signal_id[:14]}-{LEG_CODES[leg]}{attempt}'
 
 
+def is_long_option(paper) -> bool:
+    """A paper row for one bought option (see strategy.engine.Position.structure) rather than a credit spread."""
+    return getattr(paper, 'structure', None) == 'long_option'
+
+
+def buys_options(strategy: str) -> bool:
+    from strategy.registry import get_strategy
+    try:
+        return getattr(get_strategy(strategy), 'STRUCTURE', 'credit_spread') == 'long_option'
+    except ValueError:
+        return False
+
+
+def premium_fraction(strategy: str) -> float:
+    """Share of the deployed capital an option-buying strategy spends on premium per trade."""
+    from strategy.registry import get_strategy
+    return float(getattr(get_strategy(strategy), 'PREMIUM_FRACTION', 0.15))
+
+
 def trade_cash(trade: dict) -> float:
     """Rupees received minus rupees paid across every fill of the trade."""
     cash = 0.0
@@ -284,6 +303,11 @@ class LiveDesk:
             settings = self.settings(name)
             if settings['mode'] == 'off' or not MIN_CAPITAL <= settings['capital'] <= MAX_CAPITAL:
                 continue
+            if buys_options(name):
+                # Lots depend on the option's price at the entry; show the premium the strategy may spend instead.
+                preview[name] = {'lot_size': lot_size, 'premium_budget': round(settings['capital'] * premium_fraction(name)),
+                                 'normal': None, 'expiry_day': None, 'monday': None}
+                continue
 
             def lots(day, expiry_day):
                 plan = build_risk_plan(100.0, 10.0, float(cfg.spread_distance), lot_size, expiry_day,
@@ -402,15 +426,26 @@ class LiveDesk:
         if paper.sell_price is None or paper.buy_price is None or paper.net_credit is None:
             return refuse('paper entry has no prices')
         expiry = paper.expiry if isinstance(paper.expiry, date) else date.fromisoformat(str(paper.expiry)[:10])
-        width = abs(float(paper.sell_strike) - float(paper.buy_strike))
-        try:
-            plan = build_risk_plan(float(paper.sell_price), float(paper.buy_price), width, int(paper.lot_size),
-                                   now.date() == expiry, replace(strategy_cfg, capital=capital), now.date())
-        except ValueError as exc:
-            return refuse(f'sizing: {exc}')
-        lots = min(plan.lots, settings['max_lots']) if settings['max_lots'] else plan.lots
-        if lots < 1:
-            return refuse('deployed capital is below the margin of one lot')
+        long_option = is_long_option(paper)
+        if long_option:
+            # One bought option: the premium is the whole outlay; size it as the strategy does, on the deployed capital.
+            fraction = premium_fraction(name)
+            lots = int(capital * fraction // (float(paper.buy_price) * int(paper.lot_size)))
+            lots = min(lots, settings['max_lots']) if settings['max_lots'] else lots
+            if lots < 1:
+                return refuse('deployed capital is below the premium of one lot')
+            outlay = round(float(paper.buy_price) * lots * int(paper.lot_size), 2)
+        else:
+            width = abs(float(paper.sell_strike) - float(paper.buy_strike))
+            try:
+                plan = build_risk_plan(float(paper.sell_price), float(paper.buy_price), width, int(paper.lot_size),
+                                       now.date() == expiry, replace(strategy_cfg, capital=capital), now.date())
+            except ValueError as exc:
+                return refuse(f'sizing: {exc}')
+            lots = min(plan.lots, settings['max_lots']) if settings['max_lots'] else plan.lots
+            if lots < 1:
+                return refuse('deployed capital is below the margin of one lot')
+            outlay = round(plan.margin_per_lot * lots, 2)
         units = lots * int(paper.lot_size)
         if units > FREEZE_UNITS:
             return refuse(f'{units} units exceeds the exchange freeze quantity')
@@ -424,20 +459,22 @@ class LiveDesk:
                  'sell_strike': float(paper.sell_strike), 'buy_strike': float(paper.buy_strike),
                  'sell_security_id': str(sell_id), 'buy_security_id': str(buy_id),
                  'lots': lots, 'lot_size': int(paper.lot_size), 'units': units, 'capital': capital,
-                 'slippage_cap': cap, 'margin_estimate': round(plan.margin_per_lot * lots, 2),
+                 'slippage_cap': cap, 'margin_estimate': outlay, 'structure': 'long_option' if long_option else 'credit_spread',
                  'paper': {'sell_price': float(paper.sell_price), 'buy_price': float(paper.buy_price),
                            'net_credit': float(paper.net_credit), 'lots': int(paper.lots),
                            'stop_loss': paper.stop_loss, 'target': paper.target},
-                 'legs': {'hedge_entry': new_leg('BUY', buy_id, units), 'short_entry': new_leg('SELL', sell_id, units)},
+                 'legs': ({'hedge_entry': new_leg('BUY', buy_id, units)} if long_option else
+                          {'hedge_entry': new_leg('BUY', buy_id, units), 'short_entry': new_leg('SELL', sell_id, units)}),
                  'entry_credit': None, 'exit_value': None, 'pnl': None, 'exit_reason': None, 'closed_at': None,
                  'entry_slippage': None, 'exit_slippage': None, 'paper_exit': None, 'exit_minutes': 0, 'notes': []}
-        short_quote, hedge_quote = self._quote(trade, trade['sell_strike']), self._quote(trade, trade['buy_strike'])
-        short_touch, hedge_touch = touch(short_quote, 'SELL'), touch(hedge_quote, 'BUY')
+        hedge_touch = touch(self._quote(trade, trade['buy_strike']), 'BUY')
+        short_touch = 0.0 if long_option else touch(self._quote(trade, trade['sell_strike']), 'SELL')
         if short_touch is None or hedge_touch is None:
             return refuse('no live quote for one of the legs')
         worse = trade['paper']['net_credit'] - (short_touch - hedge_touch)
         if worse > cap:
-            return refuse(f'spread is {worse:.2f} points worse than the paper price (cap {cap:.2f})')
+            what = 'option' if long_option else 'spread'
+            return refuse(f'{what} is {worse:.2f} points worse than the paper price (cap {cap:.2f})')
         if mode == 'live':
             try:
                 available = self.broker(mode).available_balance()
@@ -458,7 +495,10 @@ class LiveDesk:
             if self._work(name, state, trade, 'hedge_entry', prices, deadline, now, stop_on_reject=True) == 'pending':
                 return
             if not legs['hedge_entry']['filled']:
-                return self._finish(name, state, trade, 'failed', self._why(legs['hedge_entry'], 'hedge leg did not fill'), now)
+                what = 'option' if trade.get('structure') == 'long_option' else 'hedge leg'
+                return self._finish(name, state, trade, 'failed', self._why(legs['hedge_entry'], f'{what} did not fill'), now)
+            if trade.get('structure') == 'long_option':
+                return self._opened_long(name, state, trade, now)
             legs['short_entry']['qty'] = legs['hedge_entry']['filled']
             trade['step'] = 'short'
         if trade['step'] == 'short':
@@ -506,6 +546,16 @@ class LiveDesk:
                     f"(paper {paper['net_credit']:.2f})", now)
         self._save(name, state, now)
 
+    def _opened_long(self, name, state, trade, now) -> None:
+        """A bought option filled: the trade is open. Its 'credit' is minus the premium paid, like the paper row."""
+        leg, paper = trade['legs']['hedge_entry'], trade['paper']
+        trade.update(state='open', step='done', units=leg['filled'], lots=leg['filled'] // trade['lot_size'], exit_minutes=0,
+                     entry_credit=round(-leg['avg'], 2))
+        trade['entry_slippage'] = round(paper['net_credit'] - trade['entry_credit'], 2)
+        self._alert(name, state, 'entered', f"{trade['mode']}: bought {trade['buy_strike']:.0f} {trade['option_type']} x "
+                    f"{trade['lots']} lots at {leg['avg']:.2f} (paper {paper['buy_price']:.2f})", now)
+        self._save(name, state, now)
+
     @staticmethod
     def _why(leg, fallback) -> str:
         for order in reversed(leg['orders']):
@@ -517,12 +567,15 @@ class LiveDesk:
     def _begin_exit(self, name, state, trade, reason, view, now) -> None:
         legs = trade['legs']
         hedge_left = legs['hedge_entry']['filled'] - (legs.get('hedge_unwind') or {}).get('filled', 0)
-        legs['short_exit'] = new_leg('BUY', trade['sell_security_id'], legs['short_entry']['filled'])
+        long_option = trade.get('structure') == 'long_option'
+        if not long_option:
+            legs['short_exit'] = new_leg('BUY', trade['sell_security_id'], legs['short_entry']['filled'])
         legs['hedge_exit'] = new_leg('SELL', trade['buy_security_id'], hedge_left)
         closed = view.get('closed') if view else None
         if closed is not None and closed.signal_id == trade['signal_id']:
             trade['paper_exit'] = {'reason': closed.exit_reason, 'value': closed.exit_value}
-        trade.update(state='exiting', step='short', exit_reason=reason, exit_started_at=iso(now), exit_minutes=0)
+        trade.update(state='exiting', step='hedge' if long_option else 'short', exit_reason=reason, exit_started_at=iso(now),
+                     exit_minutes=0)
         self._save(name, state, now)
 
     def _buy_ladder(self, trade, strike) -> list:
@@ -560,6 +613,13 @@ class LiveDesk:
                     return
                 if outcome != 'filled':
                     trade['exit_minutes'] += 1
+                    if trade.get('structure') == 'long_option':
+                        # The bought option is the whole position: keep offering it every minute rather than abandon it.
+                        if trade['exit_minutes'] in (1, 5) or trade['exit_minutes'] % 15 == 0:
+                            self._alert(name, state, 'EXIT NOT FILLED', self._why(legs['hedge_exit'], 'option is still held')
+                                        + f" after {trade['exit_minutes']} attempt(s); retrying every minute", now)
+                        self._save(name, state, now)
+                        return
                     if trade['exit_minutes'] < HEDGE_GIVE_UP_MINUTES:
                         self._save(name, state, now)
                         return
@@ -578,7 +638,7 @@ class LiveDesk:
         """The contract has expired: book what was still open at its intrinsic value."""
         legs = trade['legs']
         for key in ('short_exit', 'hedge_exit'):
-            if self._work(name, state, trade, key, [], deadline, now, stop_on_reject=False) == 'pending':
+            if key in legs and self._work(name, state, trade, key, [], deadline, now, stop_on_reject=False) == 'pending':
                 return
         spot, estimated = self._settlement(date.fromisoformat(trade['expiry']), now)
         if spot is None:
@@ -587,10 +647,11 @@ class LiveDesk:
                 self._alert(name, state, 'expired, settlement price not available yet', '', now)
                 self._save(name, state, now)
             return
-        short_left = legs['short_exit']['qty'] - legs['short_exit']['filled']
         hedge_left = legs['hedge_exit']['qty'] - legs['hedge_exit']['filled']
-        legs['short_settle'] = {'side': 'BUY', 'security_id': trade['sell_security_id'], 'qty': short_left, 'filled': short_left,
-                                'avg': intrinsic(trade['option_type'], trade['sell_strike'], spot), 'orders': [], 'counts': True}
+        if 'short_exit' in legs:
+            short_left = legs['short_exit']['qty'] - legs['short_exit']['filled']
+            legs['short_settle'] = {'side': 'BUY', 'security_id': trade['sell_security_id'], 'qty': short_left, 'filled': short_left,
+                                    'avg': intrinsic(trade['option_type'], trade['sell_strike'], spot), 'orders': [], 'counts': True}
         legs['hedge_settle'] = {'side': 'SELL', 'security_id': trade['buy_security_id'], 'qty': hedge_left, 'filled': hedge_left,
                                 'avg': intrinsic(trade['option_type'], trade['buy_strike'], spot), 'orders': [], 'counts': True}
         trade['exit_reason'] = 'Expiry'

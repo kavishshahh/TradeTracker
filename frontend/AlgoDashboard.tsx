@@ -10,7 +10,7 @@ import AlgoResearch from './AlgoResearch';
 import type { LiveActions, LiveResponse } from './liveData';
 import type { Research } from './researchData';
 import { useAlgoAccess } from './useAlgoAccess';
-import { PERIODS, algoSlug, algoState, blurb, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, time, todayRealized, type BacktestLedger, type EquityDays, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
+import { PERIODS, algoSlug, algoState, blurb, clock, equityPoints, inTrade, isStale, ledgerFills, marketOpen, money, openPnl, percent, periodName, periodReturn, periodShort, scanMessage, stateLabel, strikesLabel, time, todayRealized, type BacktestLedger, type EquityDays, type Paper, type PaperResponse, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Sparkline, tone } from './algoUi';
 import styles from './algos.module.css';
 
@@ -153,7 +153,7 @@ export default function AlgoDashboard() {
   function downloadLedger(strategyId: string) {
     const rows = paper?.strategies[strategyId]?.closed_positions || [];
     if (!rows.length) return;
-    const fields: (keyof Trade)[] = ['signal_id', 'option_type', 'sell_strike', 'buy_strike', 'units', 'entry_ts', 'exit_ts', 'pnl', 'exit_reason'];
+    const fields: (keyof Trade)[] = ['signal_id', 'option_type', 'sell_strike', 'buy_strike', 'units', 'entry_ts', 'exit_ts', 'pnl', 'exit_reason', 'structure'];
     const cell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const csv = [fields.join(','), ...rows.map(row => fields.map(field => cell(row[field])).join(','))].join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
@@ -304,7 +304,7 @@ function MyAlgos({ catalog, paper, period, owner, onPeriod, onOpen }: { catalog:
           </span>
         </span>
         <span className={styles.cardLive}>
-          <span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{stateLabel[state]}{position ? <em>{position.sell_strike}/{position.buy_strike} {position.option_type}</em> : null}</span>
+          <span className={`${styles.state} ${styles[`state_${state.replace('-', '_')}`]}`}><i />{stateLabel[state]}{position ? <em>{strikesLabel(position)} {position.option_type}</em> : null}</span>
           <span className={styles.cardPnl}><small>{holding ? 'Unrealized' : `${prefix} realized`}</small><b className={hidden ? '' : tone(livePnl)}>{livePnl == null ? '—' : mask(money(livePnl))}</b></span>
           <ChevronRight size={16} className={styles.cardGo} aria-hidden="true" />
         </span>

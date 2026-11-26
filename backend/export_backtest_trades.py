@@ -25,6 +25,8 @@ LEDGERS = {
     'zen_strategy_06': 'zen_strategy_06_2023-10-04_2026-11-19/trades.csv',
     'ratio_strategy_08': 'ratio_strategy_08_2022-01-26_2026-11-19/trades.csv',
     'zen_strategy_10': 'zen_strategy_10_2022-01-26_2026-11-19_on_schedule/trades.csv',
+    # Option buying, from the research simulator (algos/reports/girsanov_research/publish_zen11.py), not dhan_replay.
+    'zen_strategy_11': 'zen_strategy_11_2022-01-26_2026-11-19/trades.csv',
 }
 
 
@@ -60,7 +62,7 @@ def ledger(strategy_id, relative):
         'sell': int(float(row['sell_strike'])), 'buy': int(float(row['buy_strike'])),
         'units': int(float(row['units'])), 'lots': int(float(row['lots'])),
         'credit': number(row['net_credit']), 'pnl': number(row['pnl']), 'reason': row['exit_reason'] or None,
-        **legs(row),
+        **legs(row), **({'structure': row['structure']} if row.get('structure') == 'long_option' else {}),
     } for row in rows if row.get('exit_ts')]
     return {'strategy_id': strategy_id, 'source': f'algos/reports/{relative}',
             'capital': number(rows[0]['allocated_capital']) if rows else None,

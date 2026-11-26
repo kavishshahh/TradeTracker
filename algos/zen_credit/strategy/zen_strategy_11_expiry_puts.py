@@ -18,13 +18,17 @@
 #   signal   180-minute index change <= -0.10%  and  5-minute change >= -0.05%  and
 #            ATM implied volatility (mean of call and put) ranked >= 0.95 within its last 375 minutes  and
 #            ATM put IV <= ATM call IV
-#   trade    buy the ATM put (nearest 50-point strike), lots = floor(15% of capital / (premium x lot size))
-#   exits    option at 75% of the entry price (stop), at 175% (target), else 15:10 the same day
+#   trade    buy the ATM put (nearest 50-point strike), lots = floor(7.5% of capital / (premium x lot size))
+#   exits    option at 80% of the entry price (stop), at 300% (target), else 15:10 the same day
 #
-# WHAT THE SEARCH SHOWED (research harness, 1% slippage each way, INR 5 lakh basis)
-#   1 Dec 2025 - 19 Nov 2026: 68 trades, +4.89 lakh, 41.2% winners, drawdown 19.1%
-#   26 Jan 2022 - 30 Nov 2025 (never used to choose it): 176 trades, +3.79 lakh (+3.46 lakh after costs),
-#   drawdown 37.9%, 2025 a losing year.  It failed the 25% drawdown rule there; listed at the owner's request.
+# HISTORY
+#   Listed 26 Nov 2026 with the provider's trade rules (15% premium, stop -25%, target +75%): on INR 3.2 lakh its
+#   five-year drawdown was 37-38%, above the 25% listing rule.  The same day an improvement round
+#   (algos/reports/girsanov_research/zen11_improve.py, round 1, variant 184) changed only sizing and exits to the
+#   current ones.  Ranked on 26 Jan 2022 - 31 Dec 2024 and checked on 1 Jan 2025 - 19 Nov 2026, after brokerage,
+#   taxes and 1% slippage each way: 32.3% a year (drawdown 20.7%) and 23.4% a year (drawdown 17.4%); five years
+#   23.5% a year, drawdown 20.7%, no losing calendar year.  21 of 721 sizing/exit variants passed the same rules;
+#   nearly all share the 20% stop, the +200% target and a 5-10% premium.
 from __future__ import annotations
 
 import hashlib
@@ -44,12 +48,12 @@ from utils.time import IST, minute_bucket, round_price, to_ist
 
 STRATEGY_NAME = 'zen_strategy_11'
 DESCRIPTION = ('Buys the ATM put near weekly expiry after a 3-hour fall with a stalled last 5 minutes and option '
-               'volatility at the top of its 375-minute range; stop -25%, target +75%, out 15:10.')
+               'volatility at the top of its 375-minute range; stop -20%, target +200%, out 15:10.')
 STRUCTURE = 'long_option'
 TREND_MINUTES, TREND_CHANGE = 180, -0.001
 PAUSE_MINUTES, PAUSE_FLOOR = 5, -0.0005
 IV_RANK_WINDOW, IV_RANK_MIN_PERIODS, IV_RANK_MIN = 375, 300, 0.95
-PREMIUM_FRACTION, STOP_FRACTION, TARGET_FRACTION = 0.15, 0.25, 0.75
+PREMIUM_FRACTION, STOP_FRACTION, TARGET_FRACTION = 0.075, 0.20, 2.0
 SIGNAL_START, SIGNAL_END, EXIT_TIME = time(9, 45), time(13, 35), time(15, 10)
 MAX_ENTRIES_PER_DAY = 2
 MAX_DAYS_TO_EXPIRY, FRIDAY_MAX_DAYS = 1, 4

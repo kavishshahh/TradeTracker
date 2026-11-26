@@ -66,9 +66,9 @@ def test_buys_the_atm_put_sized_at_15_percent_of_capital_with_long_option_levels
     res = engine().evaluate(view(), None)
     assert res.action == 'entry', res.reason
     p = res.position
-    # 15% of 320,000 = 48,000 of premium: floor(48,000 / (100 x 65)) = 7 lots
-    assert (p.structure, p.option_type, p.buy_strike, p.lots, p.units) == ('long_option', 'PE', STRIKE, 7, 455)
-    assert (p.buy_price, p.sell_price, p.net_credit, p.stop_loss, p.target) == (100.0, 0.0, -100.0, -75.0, -175.0)
+    # 7.5% of 320,000 = 24,000 of premium: floor(24,000 / (100 x 65)) = 3 lots
+    assert (p.structure, p.option_type, p.buy_strike, p.lots, p.units) == ('long_option', 'PE', STRIKE, 3, 195)
+    assert (p.buy_price, p.sell_price, p.net_credit, p.stop_loss, p.target) == (100.0, 0.0, -100.0, -80.0, -300.0)
     assert p.exit_due == datetime(2026, 11, 23, 15, 10, tzinfo=IST)
     assert res.diagnostics['iv_rank'] == pytest.approx(1.0) and res.diagnostics['trend'] < -0.001
 
@@ -90,9 +90,9 @@ def test_no_entry_without_every_condition(change, reason):
 
 
 @pytest.mark.parametrize('put, at, reason, pnl', [
-    (74.0, datetime(2026, 11, 23, 12, 30, tzinfo=IST), 'Stop loss', (74.0 - 100.0) * 455),
-    (176.0, datetime(2026, 11, 23, 12, 30, tzinfo=IST), 'Target', (176.0 - 100.0) * 455),
-    (120.0, datetime(2026, 11, 23, 15, 10, tzinfo=IST), 'Time exit', (120.0 - 100.0) * 455),
+    (79.0, datetime(2026, 11, 23, 12, 30, tzinfo=IST), 'Stop loss', (79.0 - 100.0) * 195),
+    (301.0, datetime(2026, 11, 23, 12, 30, tzinfo=IST), 'Target', (301.0 - 100.0) * 195),
+    (120.0, datetime(2026, 11, 23, 15, 10, tzinfo=IST), 'Time exit', (120.0 - 100.0) * 195),
 ])
 def test_exits_sell_the_option_at_the_stop_the_target_or_15_10(put, at, reason, pnl):
     e = engine()
@@ -146,10 +146,10 @@ class Provider:
     def get_expiry_settlement(self, expiry): return None
 
 
-def paper(lots=7):
+def paper(lots=3):
     return SimpleNamespace(signal_id='put-0001', expiry=EXPIRY, option_type='PE', sell_strike=STRIKE, buy_strike=STRIKE,
-                           lots=lots, lot_size=65, sell_price=0.0, buy_price=99.5, net_credit=-99.5, stop_loss=-74.63,
-                           target=-174.13, exit_reason=None, exit_value=None, structure='long_option')
+                           lots=lots, lot_size=65, sell_price=0.0, buy_price=99.5, net_credit=-99.5, stop_loss=-79.6,
+                           target=-298.5, exit_reason=None, exit_value=None, structure='long_option')
 
 
 @pytest.fixture
@@ -168,8 +168,8 @@ def test_dry_run_buys_one_option_and_sells_it_when_the_paper_trade_closes(made):
     cfg = registry.apply_profile('zen_strategy_11')
     desk.step('zen_strategy_11', cfg, paper_view(paper(), entered=True), True, NOW)
     trade = store.states['zen_strategy_11']['open_trade']
-    # 15% of the deployed 320,000 at the 100.0 ask: floor(48,000 / 6,500) = 7 lots, one BUY order, no short leg
-    assert (trade['structure'], trade['state'], trade['lots'], trade['units']) == ('long_option', 'open', 7, 455)
+    # 7.5% of the deployed 320,000 at the 100.0 ask: floor(24,000 / 6,500) = 3 lots, one BUY order, no short leg
+    assert (trade['structure'], trade['state'], trade['lots'], trade['units']) == ('long_option', 'open', 3, 195)
     assert list(trade['legs']) == ['hedge_entry'] and trade['legs']['hedge_entry']['side'] == 'BUY'
     assert trade['entry_credit'] == pytest.approx(-trade['legs']['hedge_entry']['avg'])
     provider.book = (129.0, 130.0, 129.5)
@@ -179,5 +179,5 @@ def test_dry_run_buys_one_option_and_sells_it_when_the_paper_trade_closes(made):
     assert done['state'] == 'closed' and done['exit_reason'] == 'Target'
     assert set(done['fills']) == {'hedge_entry', 'hedge_exit'} and done['fills']['hedge_exit']['side'] == 'SELL'
     bought, sold = done['fills']['hedge_entry']['avg'], done['fills']['hedge_exit']['avg']
-    assert done['pnl'] == pytest.approx((sold - bought) * 455) and done['pnl'] > 0
+    assert done['pnl'] == pytest.approx((sold - bought) * 195) and done['pnl'] > 0
     assert done['exit_value'] == pytest.approx(-sold)

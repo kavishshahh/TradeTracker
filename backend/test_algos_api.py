@@ -212,6 +212,26 @@ class APIAuthenticationTests(unittest.TestCase):
         if reads is not None: self.assertEqual(self.db.reads, reads)
         self.assertEqual(set(self.db), self.catalog_keys)
 
+    def test_robustness_needs_access_hides_setting_names_from_guests_and_costs_no_read(self):
+        self.assertEqual(asyncio.run(request(self.app,'/algos/robustness/zen_strategy_10',user='carol'))[0],403)
+        self.assertEqual(asyncio.run(request(self.app,'/algos/robustness/zen_strategy_10',user=None))[0],401)
+        self.assertEqual(asyncio.run(request(self.app,'/algos/robustness/not_listed',user='alice'))[0],404)
+        reads = self.db.reads if hasattr(self.db,'reads') else None
+        status, owner = asyncio.run(request(self.app,'/algos/robustness/zen_strategy_10',user='alice'))
+        self.assertEqual(status,200)
+        self.assertEqual(owner['strategy_id'],'zen_strategy_10')
+        mc = owner['monte_carlo']
+        self.assertEqual(len(mc['x']), len(mc['actual']))
+        self.assertTrue(all(len(band) == len(mc['x']) for band in mc['bands'].values()))
+        self.assertGreater(mc['p95'], mc['actual_dd'])
+        self.assertIn('->', owner['sensitivity']['rows'][0]['change'])
+        status, guest = asyncio.run(request(self.app,'/algos/robustness/zen_strategy_10',user='bob'))
+        self.assertEqual(status,200)
+        self.assertEqual([row['change'] for row in guest['sensitivity']['rows'][:2]], ['Setting change 1','Setting change 2'])
+        self.assertNotIn('->', json.dumps(guest['sensitivity']))
+        self.assertEqual(guest['monte_carlo'], mc)
+        if reads is not None: self.assertEqual(self.db.reads, reads)
+
     def test_owner_grants_declines_and_revokes(self):
         asyncio.run(request(self.app,'/algos/access/request','POST','carol'))
         _, body = asyncio.run(request(self.app,'/algos/access/admin',user='alice'))

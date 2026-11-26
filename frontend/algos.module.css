@@ -332,3 +332,82 @@ button.calendarCell:hover { box-shadow: inset 0 0 0 1px var(--border); }
 .accessBanner span { flex: 1; }
 .accessBanner button { padding: 5px 11px; font-size: 12px; font-weight: 500; color: var(--primary-foreground); background: var(--primary); border-radius: 6px; white-space: nowrap; }
 .accessBanner em { font-style: normal; font-weight: 500; color: var(--foreground); white-space: nowrap; }
+
+/* Robustness tab */
+.robust { display: grid; gap: 16px; }
+.lab .amber { color: var(--warn); }
+.robustScore { display: flex; align-items: baseline; gap: 7px; font-size: 12px; color: var(--muted-foreground); }
+.robustScore b { font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ruleChips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; padding: 0; list-style: none; }
+.ruleChips li { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; font-size: 11.5px; border-radius: 999px; border: 1px solid var(--border); }
+.rulePass { color: var(--up); background: var(--up-soft); border-color: transparent !important; }
+.ruleFail { color: var(--down); background: var(--down-soft); border-color: transparent !important; }
+.robustStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.robustStat { display: grid; gap: 3px; padding: 11px 13px; background: var(--muted); border-radius: 8px; }
+.robustStat span { font-size: 11px; color: var(--muted-foreground); }
+.robustStat b { font-size: 20px; font-weight: 500; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.robustStat small { font-size: 11px; color: var(--muted-foreground); }
+.robustLegend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 8px; font-size: 11px; color: var(--muted-foreground); }
+.robustLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.robustLegend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; }
+.swatchLine { height: 2px !important; width: 16px !important; background: var(--foreground); }
+.swatchInner { background: color-mix(in srgb, var(--primary) 30%, transparent); }
+.swatchOuter { background: color-mix(in srgb, var(--primary) 13%, transparent); }
+.swatchUnseen { background: color-mix(in srgb, var(--warning) 75%, transparent); }
+.swatchWarn { background: color-mix(in srgb, var(--warning) 80%, transparent); }
+.swatchPublished { background: color-mix(in srgb, var(--primary) 75%, transparent); }
+.swatchTick { width: 2px !important; height: 12px !important; border-radius: 0 !important; background: var(--muted-foreground); }
+.swatchDot { border-radius: 50% !important; background: var(--up); }
+.robustChart { height: 260px; }
+.robustChartShort { height: 200px; margin-top: 4px; }
+.robustSub { margin: 4px 0 14px; font-size: 11px; color: var(--muted-foreground); }
+.card > .robustSub:last-child { margin-bottom: 0; }
+.placeboRows { display: grid; gap: 18px; margin: 4px 0 16px; }
+.placeboRow { display: grid; grid-template-columns: 150px minmax(0, 1fr) 260px; align-items: center; gap: 16px; }
+.placeboLabel { display: grid; gap: 2px; font-size: 12px; }
+.placeboLabel b { font-weight: 500; color: var(--foreground); }
+.placeboTrack { position: relative; height: 26px; background: var(--muted); border-radius: 6px; }
+.placeboTrack i { position: absolute; top: 0; height: 100%; }
+.placeboZero { width: 1px; background: var(--border); }
+.placeboBand { background: color-mix(in srgb, var(--primary) 18%, transparent); border-radius: 4px; }
+.placeboMedian, .placeboBest { width: 2px; background: var(--muted-foreground); transform: translateX(-1px); }
+.placeboBest { opacity: .5; }
+.placeboReal, .placeboRealFail { top: 50% !important; width: 14px; height: 14px !important; border-radius: 50%; transform: translate(-7px, -50%); background: var(--up); box-shadow: 0 0 0 3px var(--card); }
+.placeboRealFail { background: var(--down); }
+.placeboNums { display: flex; justify-content: flex-end; gap: 12px; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.placeboNums b { font-weight: 500; color: var(--foreground); }
+.sensHead, .sensRow { display: grid; grid-template-columns: minmax(150px, 230px) minmax(0, 1fr) 150px; align-items: center; gap: 14px; }
+.sensHead { padding-bottom: 6px; margin-bottom: 4px; font-size: 11px; color: var(--muted-foreground); border-bottom: 1px solid var(--border); }
+.sensHead span:nth-child(2) { text-align: center; }
+.sensRows { display: grid; gap: 2px; margin-bottom: 12px; }
+.sensRow { min-height: 24px; font-size: 12px; }
+.sensRow:hover { background: var(--muted); border-radius: 5px; }
+.sensLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 4px; }
+.sensBarBox { position: relative; height: 14px; }
+.sensBarBox em, .stressBar em { position: absolute; top: 50%; transform: translateY(-50%); font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; color: var(--muted-foreground); white-space: nowrap; }
+.sensAxis { position: absolute; left: 50%; top: -5px; bottom: -5px; width: 1px; background: var(--border); }
+.sensBarUp, .sensBarDown { position: absolute; top: 0; height: 100%; border-radius: 3px; }
+.sensBarUp { background: color-mix(in srgb, var(--up) 70%, transparent); }
+.sensBarDown { background: color-mix(in srgb, var(--down) 70%, transparent); }
+.sensDd { display: flex; align-items: center; gap: 8px; }
+.sensDd i { display: block; flex: 1; max-width: 90px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted-foreground) 45%, transparent); }
+.sensDd .sensDdWarn { background: var(--warn); }
+.sensDd b { min-width: 42px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+.stressRows { display: grid; gap: 8px; }
+.stressRow { display: grid; grid-template-columns: 220px minmax(0, 1fr) 140px; align-items: center; gap: 14px; padding: 6px 8px; font-size: 12px; border-radius: 6px; }
+.stressRow small { margin-left: 6px; padding: 1px 6px; font-size: 10px; border-radius: 9px; background: var(--muted); color: var(--muted-foreground); }
+.stressBase { background: var(--muted); }
+.stressBase small { background: var(--card); }
+.stressBar { position: relative; height: 18px; }
+.stressBar em { right: 6px; color: var(--foreground); }
+.stressRow > b { font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+.stressRow > b small { background: none; padding: 0; }
+@media (max-width: 900px) {
+  .robustStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .placeboRow { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .placeboNums { justify-content: flex-start; }
+  .sensHead, .sensRow { grid-template-columns: minmax(110px, 38%) minmax(0, 1fr) 70px; }
+  .sensDd i { display: none; }
+  .stressRow { grid-template-columns: minmax(0, 1fr) 90px; }
+  .stressBar { grid-column: 1 / -1; grid-row: 2; }
+}

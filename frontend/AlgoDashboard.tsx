@@ -5,6 +5,7 @@ import { Activity, AlertCircle, ArrowLeft, ArrowUpDown, Banknote, ChevronRight, 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AccessBanner, AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import AlgoDetail from './AlgoDetail';
+import type { LoadRobustness, Robustness } from './AlgoRobustness';
 import AlgoLive from './AlgoLive';
 import AlgoResearch from './AlgoResearch';
 import type { LiveActions, LiveResponse } from './liveData';
@@ -88,6 +89,22 @@ export default function AlgoDashboard() {
     return pending;
   }, [authed]);
 
+  // Reliability-check chart data for an algo's Robustness tab, fetched when the tab first opens. Kept for this page load.
+  const robustness = useRef(new Map<string, Promise<Robustness | null>>());
+  const loadRobustness = useCallback((id: string) => {
+    let pending = robustness.current.get(id);
+    if (!pending) {
+      pending = authed(`/algos/robustness/${encodeURIComponent(id)}`).then(async response => {
+        if (response.status === 404 && /^No robustness/.test((await response.json().catch(() => ({})) as { detail?: string }).detail || '')) return null;
+        if (!response.ok) throw new Error('Robustness checks unavailable');
+        return await response.json() as Robustness;
+      });
+      pending.catch(() => robustness.current.delete(id));
+      robustness.current.set(id, pending);
+    }
+    return pending;
+  }, [authed]);
+
   // Research notes (owner only) are fetched when the Research tab first opens and kept for this page load.
   const researchNotes = useRef<Promise<Research> | null>(null);
   const loadResearch = useCallback(() => {
@@ -160,14 +177,14 @@ export default function AlgoDashboard() {
     const link = document.createElement('a'); link.href = url; const listed = catalog.find(item => item.id === strategyId); link.download = `${listed ? algoSlug(listed) : 'algo'}-paper-trades.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
-  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} access={labAccess} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} loadEquity={loadEquity} loadResearch={loadResearch} live={liveActions} />;
+  return <AlgoLab catalog={catalog} paper={paper} error={error} loading={loading} saving={saving} loadedAt={loadedAt} access={labAccess} onRefresh={() => void refresh()} onFollow={(id, enabled) => void follow(id, enabled)} onDownload={downloadLedger} loadBacktest={loadBacktest} loadEquity={loadEquity} loadRobustness={loadRobustness} loadResearch={loadResearch} live={liveActions} />;
 }
 
-export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; access?: LabAccess; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null>; loadEquity?: (id: string) => Promise<EquityDays | null>; loadResearch?: () => Promise<Research>; live?: LiveActions };
+export type AlgoLabProps = { catalog: Strategy[]; paper: PaperResponse | null; error: string; loading: boolean; saving: boolean; loadedAt: string | null; access?: LabAccess; onRefresh: () => void; onFollow: (id: string, enabled: boolean) => void; onDownload: (id: string) => void; loadBacktest: (id: string) => Promise<BacktestLedger | null>; loadEquity?: (id: string) => Promise<EquityDays | null>; loadRobustness?: LoadRobustness; loadResearch?: () => Promise<Research>; live?: LiveActions };
 
 /** Everything on screen, given data. Holds only view state: the open tab, the open algo and the return period.
  *  Cards and backtest figures show for everyone; the trades sections show only when `access.allowed`. */
-export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, access = openAccess, onRefresh, onFollow, onDownload, loadBacktest, loadEquity, loadResearch, live }: AlgoLabProps) {
+export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, access = openAccess, onRefresh, onFollow, onDownload, loadBacktest, loadEquity, loadRobustness, loadResearch, live }: AlgoLabProps) {
   const [view, setView] = useState<View>('algos');
   const [algoKey, setAlgoKey] = useState<string | null>(null);   // the ?algo= value: a name slug (or an id from an old link)
   const [period, setPeriod] = useState<Period>('1y');
@@ -203,7 +220,7 @@ export function AlgoLab({ catalog, paper, error, loading, saving, loadedAt, acce
   if (!catalog.length) main = <div className={styles.card}><EmptyRow>{loading ? 'Loading strategies…' : error || 'No strategies are listed in the catalogue yet.'}</EmptyRow>{!loading && <button className={styles.outlineButton} onClick={onRefresh}>Refresh catalogue</button>}</div>;
   else if (algoId) main = <div className={styles.split}>
     <AlgoRail catalog={catalog} activeId={algoId} period={period} onPeriod={setPeriod} onOpen={id => go(view, id)} />
-    <div className={styles.splitMain}>{detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} period={period} onFollow={enabled => onFollow(detail.id, enabled)} onDownload={() => onDownload(detail.id)} loadBacktest={loadBacktest} loadEquity={loadEquity} access={access} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>}</div>
+    <div className={styles.splitMain}>{detail ? <AlgoDetail key={detail.id} strategy={detail} account={paper?.strategies[detail.id]} paperLoaded={!!paper} following={!!paper?.following[detail.id]} saving={saving} period={period} onFollow={enabled => onFollow(detail.id, enabled)} onDownload={() => onDownload(detail.id)} loadBacktest={loadBacktest} loadEquity={loadEquity} loadRobustness={loadRobustness} access={access} /> : <div className={styles.card}><EmptyRow>This algo is not in the catalogue.</EmptyRow></div>}</div>
   </div>;
   // Research names the rules of unlisted strategies: the owner's only, like the rules on an algo's page.
   // The order desk's settings are the owner's alone (the API refuses everyone else).

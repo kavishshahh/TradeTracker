@@ -54,6 +54,9 @@ LIVE_ACCOUNT = ('algo_live', 'account')
 LIVE_STATE = 'algo_live_state'
 # Write-ups of strategies that were researched and not listed. A file shipped with the API: no Firestore read.
 RESEARCH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seed_data', 'algo_research.json')
+# Chart data for each listed algo's Robustness tab, built by algos/reports/build_robustness.py. Served from the
+# file, so it costs no database read.
+ROBUSTNESS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seed_data', 'algo_robustness.json')
 
 
 class FollowRequest(BaseModel):
@@ -307,6 +310,25 @@ def create_algos_router(db, get_current_user, catalog_ttl=CATALOG_TTL_SECONDS, c
                 return json.load(handle)
         except (OSError, ValueError) as exc:
             unavailable('research', exc, 'Research notes unavailable')
+
+    @router.get('/robustness/{strategy_id}')
+    async def robustness(strategy_id: str, current_user: str = Depends(get_current_user)):
+        """Reliability-check results of one listed algo, for its Robustness tab. Open to everyone who may see
+        past trades; the names of the settings moved in the sensitivity check describe the rules, so only the
+        owner sees them and everyone else gets numbered changes."""
+        require_access(current_user)
+        try:
+            with open(ROBUSTNESS_FILE, encoding='utf-8') as handle:
+                body = json.load(handle)
+        except (OSError, ValueError) as exc:
+            unavailable('robustness', exc, 'Robustness checks unavailable')
+        row = (body.get('algos') or {}).get(strategy_id)
+        if row is None:
+            raise HTTPException(404, 'No robustness checks for this strategy')
+        if not is_owner(current_user):
+            rows = (row.get('sensitivity') or {}).get('rows') or []
+            row = {**row, 'sensitivity': {**row['sensitivity'], 'rows': [{**item, 'change': f'Setting change {index + 1}'} for index, item in enumerate(rows)]}} if rows else row
+        return {**row, 'basis': body.get('basis'), 'strategy_id': strategy_id}
 
     # --- live trading (owner only) --------------------------------------------------------------
     def live_account():

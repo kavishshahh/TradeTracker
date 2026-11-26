@@ -6,9 +6,10 @@ import { algoState, blurb, dailyPnl, dayBefore, istParts, money, monthLabel, mon
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
 import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import EquityChart, { type EquityPoint } from './EquityChart';
+import AlgoRobustness, { type LoadRobustness } from './AlgoRobustness';
 import styles from './algos.module.css';
 
-type Tab = 'performance' | 'trades' | 'monthly' | 'rules';
+type Tab = 'performance' | 'trades' | 'monthly' | 'robustness' | 'rules';
 type Preset = '1m' | '3m' | '6m' | '1y' | '2y' | '3y' | 'all';
 type Range = Preset | 'custom';
 /** Chart ranges in calendar months back from the last day. 2Y and 3Y appear only when the backtest is longer than that. */
@@ -17,9 +18,9 @@ const rowsReturn = (rows: Month[], capital: number) => rows.reduce((total, row) 
 
 type LoadBacktest = (id: string) => Promise<BacktestLedger | null>;
 type LoadEquity = (id: string) => Promise<EquityDays | null>;
-type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; access?: LabAccess; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest; loadEquity?: LoadEquity };
+type Props = { strategy: Strategy; account: Paper | null | undefined; paperLoaded: boolean; following: boolean; saving: boolean; period: Period; access?: LabAccess; onFollow: (enabled: boolean) => void; onDownload: () => void; loadBacktest: LoadBacktest; loadEquity?: LoadEquity; loadRobustness?: LoadRobustness };
 
-export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, access = openAccess, onFollow, onDownload, loadBacktest, loadEquity }: Props) {
+export default function AlgoDetail({ strategy, account, paperLoaded, following, saving, period, access = openAccess, onFollow, onDownload, loadBacktest, loadEquity, loadRobustness }: Props) {
   const [tab, setTab] = useState<Tab>('performance');
   // Day-by-day P&L for the chart, from the backtest ledger. Until it arrives, or if it is missing, the chart is monthly.
   const [equity, setEquity] = useState<EquityDays | null>(null);
@@ -42,10 +43,11 @@ export default function AlgoDetail({ strategy, account, paperLoaded, following, 
       <div className={styles.detailStat}><span>{periodShort[period]} returns <BacktestTag /></span><b><Return value={periodReturn(strategy, period, days)} /></b></div>
       <button className={following ? styles.followingButton : styles.followButton} onClick={() => onFollow(!following)} disabled={saving || !paperLoaded} title={following ? 'Click to stop following' : 'Follow this algo’s paper trades'}>{following ? <Check size={15} /> : <Plus size={15} />}{saving ? 'Saving…' : following ? 'Following' : 'Follow'}</button>
     </div>
-    <Tabs label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Algo performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly returns' }, { id: 'rules', label: 'About algo' }]} />
+    <Tabs label="Algo sections" value={tab} onChange={setTab} items={[{ id: 'performance', label: 'Algo performance' }, { id: 'trades', label: 'Past trades' }, { id: 'monthly', label: 'Monthly returns' }, ...(loadRobustness ? [{ id: 'robustness' as const, label: 'Robustness' }] : []), { id: 'rules', label: 'About algo' }]} />
     {tab === 'performance' && <Performance strategy={strategy} account={account} ledgerDays={days} />}
     {tab === 'trades' && (access.allowed ? <PastTrades strategy={strategy} account={account} onDownload={onDownload} loadBacktest={loadBacktest} /> : <AccessCard access={access} what="Past trades" />)}
     {tab === 'monthly' && <Monthly strategy={strategy} />}
+    {tab === 'robustness' && loadRobustness && (access.allowed ? <AlgoRobustness strategyId={strategy.id} load={loadRobustness} /> : <AccessCard access={access} what="Robustness checks" />)}
     {tab === 'rules' && <Rules strategy={strategy} owner={access.owner} />}
   </>;
 }

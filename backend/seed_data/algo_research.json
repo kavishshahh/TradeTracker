@@ -2,7 +2,7 @@
   "method": "Engine replays on one-minute closes, 4 Oct 2023 to 19 Nov 2026, gross on ₹3,20,000 of fixed model capital. Costs are slippage plus charges per trade, per unit: 4.6 points is what real fills on a similar algo lost against its published prices. Research strategies stay in the code for replays; they are not paper traded.",
   "checks": {
     "basis": "Next-candle fills and real costs on ₹3,20,000, 14 Dec 2021 to 19 Nov 2026. The pass and fail rules were fixed before each run.",
-    "note": "“Unseen” is Dec 2021 to Oct 2023, which no search used; it counts as a pass only above 95%. The drawdown bar is full at 50% and turns amber past the 25% listing limit. Skew Deep Credit was scored on an earlier list of eight rules. The two Momentum Capped algos were run from 26 Jan 2022, the earliest their option inputs allow.",
+    "note": "“Unseen” is Dec 2021 to Oct 2023, which no search used; it counts as a pass only above 95%. The drawdown bar is full at 50% and turns amber past the 25% listing limit. The two Momentum Capped algos were run from 26 Jan 2022, the earliest their option inputs allow.",
     "rows": [
       {
         "id": "ratio_strategy_04",
@@ -17,14 +17,14 @@
       },
       {
         "id": "ratio_strategy_08",
-        "checked": "22 Nov 2026",
-        "passed": 5,
-        "rules": 8,
+        "checked": "26 Nov 2026",
+        "passed": 9,
+        "rules": 11,
         "profit": 1125224,
         "per_year": 35.8,
         "drawdown": 23.0,
-        "placebo": 80,
-        "finding": "Put volatility block restored: without it 2022 produced a 42.7% drawdown."
+        "placebo": 82,
+        "finding": "Put volatility block restored: without it 2022 produced a 42.7% drawdown. On the unseen period it beats only 82% of random entries, and 9 of 28 setting changes push the drawdown past 25%."
       },
       {
         "id": "ratio_strategy_03",

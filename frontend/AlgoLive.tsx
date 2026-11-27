@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, ChevronDown, ChevronUp, Lock, OctagonX, Power } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { marketOpen, money, strikesLabel, time, type Strategy } from './algoData';
 import { deskStale, modeLabel, points, stateWord, type LiveActions, type LiveMode, type LiveResponse, type LiveSetting, type LiveSizing, type LiveState, type LiveTotals, type LiveTrade } from './liveData';
 import { AlgoIcon, EmptyRow, tone } from './algoUi';
@@ -16,7 +16,9 @@ type Act = (key: string, task: () => Promise<void>) => Promise<void>;
  *  deploys, and see what the order desk did. Saving stores a setting; the worker acts on it within a minute.
  *  Live trading is switched off in the code, so the API offers only Off and Dry run and the live-only
  *  controls (server lock, Dhan position check, loss limit) stay hidden until it is switched on. */
-export default function AlgoLive({ catalog, actions }: { catalog: Strategy[]; actions: LiveActions }) {
+export default function AlgoLive({ catalog: listed, actions }: { catalog: Strategy[]; actions: LiveActions }) {
+  // An algo forward-tested by daily replay has no worker position for the order desk to mirror.
+  const catalog = useMemo(() => listed.filter(strategy => strategy.feed !== 'daily_replay'), [listed]);
   const [live, setLive] = useState<LiveResponse | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');

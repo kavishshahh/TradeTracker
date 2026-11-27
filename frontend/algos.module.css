@@ -100,6 +100,7 @@
 .state_scanning i { background: var(--up); opacity: 1; box-shadow: 0 0 0 3px var(--up-soft); }
 .state_in_trade i { background: var(--warn); opacity: 1; box-shadow: 0 0 0 3px var(--warn-soft); }
 .state_stale i { background: var(--down); opacity: .8; }
+.state_replay i { background: var(--warn); opacity: .8; }
 .sellTag, .buyTag { display: inline-block; padding: 1px 6px; margin-right: 6px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .02em; }
 .sellTag { color: var(--down); background: var(--down-soft); }
 /* A spread's two legs read as one trade: no rule between them, and the shared cells sit in the middle. */

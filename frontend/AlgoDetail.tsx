@@ -2,7 +2,7 @@
 
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { algoState, blurb, dailyPnl, dayBefore, istParts, money, monthLabel, monthsBefore, matchingDays, pastTrades, percent, periodReturn, pnlBetween, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Day, type EquityDays, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
+import { algoState, blurb, optionName, dailyPnl, dayBefore, istParts, money, monthLabel, monthsBefore, matchingDays, pastTrades, percent, periodReturn, pnlBetween, periodShort, ruleText, signedPercent, stateLabel, time, type BacktestLedger, type Day, type EquityDays, type Month, type Paper, type PastTrade, type Period, type Strategy, type Trade } from './algoData';
 import { AlgoIcon, BacktestTag, EmptyRow, Pills, PositionTable, Return, Tabs, tone } from './algoUi';
 import { AccessCard, openAccess, type LabAccess } from './AlgoAccessCard';
 import EquityChart, { type EquityPoint } from './EquityChart';
@@ -129,7 +129,7 @@ function Performance({ strategy, account, ledgerDays }: { strategy: Strategy; ac
           <div><dt>Trades</dt><dd>{strategy.metrics.trade_count}</dd></div>
           <div><dt>Profitable months</dt><dd>{up.length} of {strategy.monthly.length}</dd></div>
         </dl>
-        <p className={styles.caption}>Gross of costs; intratrade drawdowns are excluded.{strategy.exit_policy ? ` Exit: ${strategy.exit_policy}.` : ''}</p>
+        <p className={styles.caption}>{strategy.pnl_basis === 'after_costs' ? 'After estimated charges and slippage' : 'Gross of costs'}; intratrade drawdowns are excluded.{strategy.exit_policy ? ` Exit: ${strategy.exit_policy}.` : ''}</p>
       </div>
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Paper account</h3>
@@ -181,10 +181,12 @@ function monthRange(first: string, last: string) {
 const price = (value: number | null) => value == null ? '—' : value.toFixed(2);
 /** The two options of a spread as separate positions: the one sold, then the one bought as its hedge. */
 function tradeLegs(trade: PastTrade) {
-  const leg = (sold: boolean, strike: number, entry: number | null, exit: number | null) => ({ sold, name: `NIFTY ${trade.expiry} ${strike} ${trade.type}`, entry, exit,
+  const shape = { expiry: trade.expiry, structure: trade.straddle ? 'short_straddle' : null };
+  const leg = (sold: boolean, slot: 'sell' | 'buy', strike: number, entry: number | null, exit: number | null) => ({ sold, name: optionName(shape, strike, trade.type, slot), entry, exit,
     pnl: entry == null || exit == null ? null : (sold ? entry - exit : exit - entry) * trade.units });
-  const bought = leg(false, trade.buy, trade.buyEntry, trade.buyExit);
-  return trade.single ? [bought] : [leg(true, trade.sell, trade.sellEntry, trade.sellExit), bought];
+  // A straddle's second option (the put) is sold as well.
+  const second = leg(trade.straddle, 'buy', trade.buy, trade.buyEntry, trade.buyExit);
+  return trade.single ? [second] : [leg(true, 'sell', trade.sell, trade.sellEntry, trade.sellExit), second];
 }
 const dayLabel = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 

@@ -27,6 +27,8 @@ LEDGERS = {
     'zen_strategy_10': 'zen_strategy_10_2022-01-26_2026-11-19_on_schedule/trades.csv',
     # Option buying, from the research simulator (algos/reports/girsanov_research/publish_zen11.py), not dhan_replay.
     'zen_strategy_11': 'zen_strategy_11_2022-01-26_2026-11-19/trades.csv',
+    # MCX crude oil short straddle (algos/crude_straddle/publish.py): two sold options, P&L after costs.
+    'crude_strategy_12': 'crude_strategy_12_2025-08-05_2026-11-26/trades.csv',
 }
 
 
@@ -40,6 +42,12 @@ def legs(row):
     the value the replay booked for it."""
     sell_entry, buy_entry = number(row.get('sell_leg_entry')), number(row.get('buy_leg_entry'))
     sell_exit, buy_exit = number(row.get('sell_leg_exit')), number(row.get('buy_leg_exit'))
+    if row.get('structure') == 'short_straddle':
+        # Both options are sold (the call in the "sell" fields, the put in the "buy" fields) and the trade's
+        # P&L is after costs, so the spread identity below does not apply.
+        if None in (sell_entry, buy_entry, sell_exit, buy_exit):
+            return {}
+        return {'sell_entry': sell_entry, 'buy_entry': buy_entry, 'sell_exit': sell_exit, 'buy_exit': buy_exit}
     spot = number(row.get('settlement_spot'))
     if row['exit_reason'] == 'Expiry' and spot is not None:
         sign = 1 if row['option_type'] == 'CE' else -1
@@ -62,7 +70,7 @@ def ledger(strategy_id, relative):
         'sell': int(float(row['sell_strike'])), 'buy': int(float(row['buy_strike'])),
         'units': int(float(row['units'])), 'lots': int(float(row['lots'])),
         'credit': number(row['net_credit']), 'pnl': number(row['pnl']), 'reason': row['exit_reason'] or None,
-        **legs(row), **({'structure': row['structure']} if row.get('structure') == 'long_option' else {}),
+        **legs(row), **({'structure': row['structure']} if row.get('structure') in ('long_option', 'short_straddle') else {}),
     } for row in rows if row.get('exit_ts')]
     return {'strategy_id': strategy_id, 'source': f'algos/reports/{relative}',
             'capital': number(rows[0]['allocated_capital']) if rows else None,

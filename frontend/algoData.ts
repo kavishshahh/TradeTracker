@@ -7,7 +7,11 @@ export type Day = { day: string; pnl: number };
 export type EquityDays = { strategy_id: string; days: Day[] };
 export type Month = { month: string; pnl: number; closed_trades: number; win_rate_pct: number | null; return_pct: number; winning_trades?: number; losing_trades?: number; partial_month?: boolean };
 // rules, limitations and exit_policy arrive only for the owner; everyone else gets the public fields, with `summary` as the description.
-export type Strategy = { id: string; name: string; version: string; description: string; summary?: string; underlying: string; category: string; capital: number; period_start: string; period_end: string; limitations?: string; exit_policy?: string; rules?: Rule[]; metrics: { total_pnl: number; trade_count: number; win_rate_pct: number; cagr_pct: number; max_drawdown_pct: number; return_1m_pct: number; return_3m_pct: number; return_6m_pct: number }; monthly: Month[] };
+export type Strategy = { id: string; name: string; version: string; description: string; summary?: string; underlying: string; category: string; capital: number; period_start: string; period_end: string;
+  /** 'daily_replay': the forward test is priced after each session from recorded prices, not by the minute worker. */
+  feed?: string;
+  /** 'after_costs' when the backtest P&L already has charges and slippage taken off; otherwise it is gross. */
+  pnl_basis?: string; limitations?: string; exit_policy?: string; rules?: Rule[]; metrics: { total_pnl: number; trade_count: number; win_rate_pct: number; cagr_pct: number; max_drawdown_pct: number; return_1m_pct: number; return_3m_pct: number; return_6m_pct: number }; monthly: Month[] };
 export type Trade = { signal_id: string; status: string; option_type: string; sell_strike: number; buy_strike: number; units: number; lots: number; entry_ts: string; expiry: string; exit_ts: string | null; pnl: number | null; stop_loss: number; target: number | null; exit_due: string; sell_price: number; buy_price: number; exit_reason: string | null; exit_value?: number | null; sell_mark?: number | null; buy_mark?: number | null; sell_exit_price?: number | null; buy_exit_price?: number | null; structure?: string | null };
 // in_trade and trades_hidden arrive only for viewers without access, whose open and closed positions are stripped by the API.
 export type Paper = { in_trade?: boolean; trades_hidden?: boolean; execution: string; updated_at: string; last_evaluation: string | null; status: string; capital: number; alpha: number | null; alpha2: number | null; signal_at: string | null; realized_pnl: number | null; unrealized_pnl: number | null; valuation_ts: string | null; closed_trades: number; win_rate_pct: number | null; open_position: Trade | null; closed_positions: Trade[]; ledger_limit: number };
@@ -27,9 +31,14 @@ export const blurb = (strategy: Strategy, owner: boolean) => owner ? strategy.de
 export const ruleText = (rule: Rule) => typeof rule === 'string' ? { label: '', description: rule } : rule;
 /** One bought option (option-buying algos) rather than a sold spread: stored with both strikes equal and no sold leg. */
 export const isLongOption = (trade: { structure?: string | null }) => trade.structure === 'long_option';
-/** '24000/23600' for a spread, '24000' for one bought option. */
-export const strikesLabel = (trade: { sell_strike: number; buy_strike: number; structure?: string | null }) => isLongOption(trade) ? `${trade.buy_strike}` : `${trade.sell_strike}/${trade.buy_strike}`;
-export const legName = (trade: Trade, side: 'sell' | 'buy') => `NIFTY ${trade.expiry} ${side === 'sell' ? trade.sell_strike : trade.buy_strike} ${trade.option_type}`;
+/** A call and a put sold at the same strike (MCX crude oil): stored with the call in the sell fields and the put in the buy fields. */
+export const isShortStraddle = (trade: { structure?: string | null }) => trade.structure === 'short_straddle';
+/** '24000/23600' for a spread, '24000' for one bought option or a straddle. */
+export const strikesLabel = (trade: { sell_strike: number; buy_strike: number; structure?: string | null }) => isLongOption(trade) ? `${trade.buy_strike}` : isShortStraddle(trade) ? `${trade.sell_strike}` : `${trade.sell_strike}/${trade.buy_strike}`;
+/** One option of a trade by name. For a straddle the 'sell' slot is the call and the 'buy' slot is the put. */
+export const optionName = (trade: { expiry: string; structure?: string | null }, strike: number, type: string, side: 'sell' | 'buy') =>
+  isShortStraddle(trade) ? `CRUDEOIL ${trade.expiry} ${strike} ${side === 'sell' ? 'CE' : 'PE'}` : `NIFTY ${trade.expiry} ${strike} ${type}`;
+export const legName = (trade: Trade, side: 'sell' | 'buy') => optionName(trade, side === 'sell' ? trade.sell_strike : trade.buy_strike, trade.option_type, side);
 
 /** IST calendar parts for a timestamp (defaults to now). */
 export function istParts(date = new Date()) {
@@ -53,18 +62,20 @@ export const todayRealized = (account: Paper | null | undefined) => {
   return (account.closed_positions || []).filter(trade => istDay(trade.exit_ts) === today).reduce((total, trade) => total + (trade.pnl ?? 0), 0);
 };
 
-export type AlgoState = 'awaiting' | 'closed' | 'stale' | 'in-trade' | 'scanning';
+export type AlgoState = 'awaiting' | 'closed' | 'stale' | 'in-trade' | 'scanning' | 'replay';
 export function algoState(account: Paper | null | undefined): AlgoState {
   if (!account) return 'awaiting';
+  if (account.execution === 'daily_replay') return 'replay';
   if (inTrade(account) && !marketOpen()) return 'in-trade';
   if (!marketOpen()) return 'closed';
   if (isStale(account)) return 'stale';
   return inTrade(account) ? 'in-trade' : 'scanning';
 }
-export const stateLabel: Record<AlgoState, string> = { awaiting: 'Awaiting feed', closed: 'Market Closed', stale: 'Feed stale', 'in-trade': 'In trade', scanning: 'Scanning' };
+export const stateLabel: Record<AlgoState, string> = { awaiting: 'Awaiting feed', closed: 'Market Closed', stale: 'Feed stale', 'in-trade': 'In trade', scanning: 'Scanning', replay: 'Daily replay' };
 export function scanMessage(account: Paper | null | undefined) {
   const state = algoState(account);
   if (!account || state === 'awaiting') return 'Waiting for the paper worker to publish this algo’s first update.';
+  if (state === 'replay') return `Forward test priced after each session from recorded prices, not by the minute · last update ${time(account.updated_at)}.`;
   if (state === 'in-trade' && !account.open_position) return `Holding a position${marketOpen() ? '' : ' overnight'} · marked ${time(account.valuation_ts)}. Trade details are shared by invitation.`;
   if (state === 'in-trade' && isLongOption(account.open_position!)) return `Holding a bought ${legName(account.open_position!, 'buy')} · marked ${time(account.valuation_ts)}.`;
   if (state === 'in-trade') return `Holding ${legName(account.open_position!, 'sell')} / ${account.open_position!.buy_strike} spread${marketOpen() ? '' : ' overnight'} · marked ${time(account.valuation_ts)}.`;
@@ -123,10 +134,11 @@ export function ledgerFills(catalog: Strategy[], paper: PaperResponse | null): F
       const open = trade === account.open_position;
       const base = { algo: strategy.name, algoId: strategy.id, qty: trade.units };
       fills.push({ ...base, key: `${trade.signal_id}-es`, ts: trade.entry_ts, side: 'S', name: legName(trade, 'sell'), kind: 'Entry', price: trade.sell_price, ltp: open ? trade.sell_mark ?? null : null });
-      fills.push({ ...base, key: `${trade.signal_id}-eb`, ts: trade.entry_ts, side: 'B', name: legName(trade, 'buy'), kind: 'Entry', price: trade.buy_price, ltp: open ? trade.buy_mark ?? null : null });
+      const second = isShortStraddle(trade);      // the second option is sold too
+      fills.push({ ...base, key: `${trade.signal_id}-eb`, ts: trade.entry_ts, side: second ? 'S' : 'B', name: legName(trade, 'buy'), kind: 'Entry', price: trade.buy_price, ltp: open ? trade.buy_mark ?? null : null });
       if (!open && trade.exit_ts) {
         fills.push({ ...base, key: `${trade.signal_id}-xs`, ts: trade.exit_ts, side: 'B', name: legName(trade, 'sell'), kind: 'Exit', price: trade.sell_exit_price ?? null, ltp: null });
-        fills.push({ ...base, key: `${trade.signal_id}-xb`, ts: trade.exit_ts, side: 'S', name: legName(trade, 'buy'), kind: 'Exit', price: trade.buy_exit_price ?? null, ltp: null });
+        fills.push({ ...base, key: `${trade.signal_id}-xb`, ts: trade.exit_ts, side: second ? 'B' : 'S', name: legName(trade, 'buy'), kind: 'Exit', price: trade.buy_exit_price ?? null, ltp: null });
       }
     }
   }
@@ -142,10 +154,12 @@ export type PastTrade = { key: string; source: 'backtest' | 'paper'; entry: stri
   /** Price of each option at entry and exit; null on ledgers exported before leg prices were kept. */
   sellEntry: number | null; buyEntry: number | null; sellExit: number | null; buyExit: number | null;
   /** One bought option: only the bought leg is shown. */
-  single: boolean };
+  single: boolean;
+  /** A sold call and put at one strike: both legs are sold, and the trade's P&L is after costs. */
+  straddle: boolean };
 export function pastTrades(ledger: BacktestLedger | null, account: Paper | null | undefined): PastTrade[] {
-  const backtest = (ledger?.trades || []).map((trade, index): PastTrade => ({ key: `b${index}`, source: 'backtest', entry: trade.entry, exit: trade.exit, day: istDay(trade.exit), type: trade.type, expiry: trade.expiry, sell: trade.sell, buy: trade.buy, lots: trade.lots, units: trade.units, pnl: trade.pnl, reason: trade.reason, sellEntry: trade.sell_entry ?? null, buyEntry: trade.buy_entry ?? null, sellExit: trade.sell_exit ?? null, buyExit: trade.buy_exit ?? null, single: isLongOption(trade) }));
-  const paper = (account?.closed_positions || []).filter(trade => trade.exit_ts).map((trade): PastTrade => ({ key: `p${trade.signal_id}`, source: 'paper', entry: trade.entry_ts, exit: trade.exit_ts!, day: istDay(trade.exit_ts), type: trade.option_type, expiry: trade.expiry, sell: trade.sell_strike, buy: trade.buy_strike, lots: trade.lots, units: trade.units, pnl: trade.pnl, reason: trade.exit_reason, sellEntry: trade.sell_price ?? null, buyEntry: trade.buy_price ?? null, sellExit: trade.sell_exit_price ?? null, buyExit: trade.buy_exit_price ?? null, single: isLongOption(trade) }));
+  const backtest = (ledger?.trades || []).map((trade, index): PastTrade => ({ key: `b${index}`, source: 'backtest', entry: trade.entry, exit: trade.exit, day: istDay(trade.exit), type: trade.type, expiry: trade.expiry, sell: trade.sell, buy: trade.buy, lots: trade.lots, units: trade.units, pnl: trade.pnl, reason: trade.reason, sellEntry: trade.sell_entry ?? null, buyEntry: trade.buy_entry ?? null, sellExit: trade.sell_exit ?? null, buyExit: trade.buy_exit ?? null, single: isLongOption(trade), straddle: isShortStraddle(trade) }));
+  const paper = (account?.closed_positions || []).filter(trade => trade.exit_ts).map((trade): PastTrade => ({ key: `p${trade.signal_id}`, source: 'paper', entry: trade.entry_ts, exit: trade.exit_ts!, day: istDay(trade.exit_ts), type: trade.option_type, expiry: trade.expiry, sell: trade.sell_strike, buy: trade.buy_strike, lots: trade.lots, units: trade.units, pnl: trade.pnl, reason: trade.exit_reason, sellEntry: trade.sell_price ?? null, buyEntry: trade.buy_price ?? null, sellExit: trade.sell_exit_price ?? null, buyExit: trade.buy_exit_price ?? null, single: isLongOption(trade), straddle: isShortStraddle(trade) }));
   return [...backtest, ...paper].sort((a, b) => Date.parse(a.exit) - Date.parse(b.exit));
 }
 

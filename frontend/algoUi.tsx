@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowUpRight, FileText, History } from 'lucide-react';
 import { useId, type CSSProperties, type ReactNode } from 'react';
-import { isLongOption, legName, money, signedPercent, time, type Trade } from './algoData';
+import { isLongOption, isShortStraddle, legName, money, signedPercent, time, type Trade } from './algoData';
 import styles from './algos.module.css';
 
 export const tone = (value: number | null | undefined) => value == null || value === 0 ? '' : value < 0 ? styles.red : styles.green;
@@ -60,10 +60,11 @@ export function PositionTable({ trades, open = false, totalPnl, algo }: { trades
   return <div className={styles.tableCard}><div className={styles.tableScroll}><table className={styles.table}>
     <thead><tr><th>Name</th>{algo && <th>Algo</th>}<th>Product</th><th className={styles.num}>Qty</th><th className={styles.num}>Buy avg</th><th className={styles.num}>Sell avg</th><th className={styles.num}>{open ? 'LTP' : 'Exit price'}</th><th className={styles.num}>P&L</th></tr></thead>
     <tbody>{trades.flatMap(trade => (isLongOption(trade) ? ['buy'] as const : ['sell', 'buy'] as const).map(side => {
-      const sell = side === 'sell';
+      const first = side === 'sell';
+      const sell = first || isShortStraddle(trade);       // a straddle's second option is sold too
       const rows = isLongOption(trade) ? 1 : 2;
-      const entry = sell ? trade.sell_price : trade.buy_price;
-      const current = open ? (sell ? trade.sell_mark : trade.buy_mark) : (sell ? trade.sell_exit_price : trade.buy_exit_price);
+      const entry = first ? trade.sell_price : trade.buy_price;
+      const current = open ? (first ? trade.sell_mark : trade.buy_mark) : (first ? trade.sell_exit_price : trade.buy_exit_price);
       const pnl = current == null ? null : (sell ? entry - current : current - entry) * trade.units;
       // A trade closed before each leg's exit price was recorded: show what the spread closed at and its total P&L.
       const whole = rows === 2 && !open && trade.sell_exit_price == null && trade.buy_exit_price == null && trade.pnl != null;
@@ -74,8 +75,8 @@ export function PositionTable({ trades, open = false, totalPnl, algo }: { trades
         <td className={styles.num}>{open && sell ? '−' : ''}{trade.units}<small>{trade.lots} lots</small></td>
         <td className={styles.num}>{quote(sell ? (open ? null : current) : entry)}</td>
         <td className={styles.num}>{quote(sell ? entry : (open ? null : current))}</td>
-        {whole ? sell && <td rowSpan={2} className={styles.num}>{quote(trade.exit_value)}<small>whole spread</small></td> : <td className={styles.num}>{quote(current)}</td>}
-        {whole ? sell && <td rowSpan={2} className={`${styles.num} ${tone(trade.pnl)}`}>{money(trade.pnl, 2)}<small>both legs</small></td> : <td className={`${styles.num} ${tone(pnl)}`}>{money(pnl, 2)}</td>}
+        {whole ? first && <td rowSpan={2} className={styles.num}>{quote(trade.exit_value)}<small>whole spread</small></td> : <td className={styles.num}>{quote(current)}</td>}
+        {whole ? first && <td rowSpan={2} className={`${styles.num} ${tone(trade.pnl)}`}>{money(trade.pnl, 2)}<small>both legs</small></td> : <td className={`${styles.num} ${tone(pnl)}`}>{money(pnl, 2)}</td>}
       </tr>;
     }))}</tbody>
     {totalPnl !== undefined && <tfoot><tr><td colSpan={algo ? 7 : 6}>{open ? 'Open positions P&L' : 'Total'}</td><td className={`${styles.num} ${tone(totalPnl)}`}>{money(totalPnl, 2)}</td></tr></tfoot>}
